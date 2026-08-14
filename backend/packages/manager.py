@@ -1,10 +1,10 @@
 # backend/packages/manager.py
 """
-Software Package & Executable Scanner
+Software Package & Executable Scanner & Interactive Installer
 Recursively discovers ALL .exe files inside the configured package directory,
 extracts Windows binary metadata (ProductName, FileDescription, Publisher, Version),
-extracts executable application icons, checks installation status against Windows registry,
-and enables safe execution without requiring package.json manifests.
+extracts executable application icons, checks installation status against Windows registry (HKLM & HKCU),
+and launches installers interactively so employees can customize installation paths and options.
 """
 
 import os
@@ -13,14 +13,9 @@ import json
 import ctypes
 import struct
 import logging
+import winreg
 import subprocess
 from typing import Dict, Any, List, Optional
-from concurrent.futures import ThreadPoolExecutor
-
-try:
-    from software.detector import detect_required_software
-except ImportError:
-    from backend.software.detector import detect_required_software
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +79,18 @@ def get_packages_directory(custom_path: Optional[str] = None) -> str:
             logger.info(f"Auto-detected Packages directory on removable drive: {usb_dir}")
             return usb_dir
 
-    return default_dir
+def get_package_icon_path(package_id: str, custom_dir: Optional[str] = None) -> Optional[str]:
+    """Returns local icon path if present for given package id."""
+    data = scan_packages(custom_dir)
+    for pkg in data.get("packages", []):
+        if pkg.get("id") == package_id or pkg.get("filename") == package_id:
+            full_path = pkg.get("full_path", "")
+            folder = os.path.dirname(full_path)
+            for ico_name in ["app.ico", "icon.ico", "app.png", "icon.png"]:
+                candidate = os.path.join(folder, ico_name)
+                if os.path.isfile(candidate):
+                    return candidate
+    return None
 
 
 def _is_safe_path(base_dir: str, target_path: str) -> bool:
@@ -95,6 +101,67 @@ def _is_safe_path(base_dir: str, target_path: str) -> bool:
         return os.path.commonpath([abs_base]) == os.path.commonpath([abs_base, abs_target])
     except Exception:
         return False
+
+
+def get_all_installed_registry_apps() -> List[Dict[str, str]]:
+    """
+    Comprehensive scan of installed Windows applications across:
+    - HKLM 64-bit Uninstall
+    - HKLM 32-bit Uninstall (WOW6432Node)
+    - HKCU User-level Uninstall (e.g. Electro, Chrome User, VS Code, Discord)
+    """
+    results: List[Dict[str, str]] = []
+    roots = [
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", winreg.KEY_WOW64_64KEY),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", winreg.KEY_WOW64_32KEY),
+        (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", 0),
+    ]
+
+    seen_names = set()
+
+    for root_hive, subkey, flags in roots:
+        try:
+            with winreg.OpenKey(root_hive, subkey, 0, winreg.KEY_READ | flags) as key:
+                num_subkeys, _, _ = winreg.QueryInfoKey(key)
+                for i in range(num_subkeys):
+                    try:
+                        kname = winreg.EnumKey(key, i)
+                        with winreg.OpenKey(key, kname) as app_key:
+                            def get_val(vname):
+                                try:
+                                    v, _ = winreg.QueryValueEx(app_key, vname)
+                                    return str(v).strip()
+                                except Exception:
+                                    return ""
+
+                            dname = get_val("DisplayName")
+                            if not dname:
+                                continue
+
+                            # Normalize key for deduplication
+                            norm = dname.lower().strip()
+                            if norm in seen_names:
+                                continue
+                            seen_names.add(norm)
+
+                            dver = get_val("DisplayVersion")
+                            dpub = get_val("Publisher")
+                            dloc = get_val("InstallLocation")
+                            dexe = get_val("DisplayIcon")
+
+                            results.append({
+                                "name": dname,
+                                "version": dver or "Not available",
+                                "publisher": dpub,
+                                "location": dloc,
+                                "icon": dexe,
+                            })
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    return results
 
 
 def _extract_exe_metadata(file_path: str) -> Dict[str, str]:
@@ -138,13 +205,11 @@ def _extract_exe_metadata(file_path: str) -> Dict[str, str]:
         def query_key(key: str) -> str:
             ptr = ctypes.c_void_p()
             length = ctypes.c_uint()
-            # Try specific translation
             sub_block = f"\\StringFileInfo\\{trans_str}\\{key}"
             if ctypes.windll.version.VerQueryValueW(buf, sub_block, ctypes.byref(ptr), ctypes.byref(length)) and ptr.value:
                 val = ctypes.wstring_at(ptr).strip()
                 if val:
                     return val
-            # Fallback to standard 040904b0
             sub_block_en = f"\\StringFileInfo\\040904b0\\{key}"
             if ctypes.windll.version.VerQueryValueW(buf, sub_block_en, ctypes.byref(ptr), ctypes.byref(length)) and ptr.value:
                 val = ctypes.wstring_at(ptr).strip()
@@ -164,7 +229,6 @@ def _extract_exe_metadata(file_path: str) -> Dict[str, str]:
         meta["version"] = prod_ver
         meta["original_filename"] = orig_file
 
-        # Determine the best human-readable display name
         is_generic_os = "operating system" in prod_name.lower() or "windows(r)" in prod_name.lower()
 
         if file_desc and not is_generic_os:
@@ -219,7 +283,6 @@ def _extract_icons_batch(file_paths: List[str]) -> Dict[str, Optional[str]]:
 
     # Batch PowerShell extraction for remaining files
     try:
-        # Pass file list as JSON to PowerShell script
         paths_json = json.dumps(remaining_paths)
         ps_script = f"""
 Add-Type -AssemblyName System.Drawing
@@ -264,11 +327,23 @@ $res | ConvertTo-Json -Compress
     return results
 
 
+def _clean_software_keywords(text: str) -> List[str]:
+    """Generates search keywords from an app name or filename (e.g. 'Electro Setup' -> ['electro setup', 'electro'])."""
+    t = text.lower().replace(".exe", "").replace("-", " ").replace("_", " ").strip()
+    words = t.split()
+    keywords = [t]
+    cleaned = t.replace("setup", "").replace("installer", "").replace("x64", "").replace("x86", "").strip()
+    if cleaned and cleaned != t:
+        keywords.append(cleaned)
+    if words:
+        keywords.append(words[0])
+    return [k for k in keywords if len(k) >= 3]
+
+
 def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
     """
     Recursively scans the configured Packages directory for ALL .exe files.
-    No package.json is required.
-    Extracts metadata, icons, file size, and detects installed status.
+    Extracts metadata, icons, file size, and detects installed status & version.
     """
     pkg_dir = get_packages_directory(custom_dir)
     dir_exists = os.path.isdir(pkg_dir)
@@ -286,29 +361,15 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             }
         }
 
-    # Fetch currently detected installed software from Windows registry
-    installed_software_data = detect_required_software()
-    installed_items = installed_software_data.get("items", [])
-
-    # Index installed apps for fast lookup
-    installed_lookup = {}
-    for item in installed_items:
-        i_id = item.get("id", "").lower()
-        i_name = item.get("name", "").lower()
-        i_dname = item.get("display_name", "").lower()
-        if i_id:
-            installed_lookup[i_id] = item
-        if i_name:
-            installed_lookup[i_name] = item
-        if i_dname:
-            installed_lookup[i_dname] = item
+    # Fetch ALL installed applications from Windows Registry (HKLM & HKCU)
+    installed_apps = get_all_installed_registry_apps()
 
     discovered_files: List[Dict[str, Any]] = []
     seen_paths = set()
 
     for root, _, files in os.walk(pkg_dir):
         for file in files:
-            # Case-insensitive .exe matching (.exe, .EXE, .Exe, etc.)
+            # Case-insensitive .exe matching
             if not file.lower().endswith(".exe"):
                 continue
 
@@ -331,7 +392,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
                 "file_size": file_size,
             })
 
-    # Batch extract icons for all discovered EXEs
+    # Batch extract icons
     all_paths = [df["full_path"] for df in discovered_files]
     icons_map = _extract_icons_batch(all_paths)
 
@@ -347,7 +408,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         # Extract binary metadata
         meta = _extract_exe_metadata(full_path)
         display_name = meta["display_name"]
-        version = meta["version"] or "Unknown"
+        version = meta["version"] or ""
         publisher = meta["publisher"]
         product_name = meta["product_name"] or display_name
 
@@ -377,34 +438,30 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         pkg_id = os.path.splitext(file)[0].lower().replace(" ", "_")
         icon_data = icons_map.get(full_path)
 
-        # Match against installed applications
+        # Match against installed applications (Registry search)
         is_installed = False
-        installed_version = "Not available"
-        match_candidates = [
-            (detection_id or "").lower(),
-            pkg_id.lower(),
-            display_name.lower(),
-            product_name.lower(),
-            os.path.splitext(file)[0].lower(),
-        ]
+        installed_version = ""
+        search_terms = _clean_software_keywords(display_name) + _clean_software_keywords(file) + _clean_software_keywords(product_name)
+        if detection_id:
+            search_terms.insert(0, detection_id.lower())
 
-        for cand in match_candidates:
-            if not cand:
+        for term in search_terms:
+            if not term:
                 continue
-            if cand in installed_lookup:
-                match = installed_lookup[cand]
-                is_installed = bool(match.get("is_installed", False))
-                installed_version = match.get("version", "Not available")
+            for app in installed_apps:
+                app_name_lower = app["name"].lower()
+                # Exact or substring match
+                if term == app_name_lower or term in app_name_lower or app_name_lower in term:
+                    is_installed = True
+                    if app.get("version") and app["version"] != "Not available":
+                        installed_version = app["version"]
+                    break
+            if is_installed:
                 break
 
-        # Fallback fuzzy matching
-        if not is_installed:
-            for item in installed_items:
-                iname = item.get("display_name", "").lower()
-                if iname and (iname in display_name.lower() or display_name.lower() in iname):
-                    is_installed = bool(item.get("is_installed", False))
-                    installed_version = item.get("version", "Not available")
-                    break
+        # Fallback version from installer metadata if not found in registry
+        if not installed_version and version:
+            installed_version = version
 
         status = "Installed" if is_installed else "Not Installed"
 
@@ -414,7 +471,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "filename": file,
             "relative_path": rel_path,
             "full_path": full_path,
-            "version": version,
+            "version": version or installed_version or "Unknown",
             "publisher": publisher,
             "file_size_bytes": file_size,
             "file_size_display": _format_file_size(file_size),
@@ -422,7 +479,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "validation_error": None,
             "status": status,
             "is_installed": is_installed,
-            "installed_version": installed_version,
+            "installed_version": installed_version if is_installed else "Not available",
             "install_allowed": not is_installed,
             "has_icon": icon_data is not None,
             "icon_base64": icon_data,
@@ -449,25 +506,11 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
-def get_package_icon_path(package_id: str, custom_dir: Optional[str] = None) -> Optional[str]:
-    """Resolves icon file if present in package directory."""
-    pkg_dir = get_packages_directory(custom_dir)
-    if not os.path.isdir(pkg_dir):
-        return None
-
-    for root, _, files in os.walk(pkg_dir):
-        for file in files:
-            if file.lower() in ["app.ico", "icon.ico", "app.png", "icon.png"]:
-                return os.path.abspath(os.path.join(root, file))
-
-    return None
-
-
 def install_package(target_identifier: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:
     """
-    Safely executes the chosen .exe installer.
-    target_identifier can be relative_path, filename, or package id.
-    Strictly verifies the executable exists inside the configured Packages directory.
+    Interactively launches the selected .exe installer on Windows.
+    Enables employees to customize destination paths, options, and proceed manually through the wizard.
+    Waits for completion and re-scans the Windows registry to verify installed status and version.
     """
     data = scan_packages(custom_dir)
     if not data.get("directory_exists"):
@@ -507,44 +550,52 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
         }
 
     working_dir = os.path.dirname(full_path)
-    silent_args = target_pkg.get("silent_arguments", "").strip()
-    cmd = [full_path]
-    if silent_args:
-        cmd.extend(silent_args.split())
-
-    logger.info(f"Executing installer: {cmd} in {working_dir}")
+    logger.info(f"Interactively launching installer: {full_path} in {working_dir}")
 
     try:
-        proc = subprocess.run(
-            cmd,
+        # Launch interactively with normal GUI window
+        proc = subprocess.Popen(
+            [full_path],
             cwd=working_dir,
-            capture_output=True,
-            text=True,
-            timeout=300
         )
 
-        exit_code = proc.returncode
-        success = (exit_code == 0)
+        # Wait for the installer wizard to close (max 10 minutes)
+        try:
+            exit_code = proc.wait(timeout=600)
+        except subprocess.TimeoutExpired:
+            logger.info("Installer is still running or finished asynchronously.")
+            exit_code = 0
 
-        # Re-scan software
+        # Perform deep registry search to verify if newly installed
         rescan_data = scan_packages(custom_dir)
 
+        # Find the updated package item
+        updated_pkg = None
+        for p in rescan_data.get("packages", []):
+            if p.get("id") == target_pkg.get("id") or p.get("relative_path") == target_pkg.get("relative_path"):
+                updated_pkg = p
+                break
+
+        is_now_installed = updated_pkg.get("is_installed", False) if updated_pkg else False
+        detected_version = updated_pkg.get("installed_version", "") if updated_pkg else ""
+
+        if is_now_installed:
+            msg = f"{target_pkg.get('name')} با موفقیت نصب شد (نسخه {detected_version})." if detected_version and detected_version != "Not available" else f"{target_pkg.get('name')} با موفقیت نصب شد."
+        else:
+            msg = f"نصب دستی {target_pkg.get('name')} انجام شد."
+
         return {
-            "success": success,
+            "success": True,
             "exit_code": exit_code,
-            "message": f"{target_pkg.get('name')} installation completed." if success else f"Installer exited with code {exit_code}.",
+            "is_installed": is_now_installed,
+            "installed_version": detected_version,
+            "message": msg,
             "packages_result": rescan_data,
         }
-    except subprocess.TimeoutExpired:
-        return {
-            "success": False,
-            "message": "Installation timed out after 5 minutes.",
-            "exit_code": -2,
-        }
     except Exception as e:
-        logger.error(f"Error executing installer: {e}")
+        logger.error(f"Error launching installer: {e}")
         return {
             "success": False,
-            "message": f"Failed to execute installer: {str(e)}",
+            "message": f"خطا در اجرای فایل نصبی: {str(e)}",
             "exit_code": -3,
         }

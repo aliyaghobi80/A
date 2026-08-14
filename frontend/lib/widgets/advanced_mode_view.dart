@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import '../controllers/software_controller.dart';
 import '../models/system_info.dart';
-import '../services/api_service.dart';
 import 'summary_hero_bar.dart';
 import 'cards/cpu_card.dart';
 import 'cards/motherboard_card.dart';
@@ -15,7 +16,7 @@ import 'cards/files_card.dart';
 import 'cards/driver_card.dart';
 import 'cards/packages_card.dart';
 
-class AdvancedModeView extends StatefulWidget {
+class AdvancedModeView extends StatelessWidget {
   final SystemInfo info;
   final PackagesResponse? initialPackages;
 
@@ -26,72 +27,8 @@ class AdvancedModeView extends StatefulWidget {
   });
 
   @override
-  State<AdvancedModeView> createState() => _AdvancedModeViewState();
-}
-
-class _AdvancedModeViewState extends State<AdvancedModeView> {
-  final ApiService _apiService = ApiService();
-  PackagesResponse _packagesResponse = PackagesResponse.empty();
-  bool _isScanningPackages = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.initialPackages != null) {
-      _packagesResponse = widget.initialPackages!;
-    } else {
-      _loadPackages();
-    }
-  }
-
-  Future<void> _loadPackages() async {
-    final res = await _apiService.fetchPackages();
-    if (mounted) {
-      setState(() {
-        _packagesResponse = res;
-      });
-    }
-  }
-
-  Future<void> _handleScanPackages() async {
-    setState(() {
-      _isScanningPackages = true;
-    });
-    final res = await _apiService.scanPackages();
-    if (mounted) {
-      setState(() {
-        _packagesResponse = res;
-        _isScanningPackages = false;
-      });
-    }
-  }
-
-  Future<void> _handleInstallPackage(String packageId, String name) async {
-    final scaffold = ScaffoldMessenger.of(context);
-    scaffold.showSnackBar(
-      SnackBar(
-        content: Text('Installing $name...'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-
-    final res = await _apiService.installPackage(packageId);
-    if (mounted) {
-      final success = res['success'] == true;
-      scaffold.showSnackBar(
-        SnackBar(
-          content: Text(res['message'] ?? (success ? '$name installed successfully.' : 'Installation failed.')),
-          backgroundColor: success ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      _loadPackages();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final info = widget.info;
+    final softwareCtrl = Get.find<SoftwareController>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -116,15 +53,29 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
             final cardMotherboard = MotherboardCard(motherboard: info.motherboard);
             final cardWindows = WindowsCard(windows: info.windows, system: info.system);
             final cardFiles = FilesCard(files: info.requiredFiles, summary: info.filesSummary);
-            final cardPackages = PackagesCard(
-              packages: _packagesResponse.packages,
-              summary: _packagesResponse.summary,
-              packagesDirectory: _packagesResponse.packagesDirectory,
-              directoryExists: _packagesResponse.directoryExists,
-              onScan: _handleScanPackages,
-              isScanning: _isScanningPackages,
-              onInstall: _handleInstallPackage,
-            );
+
+            final cardPackages = Obx(() {
+              final pkgRes = softwareCtrl.packagesResponse.value;
+              final isScanning = softwareCtrl.isScanning.value;
+
+              return PackagesCard(
+                packages: pkgRes.packages,
+                summary: pkgRes.summary,
+                packagesDirectory: pkgRes.packagesDirectory,
+                directoryExists: pkgRes.directoryExists,
+                onScan: () => softwareCtrl.scanPackages(),
+                isScanning: isScanning,
+                onInstall: (packageId, name) {
+                  final pkg = pkgRes.packages.firstWhereOrNull(
+                    (p) => (p.relativePath.isNotEmpty ? p.relativePath : p.id) == packageId,
+                  );
+                  if (pkg != null) {
+                    softwareCtrl.installPackageInteractive(context, pkg);
+                  }
+                },
+              );
+            });
+
             final cardNetwork = NetworkCard(network: info.network);
 
             if (isWide) {

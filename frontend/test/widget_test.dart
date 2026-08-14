@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
+import 'package:central_system_checker/controllers/software_controller.dart';
+import 'package:central_system_checker/controllers/system_info_controller.dart';
+import 'package:central_system_checker/controllers/theme_language_controller.dart';
 import 'package:central_system_checker/l10n/app_localizations.dart';
 import 'package:central_system_checker/models/system_info.dart';
 import 'package:central_system_checker/widgets/loading_view.dart';
@@ -11,7 +15,8 @@ import 'package:central_system_checker/widgets/cards/packages_card.dart';
 import 'package:central_system_checker/widgets/simple_mode_view.dart';
 
 Widget buildTestableWidget(Widget child, {Locale locale = const Locale('fa')}) {
-  return MaterialApp(
+  return GetMaterialApp(
+    key: ValueKey(locale.languageCode),
     locale: locale,
     supportedLocales: AppLocalizations.supportedLocales,
     localizationsDelegates: const [
@@ -27,6 +32,13 @@ Widget buildTestableWidget(Widget child, {Locale locale = const Locale('fa')}) {
 }
 
 void main() {
+  setUp(() {
+    Get.reset();
+    Get.put(ThemeLanguageController());
+    Get.put(SystemInfoController());
+    Get.put(SoftwareController());
+  });
+
   testWidgets('LoadingView displays expected branding and message in English and Persian', (WidgetTester tester) async {
     // English test
     await tester.pumpWidget(
@@ -322,6 +334,9 @@ void main() {
         availableToInstall: 1,
       ),
     );
+
+    final softCtrl = Get.find<SoftwareController>();
+    softCtrl.packagesResponse.value = mockDiscoveredPackages;
 
     await tester.pumpWidget(
       buildTestableWidget(
