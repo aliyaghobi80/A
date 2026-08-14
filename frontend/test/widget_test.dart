@@ -129,10 +129,12 @@ void main() {
       SoftwarePackage(
         id: '7zip',
         name: '7-Zip',
+        filename: '7Zip.EXE',
+        relativePath: 'Utilities/7Zip.EXE',
+        fullPath: r'G:\MarkaziSystem\Packages\Utilities\7Zip.EXE',
         version: '24.09',
         publisher: 'Igor Pavlov',
-        packageFolder: '7Zip',
-        installerFile: 'installer.bat',
+        fileSizeDisplay: '564.0 KB',
         isValid: true,
         status: 'Not Installed',
         isInstalled: false,
@@ -148,7 +150,12 @@ void main() {
         Column(
           children: [
             DriverCard(drivers: drivers, summary: driverSummary),
-            PackagesCard(packages: packages, summary: pkgSummary),
+            PackagesCard(
+              packages: packages,
+              summary: pkgSummary,
+              packagesDirectory: r'G:\MarkaziSystem\Packages',
+              directoryExists: true,
+            ),
           ],
         ),
         locale: const Locale('fa'),
@@ -159,7 +166,7 @@ void main() {
     expect(find.text('سالم'), findsOneWidget);
     expect(find.text('وجود ندارد'), findsOneWidget);
 
-    expect(find.text('پکیج‌های نرم‌افزاری'), findsOneWidget);
+    expect(find.text('نرم‌افزارها'), findsOneWidget);
     expect(find.text('7-Zip'), findsOneWidget);
   });
 
@@ -271,12 +278,57 @@ void main() {
       filesSummary: FilesSummary(presentCount: 1, totalCount: 1, allPresent: true),
     );
 
+    final mockDiscoveredPackages = PackagesResponse(
+      directoryExists: true,
+      packagesDirectory: r'G:\MarkaziSystem\Packages',
+      packages: [
+        SoftwarePackage(
+          id: 'chromesetup',
+          name: 'Google Chrome',
+          filename: 'ChromeSetup.exe',
+          relativePath: 'Apps/Browsers/ChromeSetup.exe',
+          fullPath: r'G:\MarkaziSystem\Packages\Apps\Browsers\ChromeSetup.exe',
+          version: '151.0.7922.138',
+          publisher: 'Google LLC',
+          fileSizeDisplay: '564.0 KB',
+          isValid: true,
+          status: 'Installed',
+          isInstalled: true,
+          installedVersion: '151.0.7922.138',
+          installAllowed: false,
+          hasIcon: false,
+        ),
+        SoftwarePackage(
+          id: 'vlc',
+          name: 'VLC Media Player',
+          filename: 'vlc-setup.exe',
+          relativePath: 'Tools/vlc-setup.exe',
+          fullPath: r'G:\MarkaziSystem\Packages\Tools\vlc-setup.exe',
+          version: '3.0.21',
+          publisher: 'VideoLAN',
+          fileSizeDisplay: '42.1 MB',
+          isValid: true,
+          status: 'Not Installed',
+          isInstalled: false,
+          installedVersion: 'Not available',
+          installAllowed: true,
+          hasIcon: false,
+        ),
+      ],
+      summary: PackageSummary(
+        totalPackages: 2,
+        validPackages: 2,
+        installedPackages: 1,
+        availableToInstall: 1,
+      ),
+    );
+
     await tester.pumpWidget(
       buildTestableWidget(
         SingleChildScrollView(
           child: SimpleModeView(
             info: mockInfo,
-            initialPackages: PackagesResponse.empty(),
+            initialPackages: mockDiscoveredPackages,
           ),
         ),
         locale: const Locale('fa'),
@@ -299,6 +351,7 @@ void main() {
     expect(find.text('درایورها'), findsAtLeast(1));
     expect(find.text('نرم‌افزارها'), findsAtLeast(1));
     expect(find.text('Google Chrome'), findsOneWidget);
+    expect(find.text('VLC Media Player'), findsOneWidget);
     expect(find.text('فایل‌های موردنیاز'), findsAtLeast(1));
   });
 }

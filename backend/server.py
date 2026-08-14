@@ -143,13 +143,19 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 payload = {}
 
-            pkg_id = payload.get("package_id") or payload.get("id") or ""
+            pkg_id = (
+                payload.get("package_id")
+                or payload.get("id")
+                or payload.get("relative_path")
+                or payload.get("filename")
+                or ""
+            )
             if not pkg_id:
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self._send_cors_headers()
                 self.end_headers()
-                resp = {"success": False, "message": "Missing 'package_id' in request body."}
+                resp = {"success": False, "message": "Missing 'package_id' or 'relative_path' in request body."}
                 self.wfile.write(json.dumps(resp).encode("utf-8"))
                 return
 

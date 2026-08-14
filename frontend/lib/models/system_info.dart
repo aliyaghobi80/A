@@ -158,12 +158,14 @@ class DriverSummary {
 class SoftwarePackage {
   final String id;
   final String name;
+  final String filename;
+  final String relativePath;
+  final String fullPath;
   final String version;
   final String publisher;
   final String? detectionId;
-  final String packageFolder;
-  final String? installerFile;
   final String? silentArguments;
+  final String fileSizeDisplay;
   final bool isValid;
   final String? validationError;
   final String status;
@@ -171,18 +173,20 @@ class SoftwarePackage {
   final String installedVersion;
   final bool installAllowed;
   final bool hasIcon;
+  final String? iconBase64;
   final String? iconUrl;
-  final String? packagePath;
 
   SoftwarePackage({
     required this.id,
     required this.name,
+    required this.filename,
+    required this.relativePath,
+    this.fullPath = '',
     required this.version,
     required this.publisher,
     this.detectionId,
-    required this.packageFolder,
-    this.installerFile,
     this.silentArguments,
+    this.fileSizeDisplay = '',
     required this.isValid,
     this.validationError,
     required this.status,
@@ -190,29 +194,31 @@ class SoftwarePackage {
     required this.installedVersion,
     required this.installAllowed,
     required this.hasIcon,
+    this.iconBase64,
     this.iconUrl,
-    this.packagePath,
   });
 
   factory SoftwarePackage.fromJson(Map<String, dynamic> json) {
     return SoftwarePackage(
       id: json['id'] ?? 'unknown',
-      name: json['name'] ?? 'Unknown Package',
-      version: json['version'] ?? '1.0',
+      name: json['name'] ?? json['display_name'] ?? 'Unknown Software',
+      filename: json['filename'] ?? json['installer_file'] ?? '',
+      relativePath: json['relative_path'] ?? json['package_folder'] ?? '',
+      fullPath: json['full_path'] ?? '',
+      version: json['version'] ?? 'Unknown',
       publisher: json['publisher'] ?? '',
       detectionId: json['detection_id'],
-      packageFolder: json['package_folder'] ?? '',
-      installerFile: json['installer_file'],
       silentArguments: json['silent_arguments'],
-      isValid: json['is_valid'] as bool? ?? false,
+      fileSizeDisplay: json['file_size_display'] ?? '',
+      isValid: json['is_valid'] as bool? ?? true,
       validationError: json['validation_error'],
-      status: json['status'] ?? 'Unknown',
+      status: json['status'] ?? (json['is_installed'] == true ? 'Installed' : 'Not Installed'),
       isInstalled: json['is_installed'] as bool? ?? false,
       installedVersion: json['installed_version'] ?? 'Not available',
-      installAllowed: json['install_allowed'] as bool? ?? false,
-      hasIcon: json['has_icon'] as bool? ?? false,
+      installAllowed: json['install_allowed'] as bool? ?? (!((json['is_installed'] as bool?) ?? false)),
+      hasIcon: (json['has_icon'] as bool? ?? false) || json['icon_base64'] != null,
+      iconBase64: json['icon_base64'],
       iconUrl: json['icon_url'],
-      packagePath: json['package_path'],
     );
   }
 }
@@ -248,17 +254,20 @@ class PackageSummary {
 }
 
 class PackagesResponse {
+  final bool directoryExists;
   final String packagesDirectory;
   final List<SoftwarePackage> packages;
   final PackageSummary summary;
 
   PackagesResponse({
+    this.directoryExists = true,
     required this.packagesDirectory,
     required this.packages,
     required this.summary,
   });
 
   factory PackagesResponse.empty() => PackagesResponse(
+        directoryExists: true,
         packagesDirectory: '',
         packages: [],
         summary: PackageSummary.empty(),
@@ -266,6 +275,7 @@ class PackagesResponse {
 
   factory PackagesResponse.fromJson(Map<String, dynamic> json) {
     return PackagesResponse(
+      directoryExists: json['directory_exists'] as bool? ?? true,
       packagesDirectory: json['packages_directory'] ?? '',
       packages: (json['packages'] as List<dynamic>? ?? [])
           .map((e) => SoftwarePackage.fromJson(e as Map<String, dynamic>))

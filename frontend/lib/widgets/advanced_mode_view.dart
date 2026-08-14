@@ -119,6 +119,8 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
             final cardPackages = PackagesCard(
               packages: _packagesResponse.packages,
               summary: _packagesResponse.summary,
+              packagesDirectory: _packagesResponse.packagesDirectory,
+              directoryExists: _packagesResponse.directoryExists,
               onScan: _handleScanPackages,
               isScanning: _isScanningPackages,
               onInstall: _handleInstallPackage,

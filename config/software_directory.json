@@ -1,0 +1,4 @@
+{
+  "packageRoot": "Packages",
+  "description": "Relative or absolute directory path to scan for installable software .exe files"
+}

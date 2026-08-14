@@ -154,8 +154,19 @@ abstract class AppLocalizations {
   String get driverCategory;
   String driverSummaryCount(int healthy, int total);
 
-  // Software Requirements
+  // Software Requirements & Discovery
   String get software;
+  String get availableSoftware;
+  String get scan;
+  String get scanning;
+  String get scanPackages;
+  String get scanningPackages;
+  String get packagesDirectory;
+  String get softwareDirectoryNotFound;
+  String get scanningDirectory;
+  String get filename;
+  String get publisher;
+  String get fileSize;
   String get installed;
   String get notInstalled;
   String get unknown;
@@ -166,12 +177,6 @@ abstract class AppLocalizations {
   String get allSoftwareInstalled;
   String get someSoftwareMissing;
   String get noSoftwareConfigured;
-
-  // Packages Section
-  String get packages;
-  String get scanPackages;
-  String get scanningPackages;
-  String get packagesDirectory;
   String get install;
   String get installing;
   String get confirmInstallTitle;

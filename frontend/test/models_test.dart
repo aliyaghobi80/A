@@ -120,7 +120,7 @@ void main() {
       'driver_summary': {
         'healthy_count': 1,
         'total_present_count': 1,
-        'all_healthy': true,
+        'allHealthy': true,
         'has_problem': false,
         'status_text': 'Ready'
       },
@@ -172,63 +172,68 @@ void main() {
     expect(info.drivers.length, 2);
     expect(info.drivers.first.isHealthy, true);
     expect(info.drivers[1].isPresent, false);
-    expect(info.driverSummary.allHealthy, true);
     expect(info.driverSummary.statusText, 'Ready');
     expect(info.software.first.isInstalled, true);
     expect(info.filesSummary.presentCount, 0);
   });
 
-  test('PackagesResponse.fromJson parses packages with validation and installation permissions', () {
+  test('PackagesResponse.fromJson parses recursive exe packages and icons correctly', () {
     final mockPackagesJson = {
+      'directory_exists': true,
       'packages_directory': 'G:\\MarkaziSystem\\Packages',
       'packages': [
         {
           'id': '7zip',
           'name': '7-Zip',
+          'filename': '7Zip.EXE',
+          'relative_path': 'Utilities/7Zip.EXE',
+          'full_path': 'G:\\MarkaziSystem\\Packages\\Utilities\\7Zip.EXE',
           'version': '24.09',
           'publisher': 'Igor Pavlov',
-          'detection_id': '7zip',
-          'package_folder': '7Zip',
-          'installer_file': 'installer.bat',
-          'silent_arguments': '/S',
+          'file_size_display': '564.0 KB',
           'is_valid': true,
-          'validation_error': null,
           'status': 'Not Installed',
           'is_installed': false,
           'installed_version': 'Not available',
           'install_allowed': true,
-          'has_icon': false,
-          'icon_url': null,
-          'package_path': 'G:\\MarkaziSystem\\Packages\\7Zip'
+          'has_icon': true,
+          'icon_base64': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=='
         },
         {
-          'id': 'invalid_tool',
-          'name': 'Invalid Tool',
-          'version': '1.0',
-          'publisher': 'Unknown',
-          'package_folder': 'InvalidSample',
-          'installer_file': 'missing.exe',
-          'is_valid': false,
-          'validation_error': 'Installer file missing',
-          'status': 'Unknown',
-          'is_installed': false,
+          'id': 'winrar',
+          'name': 'WinRAR',
+          'filename': 'winrar-x64.exe',
+          'relative_path': 'WinRAR/winrar-x64.exe',
+          'full_path': 'G:\\MarkaziSystem\\Packages\\WinRAR\\winrar-x64.exe',
+          'version': '7.13.0',
+          'publisher': 'win.rar GmbH',
+          'file_size_display': '3.4 MB',
+          'is_valid': true,
+          'status': 'Installed',
+          'is_installed': true,
+          'installed_version': '7.13.0',
           'install_allowed': false,
-          'has_icon': false,
-          'icon_url': null
+          'has_icon': false
         }
       ],
       'summary': {
         'total_packages': 2,
-        'valid_packages': 1,
-        'installed_packages': 0,
+        'valid_packages': 2,
+        'installed_packages': 1,
         'available_to_install': 1
       }
     };
 
     final resp = PackagesResponse.fromJson(mockPackagesJson);
+    expect(resp.directoryExists, true);
     expect(resp.packages.length, 2);
+    expect(resp.packages.first.filename, '7Zip.EXE');
+    expect(resp.packages.first.relativePath, 'Utilities/7Zip.EXE');
+    expect(resp.packages.first.fileSizeDisplay, '564.0 KB');
     expect(resp.packages.first.installAllowed, true);
-    expect(resp.packages[1].isValid, false);
+    expect(resp.packages.first.hasIcon, true);
+    expect(resp.packages[1].isInstalled, true);
+    expect(resp.packages[1].installAllowed, false);
     expect(resp.summary.availableToInstall, 1);
   });
 }

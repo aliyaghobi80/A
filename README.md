@@ -1,24 +1,58 @@
-# Central System Checker (مرکزی سیستم چکر) - Phase 2 Refined
+# Central System Checker (مرکزی سیستم چکر) - Phase 2 (Automatic EXE Software Scanner)
 
-A modern Windows desktop application built with **Flutter** (Frontend UI/UX) and **Python** (Modular Hardware, OS, Software, Driver & Package Engine) designed for fast, accurate hardware verification, invoice audits, driver health inspections, and software package management.
+A high-performance Windows desktop application built with **Flutter** (Frontend UI/UX) and **Python** (Hardware, OS, Driver & Executable Software Discovery Engine) designed for rapid hardware verification, invoice audits, driver health inspections, and software package installation.
 
 ---
 
-## 🌟 Key Features (Phase 1 & Phase 2 Refined)
+## 🌟 Key Features
 
-### 1. Simple Mode UI/UX (5–10s Paper Invoice Comparison)
+### 1. Automatic Recursive EXE Software Scanner
+- **No `package.json` required**: Drop any `.exe` or `.EXE` installer into the configured package directory, and the application discovers it automatically.
+- **Recursive Subdirectory Scanning**:
+  ```text
+  Packages/
+  ├── ChromeSetup.exe
+  ├── WinRAR.exe
+  ├── Apps/
+  │   └── Browsers/
+  │       └── ChromeSetup.exe
+  ├── Tools/
+  │   └── vlc.exe
+  └── Utilities/
+      └── 7Zip.EXE
+  ```
+- **Metadata Extraction from Windows Binaries**:
+  - Automatically extracts `ProductName`, `FileDescription`, `CompanyName` (Publisher), `ProductVersion`, and `OriginalFilename` using Win32 VersionInfo APIs.
+  - Automatically cleans filenames to human-readable names when metadata is absent.
+- **Application Icon Extraction**:
+  - Automatically extracts embedded application icons from `.exe` binaries into high-resolution PNG data URIs.
+- **Configurable Software Root (`config/software_directory.json`)**:
+  ```json
+  {
+    "packageRoot": "Packages",
+    "description": "Relative or absolute directory path to scan for installable software .exe files"
+  }
+  ```
+- **Clear Missing Directory Handling**:
+  - If the configured directory is not found on disk, the UI displays a clear message:
+    - Persian: `پوشه نرم‌افزارها پیدا نشد.`
+    - English: `Software directory not found.`
+- **Safe Installation Engine**:
+  - Scanning NEVER executes files.
+  - Clicking **[ Install ]** (`[ نصب ]`) displays a confirmation dialog, safely launches the user-selected installer with directory containment, waits for completion, and automatically refreshes installation status.
+
+### 2. Simple Mode UI/UX (5–10s Paper Invoice Comparison)
 - **Prominent Hardware Values**:
-  - High-contrast, large (22–26pt) main values for **CPU**, **RAM**, **GPU**, **Motherboard**, **Storage**, and **Windows**.
-  - Immediate visual clarity for non-technical retail staff comparing physical PC specs against purchase invoices.
+  - 22–26pt high-contrast typography for **CPU**, **RAM**, **GPU**, **Motherboard**, **Storage**, and **Windows**.
 - **Top Quick Status Summary**:
   - **System Status**: `● Ready` (`● آماده`) / `● Needs Attention` (`● نیاز به بررسی`).
   - **Drivers**: `X / Y Important Drivers OK` (`X از Y درایور مهم سالم`).
   - **Software**: `X / Y Installed` (`X از Y نصب شده`).
   - **Files**: `X / Y Present` (`X از Y موجود است`).
 - **1-Click Copy Summary**:
-  - "Copy Specifications" / "کپی خلاصه مشخصات" formats all specs cleanly to clipboard.
+  - "Copy Specifications" / "کپی خلاصه مشخصات" exports all hardware, software, driver, and file checks to the clipboard.
 
-### 2. Important Hardware Driver Checker
+### 3. Important Hardware Driver Checker
 - **Critical Device Coverage**:
   - **Graphics / GPU**: NVIDIA, AMD, Intel display controllers.
   - **Audio Controller**: High Definition Audio / Realtek controllers.
@@ -27,68 +61,29 @@ A modern Windows desktop application built with **Flutter** (Frontend UI/UX) and
   - **Bluetooth**: Bluetooth controllers (gracefully reports `Not Present` / `وجود ندارد` without penalizing systems lacking physical Bluetooth hardware).
   - **Chipset & System Devices**: Detects missing drivers (Code 28), startup failures (Code 10), and hardware issues.
 
-### 3. Software Package System & Manifests
-- **Structured Package System**:
-  ```
-  Packages/
-  ├── Chrome/
-  │   ├── package.json
-  │   ├── installer.exe
-  │   └── app.ico
-  ├── WinRAR/
-  │   ├── package.json
-  │   ├── installer.exe
-  │   └── app.ico
-  ├── VLC/
-  │   ├── package.json
-  │   ├── installer.exe
-  │   └── app.ico
-  └── ...
-  ```
-- **Package Manifest Schema (`package.json`)**:
-  ```json
-  {
-    "id": "vlc",
-    "name": "VLC Media Player",
-    "version": "3.0.21",
-    "publisher": "VideoLAN",
-    "installer": "installer.exe",
-    "icon": "app.ico",
-    "silentArguments": "/S",
-    "detectionId": "vlc"
-  }
-  ```
-- **Security & Integrity**:
-  - Validates manifest schema and verifies installer exists directly inside the package folder.
-  - Blocks path traversal (e.g. `../` or arbitrary root executables).
-  - Dedicated **"Scan Packages"** button rescans the Packages directory on-demand.
-  - Safe **[ Install ]** button with confirmation dialog, enabled only for valid, uninstalled packages.
-
 ### 4. Required Files and Folders Checker
-- Configuration-driven check via [`config/file_requirements.json`](file:///g:/MarkaziSystem/config/file_requirements.json) (`Training Folder`, `Desktop Tools`, `System Hosts File`).
+- Configuration-driven check via [`config/file_requirements.json`](file:///g:/MarkaziSystem/config/file_requirements.json).
 
 ### 5. Bilingual Support (English & Persian) with Native RTL
 - **English**: LTR layout, clear technical terminology.
 - **Persian (فارسی)**: Native RTL layout with technical terminology:
   - Software: **نرم‌افزارها**
-  - Required Files: **فایل‌های موردنیاز**
-  - Drivers: **درایورها**
-  - Scan: **اسکن** / **اسکن پکیج‌ها**
+  - Scan: **اسکن**
   - Install: **نصب**
   - Installed: **نصب شده**
   - Not Installed: **نصب نشده**
+  - Unknown: **نامشخص**
   - Present: **موجود است**
   - Missing: **موجود نیست**
   - Ready: **آماده**
   - Needs Attention: **نیاز به بررسی**
-  - Not Present: **وجود ندارد**
   - Driver OK: **سالم**
   - Driver Problem: **خطای درایور**
+  - Not Present: **وجود ندارد**
   - System Status: **وضعیت سیستم**
-- Product and hardware model names remain in Latin form.
 
 ### 6. Minimum Window Size Protection
-- Enforces an appropriate minimum desktop window size ($1100 \times 700$ px with DPI scaling) via `WM_GETMINMAXINFO` in the Windows runner.
+- Enforces an appropriate minimum desktop window size ($1100 \times 700$ px with DPI scaling) via `WM_GETMINMAXINFO`.
 
 ---
 
@@ -97,13 +92,12 @@ A modern Windows desktop application built with **Flutter** (Frontend UI/UX) and
 ```
 MarkaziSystem/
 ├── Packages/                        # Configured Software Packages Directory
-│   ├── Chrome/                      # Valid Package (package.json + installer)
-│   ├── WinRAR/                      # Valid Package
-│   ├── VLC/                         # Valid Package
-│   ├── 7Zip/                        # Valid Package (available to install)
-│   └── InvalidSample/               # Invalid package test case
+│   ├── Apps/Browsers/               # Nested folders discovered automatically
+│   ├── Tools/
+│   └── Utilities/
 │
 ├── config/
+│   ├── software_directory.json      # Configurable packages root path
 │   ├── software_requirements.json   # Configurable list of required software
 │   └── file_requirements.json       # Configurable list of required files/folders
 │
@@ -122,22 +116,20 @@ MarkaziSystem/
 │   │           ├── driver_card.dart
 │   │           ├── packages_card.dart
 │   │           ├── software_card.dart
-│   │           ├── files_card.dart
-│   │           └── ... (CPU, RAM, GPU, Motherboard, Storage, Windows, BIOS, Network)
+│   │           └── files_card.dart
 │   └── test/                        # Automated Unit & Widget Tests
 │
 ├── backend/                         # Modular Python Engine
 │   ├── main.py                      # CLI & Server Runner (Host: 127.0.0.1:18080)
-│   ├── server.py                    # Multi-threaded HTTP Server with Package API
-│   ├── collector.py                 # Concurrent Task Orchestrator (Hardware + Drivers + Software + Files)
+│   ├── server.py                    # Multi-threaded HTTP Server
+│   ├── collector.py                 # Concurrent Task Orchestrator
 │   ├── drivers/                     # Windows PnP Driver Checker
 │   │   └── checker.py
-│   ├── packages/                    # Software Package Manager & Installer Runner
+│   ├── packages/                    # Recursive EXE Scanner & Installer Engine
 │   │   └── manager.py
-│   ├── software/                    # Software Collectors (Registry, Office, Binary Versioning)
+│   ├── software/                    # Software Collectors
 │   ├── files/                       # File/Folder Presence Checker
-│   ├── hardware/                    # CPU, RAM, GPU, Storage, Motherboard, BIOS
-│   └── windows/                     # OS & Network
+│   └── hardware/                    # CPU, RAM, GPU, Storage, Motherboard, BIOS
 │
 ├── run_demo.bat                     # Windows Batch 1-Click Launcher
 ├── run_demo.ps1                     # Windows PowerShell 1-Click Launcher
@@ -177,13 +169,3 @@ cd frontend
 flutter test
 flutter analyze
 ```
-
----
-
-## 🔒 Scope Restriction
-
-This project strictly implements **Phase 1 and Phase 2** specifications. The following features are excluded by design until Phase 3+:
-- Windows / Office activation checking or tools
-- Automated driver installation
-- Automated invoice OCR
-- Cloud sync / Databases / User accounts

@@ -20,7 +20,7 @@ class AppLocalizationsEn implements AppLocalizations {
   String get simpleModeTooltip => 'Simple Mode: Fast Invoice Comparison & Checklists';
 
   @override
-  String get advancedModeTooltip => 'Advanced Mode: Complete Diagnostics, Drivers & Packages';
+  String get advancedModeTooltip => 'Advanced Mode: Complete Diagnostics, Drivers & Software';
 
   @override
   String get languageEn => 'EN';
@@ -278,9 +278,42 @@ class AppLocalizationsEn implements AppLocalizations {
   @override
   String driverSummaryCount(int healthy, int total) => '$healthy / $total Important Drivers OK';
 
-  // Software Requirements
+  // Software Requirements & Discovery
   @override
   String get software => 'Software';
+
+  @override
+  String get availableSoftware => 'Software';
+
+  @override
+  String get scan => 'Scan';
+
+  @override
+  String get scanning => 'Scanning...';
+
+  @override
+  String get scanPackages => 'Scan';
+
+  @override
+  String get scanningPackages => 'Scanning...';
+
+  @override
+  String get packagesDirectory => 'Packages Directory';
+
+  @override
+  String get softwareDirectoryNotFound => 'Software directory not found.';
+
+  @override
+  String get scanningDirectory => 'Scanning:';
+
+  @override
+  String get filename => 'Filename';
+
+  @override
+  String get publisher => 'Publisher';
+
+  @override
+  String get fileSize => 'Size';
 
   @override
   String get installed => 'Installed';
@@ -312,19 +345,6 @@ class AppLocalizationsEn implements AppLocalizations {
   @override
   String get noSoftwareConfigured => 'No required software configured.';
 
-  // Packages Section
-  @override
-  String get packages => 'Software Packages';
-
-  @override
-  String get scanPackages => 'Scan Packages';
-
-  @override
-  String get scanningPackages => 'Scanning packages...';
-
-  @override
-  String get packagesDirectory => 'Packages Directory';
-
   @override
   String get install => 'Install';
 
@@ -341,7 +361,7 @@ class AppLocalizationsEn implements AppLocalizations {
   String get availableToInstall => 'Available to Install';
 
   @override
-  String get noPackagesFound => 'No packages found in directory';
+  String get noPackagesFound => 'No installers found in directory';
 
   @override
   String installSuccess(String name) => '$name installed successfully';

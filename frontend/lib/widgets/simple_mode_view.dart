@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
@@ -118,7 +119,7 @@ class _SimpleModeViewState extends State<SimpleModeView> {
 
     if (confirmed == true && mounted) {
       setState(() {
-        _installingPackageId = pkg.id;
+        _installingPackageId = pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id;
       });
 
       scaffoldMessenger.showSnackBar(
@@ -128,7 +129,7 @@ class _SimpleModeViewState extends State<SimpleModeView> {
         ),
       );
 
-      final res = await _apiService.installPackage(pkg.id);
+      final res = await _apiService.installPackage(pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id);
       if (mounted) {
         setState(() {
           _installingPackageId = null;
@@ -190,6 +191,14 @@ class _SimpleModeViewState extends State<SimpleModeView> {
       }
     }
 
+    if (_packagesResponse.packages.isNotEmpty) {
+      buffer.writeln('\n[${l10n.availableSoftware}]');
+      for (final p in _packagesResponse.packages) {
+        final st = p.isInstalled ? '${l10n.installed} (${p.version})' : l10n.notInstalled;
+        buffer.writeln('- ${p.name} (${p.filename}): $st');
+      }
+    }
+
     if (info.requiredFiles.isNotEmpty) {
       buffer.writeln('\n[${l10n.requiredFiles}]');
       for (final f in info.requiredFiles) {
@@ -202,7 +211,6 @@ class _SimpleModeViewState extends State<SimpleModeView> {
   }
 
   Widget _buildQuickStatusSummary(BuildContext context, SystemInfo info, AppLocalizations l10n, bool isDark) {
-    // Determine overall state
     final isSystemReady = info.driverSummary.allHealthy &&
         info.softwareSummary.allInstalled &&
         info.filesSummary.allPresent;
@@ -526,7 +534,7 @@ class _SimpleModeViewState extends State<SimpleModeView> {
           ),
           const SizedBox(height: 14),
 
-          // Main Prominent Value (20–24pt font for 5–10s invoice check)
+          // Main Prominent Value (22–26pt font for 5–10s invoice check)
           if (customContent != null)
             customContent
           else ...[
@@ -850,60 +858,36 @@ class _SimpleModeViewState extends State<SimpleModeView> {
         ),
         const SizedBox(height: 28),
 
-        // 4. Required Software Checklist & Packages Section
+        // 4. Software Section (Header + Scan button)
         _buildSectionHeader(
           context: context,
           icon: Icons.apps_rounded,
           title: l10n.software,
           color: const Color(0xFF6366F1),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ElevatedButton.icon(
-                onPressed: _isScanningPackages ? null : _handleScanPackages,
-                icon: _isScanningPackages
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.refresh_rounded, size: 15),
-                label: Text(
-                  _isScanningPackages ? l10n.scanningPackages : l10n.scanPackages,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: (info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: (info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Text(
-                  l10n.softwareSummaryCount(info.softwareSummary.installedCount, info.softwareSummary.totalCount),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                  ),
-                ),
-              ),
-            ],
+          trailing: ElevatedButton.icon(
+            onPressed: _isScanningPackages ? null : _handleScanPackages,
+            icon: _isScanningPackages
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.refresh_rounded, size: 15),
+            label: Text(
+              _isScanningPackages ? l10n.scanning : l10n.scan,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6366F1),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
         ),
         const SizedBox(height: 12),
 
-        // Software & Packages Container
+        // Software Container
         Container(
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF131D33) : Colors.white,
@@ -917,8 +901,40 @@ class _SimpleModeViewState extends State<SimpleModeView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Configured Required Software Checklist
-              if (info.software.isNotEmpty) ...[
+              // If software directory is missing, display alert
+              if (!_packagesResponse.directoryExists) ...[
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.folder_off_rounded, color: Color(0xFFF59E0B), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          l10n.softwareDirectoryNotFound,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFF59E0B),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
+
+              // Discovered .exe installers list
+              if (_packagesResponse.packages.isNotEmpty) ...[
+                ..._packagesResponse.packages.map((pkg) => _buildSimplePackageRow(context, pkg, isDark, l10n)),
+              ] else if (info.software.isNotEmpty) ...[
+                // Fallback to configured required software checklist
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final isMultiCol = constraints.maxWidth > 650;
@@ -937,43 +953,19 @@ class _SimpleModeViewState extends State<SimpleModeView> {
                     }
                   },
                 ),
-              ],
-
-              // Scanned Packages Section (if any packages discovered)
-              if (_packagesResponse.packages.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Divider(
-                  color: isDark ? const Color(0xFF1E2C4A) : const Color(0xFFF1F5F9),
-                  thickness: 1,
-                  height: 1,
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Icon(Icons.inventory_2_rounded, size: 16, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-                    const SizedBox(width: 8),
-                    Text(
-                      l10n.packages,
+              ] else
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      l10n.noPackagesFound,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                       ),
                     ),
-                    const Spacer(),
-                    Text(
-                      '${_packagesResponse.summary.availableToInstall} ${l10n.availableToInstall}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF2563EB),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 10),
-                ..._packagesResponse.packages.map((pkg) => _buildSimplePackageRow(context, pkg, isDark, l10n)),
-              ],
             ],
           ),
         ),
@@ -1232,35 +1224,69 @@ class _SimpleModeViewState extends State<SimpleModeView> {
   Widget _buildSimplePackageRow(BuildContext context, SoftwarePackage pkg, bool isDark, AppLocalizations l10n) {
     final isInstalled = pkg.isInstalled;
     final installAllowed = pkg.installAllowed;
-    final isCurrentInstalling = _installingPackageId == pkg.id;
+    final currentTargetId = pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id;
+    final isCurrentInstalling = _installingPackageId == currentTargetId;
 
     final statusColor = isInstalled ? const Color(0xFF10B981) : const Color(0xFF6366F1);
 
+    Widget iconWidget;
+    if (pkg.iconBase64 != null && pkg.iconBase64!.isNotEmpty) {
+      try {
+        final b64 = pkg.iconBase64!.contains(',')
+            ? pkg.iconBase64!.split(',').last
+            : pkg.iconBase64!;
+        final bytes = base64Decode(b64);
+        iconWidget = Image.memory(
+          bytes,
+          width: 24,
+          height: 24,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (context, error, stackTrace) => Icon(
+            isInstalled ? Icons.check_circle_rounded : Icons.download_rounded,
+            size: 20,
+            color: statusColor,
+          ),
+        );
+      } catch (_) {
+        iconWidget = Icon(
+          isInstalled ? Icons.check_circle_rounded : Icons.download_rounded,
+          size: 20,
+          color: statusColor,
+        );
+      }
+    } else {
+      iconWidget = Icon(
+        isInstalled ? Icons.check_circle_rounded : Icons.download_rounded,
+        size: 20,
+        color: statusColor,
+      );
+    }
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+          color: isInstalled
+              ? statusColor.withValues(alpha: isDark ? 0.3 : 0.2)
+              : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
         ),
       ),
       child: Row(
         children: [
           Container(
+            width: 36,
+            height: 36,
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
+              color: statusColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              isInstalled ? Icons.check_circle_rounded : Icons.download_rounded,
-              size: 16,
-              color: statusColor,
-            ),
+            child: Center(child: iconWidget),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1273,29 +1299,45 @@ class _SimpleModeViewState extends State<SimpleModeView> {
                       child: Text(
                         pkg.name,
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Directionality(
-                      textDirection: TextDirection.ltr,
-                      child: Text(
-                        l10n.versionBadge(pkg.version),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    if (pkg.version.isNotEmpty && pkg.version != 'Unknown') ...[
+                      const SizedBox(width: 6),
+                      Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          l10n.versionBadge(pkg.version),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
+                ),
+                const SizedBox(height: 2),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    pkg.filename.isNotEmpty ? pkg.filename : pkg.relativePath,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           if (installAllowed)
             ElevatedButton.icon(
               onPressed: isCurrentInstalling ? null : () => _confirmAndInstall(context, pkg),
@@ -1305,25 +1347,25 @@ class _SimpleModeViewState extends State<SimpleModeView> {
                       height: 12,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Icon(Icons.install_desktop_rounded, size: 13),
+                  : const Icon(Icons.install_desktop_rounded, size: 14),
               label: Text(isCurrentInstalling ? l10n.installing : l10n.install),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
             )
           else
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: statusColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                isInstalled ? l10n.installed : l10n.notInstalled,
+                isInstalled ? '✓ ${l10n.installed}' : '✕ ${l10n.notInstalled}',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,

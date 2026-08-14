@@ -20,7 +20,7 @@ class AppLocalizationsFa implements AppLocalizations {
   String get simpleModeTooltip => 'حالت ساده: مقایسه سریع با فاکتور خرید و چک‌لیست‌ها';
 
   @override
-  String get advancedModeTooltip => 'حالت پیشرفته: مشخصات کامل فنی، جزئیات درایورها و پکیج‌ها';
+  String get advancedModeTooltip => 'حالت پیشرفته: مشخصات کامل فنی، جزئیات درایورها و نرم‌افزارها';
 
   @override
   String get languageEn => 'EN';
@@ -278,9 +278,42 @@ class AppLocalizationsFa implements AppLocalizations {
   @override
   String driverSummaryCount(int healthy, int total) => '$healthy از $total درایور مهم سالم';
 
-  // Software Requirements
+  // Software Requirements & Discovery
   @override
   String get software => 'نرم‌افزارها';
+
+  @override
+  String get availableSoftware => 'نرم‌افزارها';
+
+  @override
+  String get scan => 'اسکن';
+
+  @override
+  String get scanning => 'در حال اسکن...';
+
+  @override
+  String get scanPackages => 'اسکن';
+
+  @override
+  String get scanningPackages => 'در حال اسکن...';
+
+  @override
+  String get packagesDirectory => 'پوشه نرم‌افزارها';
+
+  @override
+  String get softwareDirectoryNotFound => 'پوشه نرم‌افزارها پیدا نشد.';
+
+  @override
+  String get scanningDirectory => 'مسیر در حال اسکن:';
+
+  @override
+  String get filename => 'نام فایل';
+
+  @override
+  String get publisher => 'ناشر';
+
+  @override
+  String get fileSize => 'حجم';
 
   @override
   String get installed => 'نصب شده';
@@ -312,19 +345,6 @@ class AppLocalizationsFa implements AppLocalizations {
   @override
   String get noSoftwareConfigured => 'نرم‌افزاری در لیست الزامات تعریف نشده است.';
 
-  // Packages Section
-  @override
-  String get packages => 'پکیج‌های نرم‌افزاری';
-
-  @override
-  String get scanPackages => 'اسکن پکیج‌ها';
-
-  @override
-  String get scanningPackages => 'در حال اسکن پکیج‌ها...';
-
-  @override
-  String get packagesDirectory => 'مسیر پکیج‌ها';
-
   @override
   String get install => 'نصب';
 
@@ -335,19 +355,19 @@ class AppLocalizationsFa implements AppLocalizations {
   String get confirmInstallTitle => 'تأیید نصب نرم‌افزار';
 
   @override
-  String confirmInstallMessage(String name) => 'آیا از اجرای نصب پکیج $name اطمینان دارید؟';
+  String confirmInstallMessage(String name) => 'آیا از اجرای نصب $name اطمینان دارید؟';
 
   @override
   String get availableToInstall => 'آماده نصب';
 
   @override
-  String get noPackagesFound => 'پکیجی در این مسیر یافت نشد';
+  String get noPackagesFound => 'فایل نصبی در این پوشه یافت نشد';
 
   @override
-  String installSuccess(String name) => 'پکیج $name با موفقیت نصب شد';
+  String installSuccess(String name) => '$name با موفقیت نصب شد';
 
   @override
-  String installFailed(String name) => 'خطا در اجرای نصب پکیج $name';
+  String installFailed(String name) => 'خطا در اجرای نصب $name';
 
   @override
   String versionBadge(String ver) => 'نسخه $ver';
