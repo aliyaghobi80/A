@@ -9,6 +9,8 @@ import 'cards/storage_card.dart';
 import 'cards/windows_card.dart';
 import 'cards/bios_card.dart';
 import 'cards/network_card.dart';
+import 'cards/software_card.dart';
+import 'cards/files_card.dart';
 
 class AdvancedModeView extends StatelessWidget {
   final SystemInfo info;
@@ -44,6 +46,11 @@ class AdvancedModeView extends StatelessWidget {
                         const SizedBox(height: 16),
                         StorageCard(storage: info.storage),
                         const SizedBox(height: 16),
+                        SoftwareCard(
+                          software: info.software,
+                          summary: info.softwareSummary,
+                        ),
+                        const SizedBox(height: 16),
                         BiosCard(bios: info.bios),
                       ],
                     ),
@@ -60,6 +67,11 @@ class AdvancedModeView extends StatelessWidget {
                         WindowsCard(
                           windows: info.windows,
                           system: info.system,
+                        ),
+                        const SizedBox(height: 16),
+                        FilesCard(
+                          files: info.requiredFiles,
+                          summary: info.filesSummary,
                         ),
                         const SizedBox(height: 16),
                         NetworkCard(network: info.network),
@@ -85,6 +97,16 @@ class AdvancedModeView extends StatelessWidget {
                   WindowsCard(
                     windows: info.windows,
                     system: info.system,
+                  ),
+                  const SizedBox(height: 16),
+                  SoftwareCard(
+                    software: info.software,
+                    summary: info.softwareSummary,
+                  ),
+                  const SizedBox(height: 16),
+                  FilesCard(
+                    files: info.requiredFiles,
+                    summary: info.filesSummary,
                   ),
                   const SizedBox(height: 16),
                   BiosCard(bios: info.bios),

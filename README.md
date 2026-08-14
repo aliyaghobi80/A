@@ -1,14 +1,39 @@
-# Central System Checker (مرکزی سیستم چکر) - Phase 1
+# Central System Checker (مرکزی سیستم چکر) - Phase 2
 
-A modern Windows desktop application built with **Flutter** (Frontend UI/UX) and **Python** (Modular Hardware Information Engine) designed to automatically inspect, verify, and display hardware and Windows operating system specifications.
+A modern Windows desktop application built with **Flutter** (Frontend UI/UX) and **Python** (Modular Hardware & Software Verification Engine) designed to automatically inspect, verify, and display hardware specifications, Windows operating system metrics, required installed software, and required file/folder presence.
 
 ---
 
-## 🌟 Key Features (Phase 1)
+## 🌟 Key Features (Phase 1 & Phase 2)
 
-### 1. Bilingual Support (English & Persian) with Native RTL
+### 1. Automated Required Software Verification (Phase 2)
+- **Configuration-Driven**: Required software items are configured via [`config/software_requirements.json`](file:///g:/MarkaziSystem/config/software_requirements.json) without hardcoding logic in UI widgets.
+- **Deep Windows Inspection**:
+  - 64-bit Uninstall Registry (`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`)
+  - 32-bit WOW6432Node Registry (`HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`)
+  - Current User Registry (`HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall`)
+  - App Paths Registry (`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths`)
+  - Win32 `GetFileVersionInfoW` binary version extraction via `ctypes`.
+- **Microsoft Office Detection**:
+  - Automatically identifies Click-to-Run (C2R) and MSI Office installations (e.g. `Microsoft Office 2024`, `Microsoft Office 2021`, `Microsoft 365`).
+  - Reports product edition and version without checking or modifying activation state.
+- **Default Software Checklist**:
+  - Google Chrome
+  - WinRAR
+  - VLC Media Player
+  - Microsoft Office
+
+### 2. Required Files and Folders Presence (Phase 2)
+- **Configuration-Driven**: Required files and folders are configured via [`config/file_requirements.json`](file:///g:/MarkaziSystem/config/file_requirements.json).
+- **Inspection**: Determines `Present` (`موجود است`) vs `Missing` (`موجود نیست`) without altering file system state.
+
+### 3. Minimum Window Size Protection (Phase 1 Final UI Fix)
+- Enforces an appropriate minimum desktop window size ($1100 \times 700$ px with DPI scaling) via `WM_GETMINMAXINFO` in the Windows runner.
+- Prevents UI card distortion, text clipping, and header overflow in both English (LTR) and Persian (RTL). Normal resizing larger is fully preserved.
+
+### 4. Bilingual Support (English & Persian) with Native RTL
 - **English**: LTR layout, clear technical terminology.
-- **Persian (فارسی)**: Native RTL layout with natural Persian technical terminology:
+- **Persian (فارسی)**: Native RTL layout with exact technical terminology:
   - CPU: **سی‌پی‌یو**
   - RAM: **رم**
   - GPU: **کارت گرافیک**
@@ -17,44 +42,31 @@ A modern Windows desktop application built with **Flutter** (Frontend UI/UX) and
   - Windows: **ویندوز**
   - BIOS / UEFI: **BIOS / UEFI**
   - Network: **شبکه**
-  - Computer Name: **نام کامپیوتر**
-  - System Model: **مدل سیستم**
-  - Manufacturer: **سازنده**
-  - Serial Number: **شماره سریال**
-  - Architecture: **معماری**
+  - Software: **نرم‌افزارها**
+  - Required Files: **فایل‌ها و پوشه‌های موردنیاز**
+  - Installed / Not Installed: **نصب شده / نصب نشده**
+  - Present / Missing: **موجود است / موجود نیست**
   - Version: **نسخه**
-  - Build Number: **شماره ساخت**
-  - Unavailable Fallback: **موجود نیست**
-- Hardware product names, CPU/GPU models, motherboard models, and Windows editions remain in their clean original Latin form (e.g. `Intel Core i3-12100F`, `NVIDIA GeForce RTX 3060`, `Gigabyte H610M K DDR4`, `Windows 11 Enterprise`).
+  - Path: **مسیر**
+  - Fallback: **موجود نیست**
+- Hardware product names and software brand names remain in their clean original Latin form.
 
-### 2. Dual Display Modes
+### 5. Dual Display Modes
 - **Simple Mode (Default)**:
-  - Tailored for employees quickly comparing actual PC components with a paper purchase invoice.
-  - Prioritizes the 6 core components:
-    1. **CPU / سی‌پی‌یو**
-    2. **RAM / رم**
-    3. **GPU / کارت گرافیک**
-    4. **Motherboard / مادربرد**
-    5. **Storage / حافظه ذخیره‌سازی**
-    6. **Windows / ویندوز**
-  - High-contrast, easy-to-scan invoice cards with copy buttons and total specs summary copy.
+  - Fast invoice comparison for store staff:
+    1. **Hardware Specifications**: CPU, RAM, GPU, Motherboard, Storage, Windows.
+    2. **Required Software Checklist**: Google Chrome, WinRAR, VLC, Office with status badges (`✓` / `✗`).
+    3. **Required Files & Folders Checklist**: Training Folder, Desktop Tools with presence badges (`✓` / `✗`).
+  - 1-Click **"Copy Specifications" / "کپی خلاصه مشخصات"** clipboard export.
 - **Advanced Mode**:
-  - Full diagnostic dashboard with detailed hardware metrics:
-    - CPU cores, threads, clock speed
-    - RAM slot locator, module types (DDR4/DDR5), speeds, part numbers
-    - GPU dedicated 64-bit VRAM, driver versions
-    - Physical storage disks, drive types (NVMe SSD, SATA SSD, HDD), bus interfaces, serial numbers
-    - Motherboard serial number and manufacturer
-    - Windows build number, UBR, host metadata
-    - BIOS / UEFI version, vendor, release date
-    - Network adapters, connection states, IPv4, MAC addresses, link speeds
+  - Full diagnostic dashboard including `SoftwareCard` (version, detection source, install location) and `FilesCard` (type, path, status).
 
-### 3. Header Controls & Persistent User Preferences
-- In-header **Mode Switcher**: `[ Simple | Advanced ]` / `[ ساده | پیشرفته ]`
-- In-header **Language Switcher**: `[ EN | FA ]`
-- In-header **Theme Toggle**: Light / Dark mode
-- In-header **Refresh Button**: Instant live re-scan
-- **Settings Persistence**: User preferences (language, display mode, theme) are remembered between sessions without any external database.
+### 6. Header Controls & Persistent User Preferences
+- **Mode Switcher**: `[ Simple | Advanced ]` / `[ ساده | پیشرفته ]`
+- **Language Switcher**: `[ EN | FA ]`
+- **Theme Toggle**: Light / Dark mode
+- **Refresh Button**: Live re-scan of hardware, software, and files.
+- **Settings Persistence**: Stored in `%APPDATA%\CentralSystemChecker\settings.json`.
 
 ---
 
@@ -62,6 +74,9 @@ A modern Windows desktop application built with **Flutter** (Frontend UI/UX) and
 
 ```
 MarkaziSystem/
+├── config/
+│   ├── software_requirements.json   # Configurable list of required software
+│   └── file_requirements.json       # Configurable list of required files/folders
 │
 ├── frontend/                        # Flutter Desktop Application (Windows)
 │   ├── lib/
@@ -80,19 +95,35 @@ MarkaziSystem/
 │   │   │   └── app_theme.dart       # Modern Dark/Light Themes + Persian Typography
 │   │   └── widgets/
 │   │       ├── app_header.dart      # Brand Title, Mode & Language Switchers, Theme Toggle
-│   │       ├── simple_mode_view.dart # Invoice-comparison Checklist View
-│   │       ├── advanced_mode_view.dart # Full Hardware Dashboard Grid
+│   │       ├── simple_mode_view.dart # Simple Invoice & Checklist View
+│   │       ├── advanced_mode_view.dart # Full Hardware & Diagnostic Dashboard Grid
 │   │       ├── summary_hero_bar.dart # Overview Metric Chips
 │   │       ├── loading_view.dart    # Inspection Loader
 │   │       ├── error_view.dart      # Error Boundary & Retry
-│   │       └── cards/               # Hardware Category Cards
+│   │       └── cards/               # Hardware, Software, & File Diagnostic Cards
+│   │           ├── software_card.dart
+│   │           ├── files_card.dart
+│   │           ├── cpu_card.dart
+│   │           ├── ram_card.dart
+│   │           ├── gpu_card.dart
+│   │           ├── motherboard_card.dart
+│   │           ├── storage_card.dart
+│   │           ├── windows_card.dart
+│   │           ├── bios_card.dart
+│   │           └── network_card.dart
 │   └── test/                        # Automated Widget & Unit Tests
 │
-├── backend/                         # Modular Python Hardware Detection Engine
+├── backend/                         # Modular Python Verification Engine
 │   ├── main.py                      # CLI & Server Runner (Host: 127.0.0.1:18080)
 │   ├── server.py                    # Multi-threaded HTTP Server with CORS
 │   ├── collector.py                 # Concurrent Task Orchestrator
 │   ├── hardware/                    # Hardware Collectors (CPU, RAM, GPU, Storage, Motherboard, BIOS)
+│   ├── software/                    # Software Collectors (Registry, Office, Binary Versioning)
+│   │   ├── detector.py
+│   │   ├── registry.py
+│   │   └── office.py
+│   ├── files/                       # File/Folder Presence Checker
+│   │   └── checker.py
 │   ├── windows/                     # Windows OS & Network Collectors
 │   └── utils/                       # PowerShell Runner & Formatters
 │
@@ -106,7 +137,6 @@ MarkaziSystem/
 ## 🚀 How to Run
 
 ### Option 1: 1-Click Launch (Recommended)
-
 Double-click or run in terminal:
 ```cmd
 run_demo.bat
@@ -140,10 +170,10 @@ flutter analyze
 
 ---
 
-## 🔒 Scope Restriction (Phase 1)
+## 🔒 Scope Restriction (Phase 2)
 
-This project strictly implements **Phase 1** specifications. The following features are excluded by design:
-- Invoice comparison automation (Phase 2)
-- Windows / Office activation tools
-- Software installer / USB automation
-- Cloud sync / database
+This project strictly implements **Phase 1 and Phase 2** specifications. The following features are excluded by design until Phase 3+:
+- Windows / Office activation checking or tools
+- Automated software installation / USB installer
+- Invoice OCR / automated invoice comparison
+- Databases / User accounts / Cloud sync

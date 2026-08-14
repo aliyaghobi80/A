@@ -55,6 +55,10 @@ abstract class AppLocalizations {
   String get switchToLightMode;
   String get switchToDarkMode;
 
+  // Summary & Overview
+  String get hardware;
+  String get ready;
+
   // Simple Mode UI
   String get simpleModeHeaderTitle;
   String get simpleModeHeaderSubtitle;
@@ -135,6 +139,32 @@ abstract class AppLocalizations {
   String get disconnected;
   String activeAdaptersCount(int active, int total);
   String get noNetworkDetected;
+
+  // Phase 2: Software Requirements
+  String get software;
+  String get installed;
+  String get notInstalled;
+  String get unknown;
+  String get detectionSource;
+  String get installLocation;
+  String get softwareStatus;
+  String softwareSummaryCount(int installed, int total);
+  String get allSoftwareInstalled;
+  String get someSoftwareMissing;
+  String get noSoftwareConfigured;
+
+  // Phase 2: File Requirements
+  String get requiredFiles;
+  String get present;
+  String get missing;
+  String get filePath;
+  String get fileType;
+  String get folder;
+  String get file;
+  String filesSummaryCount(int present, int total);
+  String get allFilesPresent;
+  String get someFilesMissing;
+  String get noFilesConfigured;
 
   // Loading & Error Views
   String get loadingMessage;

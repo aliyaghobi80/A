@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "id": "training_folder",
+      "name": "Training Folder",
+      "displayName": "Training Folder",
+      "path": "C:\\CompanyFiles\\Training",
+      "type": "folder",
+      "required": true
+    },
+    {
+      "id": "desktop_tools",
+      "name": "Desktop Tools",
+      "displayName": "Desktop Tools",
+      "path": "C:\\Users\\Public\\Desktop\\CompanyTools",
+      "type": "folder",
+      "required": true
+    },
+    {
+      "id": "system_hosts",
+      "name": "System Hosts File",
+      "displayName": "System Hosts File",
+      "path": "C:\\Windows\\System32\\drivers\\etc\\hosts",
+      "type": "file",
+      "required": true
+    }
+  ]
+}

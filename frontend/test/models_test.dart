@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:central_system_checker/models/system_info.dart';
 
 void main() {
-  test('SystemInfo.fromJson parses full schema correctly with fallbacks', () {
+  test('SystemInfo.fromJson parses full schema correctly with fallbacks and Phase 2 data', () {
     final mockJson = {
       'status': 'success',
       'timestamp': '2026-08-14T06:35:00',
@@ -88,7 +88,55 @@ void main() {
           'link_speed': '1 Gbps',
           'is_connected': true
         }
-      ]
+      ],
+      'software': [
+        {
+          'id': 'chrome',
+          'name': 'Google Chrome',
+          'display_name': 'Google Chrome',
+          'status': 'Installed',
+          'is_installed': true,
+          'version': '151.0.7922.138',
+          'product_name': 'Google Chrome',
+          'detection_source': 'Registry (HKLM_32)',
+          'install_location': 'C:\\Program Files\\Google\\Chrome\\Application',
+          'required': true
+        },
+        {
+          'id': 'vlc',
+          'name': 'VLC Media Player',
+          'display_name': 'VLC Media Player',
+          'status': 'Not Installed',
+          'is_installed': false,
+          'version': 'Not available',
+          'product_name': 'VLC Media Player',
+          'detection_source': 'None',
+          'install_location': 'Not available',
+          'required': true
+        }
+      ],
+      'software_summary': {
+        'installed_count': 1,
+        'total_count': 2,
+        'all_installed': false
+      },
+      'required_files': [
+        {
+          'id': 'training_folder',
+          'name': 'Training Folder',
+          'display_name': 'Training Folder',
+          'path': 'C:\\CompanyFiles\\Training',
+          'type': 'folder',
+          'status': 'Missing',
+          'exists': false,
+          'required': true
+        }
+      ],
+      'files_summary': {
+        'present_count': 0,
+        'total_count': 1,
+        'all_present': false
+      }
     };
 
     final info = SystemInfo.fromJson(mockJson);
@@ -106,5 +154,14 @@ void main() {
     expect(info.system.computerName, 'DESKTOP-BTS6OUC');
     expect(info.bios.version, 'F22');
     expect(info.network.first.isConnected, true);
+    expect(info.software.length, 2);
+    expect(info.software.first.name, 'Google Chrome');
+    expect(info.software.first.isInstalled, true);
+    expect(info.software.first.version, '151.0.7922.138');
+    expect(info.softwareSummary.installedCount, 1);
+    expect(info.softwareSummary.totalCount, 2);
+    expect(info.requiredFiles.length, 1);
+    expect(info.requiredFiles.first.exists, false);
+    expect(info.filesSummary.presentCount, 0);
   });
 }

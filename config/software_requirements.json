@@ -1,0 +1,57 @@
+{
+  "software": [
+    {
+      "id": "chrome",
+      "name": "Google Chrome",
+      "displayName": "Google Chrome",
+      "required": true,
+      "registryPatterns": ["Google Chrome", "Chrome"],
+      "appPaths": ["chrome.exe"],
+      "executablePaths": [
+        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+      ]
+    },
+    {
+      "id": "winrar",
+      "name": "WinRAR",
+      "displayName": "WinRAR",
+      "required": true,
+      "registryPatterns": ["WinRAR"],
+      "appPaths": ["WinRAR.exe"],
+      "executablePaths": [
+        "C:\\Program Files\\WinRAR\\WinRAR.exe",
+        "C:\\Program Files (x86)\\WinRAR\\WinRAR.exe"
+      ]
+    },
+    {
+      "id": "vlc",
+      "name": "VLC Media Player",
+      "displayName": "VLC Media Player",
+      "required": true,
+      "registryPatterns": ["VLC media player", "VLC"],
+      "appPaths": ["vlc.exe"],
+      "executablePaths": [
+        "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
+        "C:\\Program Files (x86)\\VideoLAN\\VLC\\vlc.exe"
+      ]
+    },
+    {
+      "id": "office",
+      "name": "Microsoft Office",
+      "displayName": "Microsoft Office",
+      "required": true,
+      "isOffice": true,
+      "registryPatterns": ["Microsoft Office", "Office 16", "Microsoft 365"],
+      "appPaths": ["WINWORD.EXE", "EXCEL.EXE"],
+      "executablePaths": [
+        "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+        "C:\\Program Files (x86)\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+        "C:\\Program Files\\Microsoft Office\\Office16\\WINWORD.EXE",
+        "C:\\Program Files (x86)\\Microsoft Office\\Office16\\WINWORD.EXE",
+        "C:\\Program Files\\Microsoft Office\\Office15\\WINWORD.EXE",
+        "C:\\Program Files (x86)\\Microsoft Office\\Office15\\WINWORD.EXE"
+      ]
+    }
+  ]
+}

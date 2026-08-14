@@ -4,7 +4,7 @@ project(central_system_checker LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "central_system_checker")
+set(BINARY_NAME "CentralSystemChecker")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.

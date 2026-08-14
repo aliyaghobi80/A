@@ -22,13 +22,16 @@ if (-not $portActive) {
     Write-Host "[1/2] Python backend already active on port 18080." -ForegroundColor Green
 }
 
-# Check Frontend executable
+$releaseExeMain = "frontend\build\windows\x64\runner\Release\CentralSystemChecker.exe"
 $releaseExeNew = "frontend\build\windows\x64\runner\Release\central_system_checker.exe"
 $releaseExeOld = "frontend\build\windows\x64\runner\Release\pc_system_inspector.exe"
 $debugExeNew = "frontend\build\windows\x64\runner\Debug\central_system_checker.exe"
 $debugExeOld = "frontend\build\windows\x64\runner\Debug\pc_system_inspector.exe"
 
-if (Test-Path $releaseExeNew) {
+if (Test-Path $releaseExeMain) {
+    Write-Host "[2/2] Launching Windows Desktop Application (Release)..." -ForegroundColor Green
+    Start-Process $releaseExeMain
+} elseif (Test-Path $releaseExeNew) {
     Write-Host "[2/2] Launching Windows Desktop Application (Release)..." -ForegroundColor Green
     Start-Process $releaseExeNew
 } elseif (Test-Path $releaseExeOld) {

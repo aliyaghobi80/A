@@ -25,7 +25,9 @@ if %errorlevel% neq 0 (
 
 :: Launch Flutter application
 echo [2/2] Launching Central System Checker Desktop App...
-if exist "frontend\build\windows\x64\runner\Release\central_system_checker.exe" (
+if exist "frontend\build\windows\x64\runner\Release\CentralSystemChecker.exe" (
+    start "" "frontend\build\windows\x64\runner\Release\CentralSystemChecker.exe"
+) else if exist "frontend\build\windows\x64\runner\Release\central_system_checker.exe" (
     start "" "frontend\build\windows\x64\runner\Release\central_system_checker.exe"
 ) else if exist "frontend\build\windows\x64\runner\Release\pc_system_inspector.exe" (
     start "" "frontend\build\windows\x64\runner\Release\pc_system_inspector.exe"

@@ -22,6 +22,7 @@ class SimpleModeView extends StatelessWidget {
   String _buildAllSpecsSummary(AppLocalizations l10n) {
     final buffer = StringBuffer();
     buffer.writeln('=== ${l10n.appName} ===');
+    buffer.writeln('[${l10n.hardware}]');
     buffer.writeln('${l10n.cpu}: ${info.cpu.name}');
     buffer.writeln('${l10n.ram}: ${info.ram.totalDisplay}${info.ram.speedDisplay != 'Not available' ? ' (${info.ram.speedDisplay})' : ''}');
     
@@ -42,7 +43,60 @@ class SimpleModeView extends StatelessWidget {
     }
 
     buffer.writeln('${l10n.windows}: ${info.windows.edition} (${info.windows.architecture})');
+
+    if (info.software.isNotEmpty) {
+      buffer.writeln('\n[${l10n.software}]');
+      for (final s in info.software) {
+        final statusStr = s.isInstalled ? '${l10n.installed} (${s.version})' : l10n.notInstalled;
+        buffer.writeln('- ${s.displayName}: $statusStr');
+      }
+    }
+
+    if (info.requiredFiles.isNotEmpty) {
+      buffer.writeln('\n[${l10n.requiredFiles}]');
+      for (final f in info.requiredFiles) {
+        final statusStr = f.exists ? l10n.present : l10n.missing;
+        buffer.writeln('- ${f.displayName}: $statusStr');
+      }
+    }
+
     return buffer.toString();
+  }
+
+  Widget _buildSectionHeader({
+    required BuildContext context,
+    required IconData icon,
+    required String title,
+    required Color color,
+    Widget? trailing,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: color),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+            letterSpacing: -0.2,
+          ),
+        ),
+        const Spacer(),
+        ?trailing,
+      ],
+    );
   }
 
   Widget _buildInvoiceCard({
@@ -304,9 +358,18 @@ class SimpleModeView extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 22),
 
-        // 6 Priority Cards in 2-Column Responsive Grid
+        // SECTION 1: Hardware Specifications Header
+        _buildSectionHeader(
+          context: context,
+          icon: Icons.memory_rounded,
+          title: l10n.hardware,
+          color: const Color(0xFF3B82F6),
+        ),
+        const SizedBox(height: 14),
+
+        // 6 Priority Hardware Cards in 2-Column Responsive Grid
         LayoutBuilder(
           builder: (context, constraints) {
             final isWide = constraints.maxWidth > 850;
@@ -809,27 +872,25 @@ class SimpleModeView extends StatelessWidget {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Left Column: CPU, GPU, Storage
                   Expanded(
                     child: Column(
                       children: [
                         card1Cpu,
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                         card3Gpu,
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                         card5Storage,
                       ],
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  // Right Column: RAM, Motherboard, Windows
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       children: [
                         card2Ram,
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                         card4Motherboard,
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                         card6Windows,
                       ],
                     ),
@@ -840,22 +901,339 @@ class SimpleModeView extends StatelessWidget {
               return Column(
                 children: [
                   card1Cpu,
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   card2Ram,
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   card3Gpu,
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   card4Motherboard,
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   card5Storage,
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   card6Windows,
                 ],
               );
             }
           },
         ),
+        const SizedBox(height: 28),
+
+        // SECTION 2: Required Software Checklist
+        _buildSectionHeader(
+          context: context,
+          icon: Icons.apps_rounded,
+          title: l10n.software,
+          color: const Color(0xFF6366F1),
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: (info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: (info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.3),
+              ),
+            ),
+            child: Text(
+              l10n.softwareSummaryCount(info.softwareSummary.installedCount, info.softwareSummary.totalCount),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Software Checklist Grid
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF131D33) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF22304E) : const Color(0xFFE2E8F0),
+              width: 1.2,
+            ),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: info.software.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      l10n.noSoftwareConfigured,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMultiCol = constraints.maxWidth > 600;
+
+                    final items = info.software.map((s) => _buildSoftwareRow(context, s, isDark, l10n)).toList();
+
+                    if (isMultiCol) {
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: items.map((w) => SizedBox(width: (constraints.maxWidth - 12) / 2, child: w)).toList(),
+                      );
+                    } else {
+                      return Column(
+                        children: items.map((w) => Padding(padding: const EdgeInsets.only(bottom: 8), child: w)).toList(),
+                      );
+                    }
+                  },
+                ),
+        ),
+        const SizedBox(height: 28),
+
+        // SECTION 3: Required Files & Folders Checklist
+        _buildSectionHeader(
+          context: context,
+          icon: Icons.folder_special_rounded,
+          title: l10n.requiredFiles,
+          color: const Color(0xFF0EA5E9),
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: (info.filesSummary.allPresent ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: (info.filesSummary.allPresent ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.3),
+              ),
+            ),
+            child: Text(
+              l10n.filesSummaryCount(info.filesSummary.presentCount, info.filesSummary.totalCount),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: info.filesSummary.allPresent ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Files Checklist Grid
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF131D33) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF22304E) : const Color(0xFFE2E8F0),
+              width: 1.2,
+            ),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: info.requiredFiles.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      l10n.noFilesConfigured,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMultiCol = constraints.maxWidth > 600;
+
+                    final items = info.requiredFiles.map((f) => _buildFileRow(context, f, isDark, l10n)).toList();
+
+                    if (isMultiCol) {
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: items.map((w) => SizedBox(width: (constraints.maxWidth - 12) / 2, child: w)).toList(),
+                      );
+                    } else {
+                      return Column(
+                        children: items.map((w) => Padding(padding: const EdgeInsets.only(bottom: 8), child: w)).toList(),
+                      );
+                    }
+                  },
+                ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildSoftwareRow(BuildContext context, SoftwareItem item, bool isDark, AppLocalizations l10n) {
+    final isInstalled = item.isInstalled;
+    final statusColor = isInstalled ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isInstalled
+              ? statusColor.withValues(alpha: isDark ? 0.3 : 0.2)
+              : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(
+              isInstalled ? Icons.check_rounded : Icons.close_rounded,
+              size: 16,
+              color: statusColor,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    item.displayName,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isInstalled && item.version != 'Not available')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Text(
+                        'v${item.version}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              isInstalled ? l10n.installed : l10n.notInstalled,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: statusColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFileRow(BuildContext context, RequiredFileItem item, bool isDark, AppLocalizations l10n) {
+    final exists = item.exists;
+    final statusColor = exists ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final isFolder = item.type.toLowerCase() == 'folder';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: exists
+              ? statusColor.withValues(alpha: isDark ? 0.3 : 0.2)
+              : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(
+              exists ? Icons.check_rounded : Icons.close_rounded,
+              size: 16,
+              color: statusColor,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    item.displayName,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    isFolder ? l10n.folder : l10n.file,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              exists ? l10n.present : l10n.missing,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: statusColor,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

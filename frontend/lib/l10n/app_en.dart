@@ -5,7 +5,7 @@ class AppLocalizationsEn implements AppLocalizations {
   String get appName => 'Central System Checker';
 
   @override
-  String get appSubtitle => 'Hardware & Windows Information';
+  String get appSubtitle => 'Hardware, Windows & Software Verification';
 
   @override
   String get liveInspector => 'Live Inspector';
@@ -17,10 +17,10 @@ class AppLocalizationsEn implements AppLocalizations {
   String get advancedMode => 'Advanced';
 
   @override
-  String get simpleModeTooltip => 'Simple Mode: Fast Invoice Comparison';
+  String get simpleModeTooltip => 'Simple Mode: Fast Invoice & Software Checklist';
 
   @override
-  String get advancedModeTooltip => 'Advanced Mode: Detailed System Specifications';
+  String get advancedModeTooltip => 'Advanced Mode: Detailed System & Diagnostics';
 
   @override
   String get languageEn => 'EN';
@@ -53,10 +53,16 @@ class AppLocalizationsEn implements AppLocalizations {
   String get switchToDarkMode => 'Switch to Dark Mode';
 
   @override
-  String get simpleModeHeaderTitle => 'Hardware Specifications for Invoice Check';
+  String get hardware => 'Hardware';
 
   @override
-  String get simpleModeHeaderSubtitle => 'Quickly compare actual PC hardware specifications with the purchase invoice';
+  String get ready => 'Ready';
+
+  @override
+  String get simpleModeHeaderTitle => 'Specifications for Invoice & Setup Check';
+
+  @override
+  String get simpleModeHeaderSubtitle => 'Quickly verify PC hardware, installed software, and required folders';
 
   @override
   String get invoiceCheckBadge => 'Invoice Check';
@@ -244,8 +250,76 @@ class AppLocalizationsEn implements AppLocalizations {
   @override
   String get noNetworkDetected => 'No network adapters detected';
 
+  // Phase 2: Software
   @override
-  String get loadingMessage => 'Detecting hardware & Windows specifications...';
+  String get software => 'Software';
+
+  @override
+  String get installed => 'Installed';
+
+  @override
+  String get notInstalled => 'Not Installed';
+
+  @override
+  String get unknown => 'Unknown';
+
+  @override
+  String get detectionSource => 'Detection Source';
+
+  @override
+  String get installLocation => 'Install Location';
+
+  @override
+  String get softwareStatus => 'Software Status';
+
+  @override
+  String softwareSummaryCount(int installed, int total) => '$installed / $total Installed';
+
+  @override
+  String get allSoftwareInstalled => 'All Required Software Installed';
+
+  @override
+  String get someSoftwareMissing => 'Missing Required Software';
+
+  @override
+  String get noSoftwareConfigured => 'No software requirements configured';
+
+  // Phase 2: Files
+  @override
+  String get requiredFiles => 'Required Files & Folders';
+
+  @override
+  String get present => 'Present';
+
+  @override
+  String get missing => 'Missing';
+
+  @override
+  String get filePath => 'Path';
+
+  @override
+  String get fileType => 'Type';
+
+  @override
+  String get folder => 'Folder';
+
+  @override
+  String get file => 'File';
+
+  @override
+  String filesSummaryCount(int present, int total) => '$present / $total Present';
+
+  @override
+  String get allFilesPresent => 'All Required Files Present';
+
+  @override
+  String get someFilesMissing => 'Missing Required Files';
+
+  @override
+  String get noFilesConfigured => 'No file requirements configured';
+
+  @override
+  String get loadingMessage => 'Detecting hardware, software & Windows specifications...';
 
   @override
   String get initializingMessage => 'Initializing system inspector...';

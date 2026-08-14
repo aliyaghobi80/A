@@ -11,6 +11,10 @@ class SystemInfo {
   final SystemMetaInfo system;
   final BiosInfo bios;
   final List<NetworkInfo> network;
+  final List<SoftwareItem> software;
+  final SoftwareSummary softwareSummary;
+  final List<RequiredFileItem> requiredFiles;
+  final FilesSummary filesSummary;
 
   SystemInfo({
     required this.status,
@@ -25,7 +29,12 @@ class SystemInfo {
     required this.system,
     required this.bios,
     required this.network,
-  });
+    this.software = const [],
+    SoftwareSummary? softwareSummary,
+    this.requiredFiles = const [],
+    FilesSummary? filesSummary,
+  })  : softwareSummary = softwareSummary ?? SoftwareSummary.empty(),
+        filesSummary = filesSummary ?? FilesSummary.empty();
 
   factory SystemInfo.fromJson(Map<String, dynamic> json) {
     return SystemInfo(
@@ -47,6 +56,145 @@ class SystemInfo {
       network: (json['network'] as List<dynamic>? ?? [])
           .map((e) => NetworkInfo.fromJson(e as Map<String, dynamic>))
           .toList(),
+      software: (json['software'] as List<dynamic>? ?? [])
+          .map((e) => SoftwareItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      softwareSummary: SoftwareSummary.fromJson(json['software_summary'] as Map<String, dynamic>? ?? {}),
+      requiredFiles: (json['required_files'] as List<dynamic>? ?? [])
+          .map((e) => RequiredFileItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      filesSummary: FilesSummary.fromJson(json['files_summary'] as Map<String, dynamic>? ?? {}),
+    );
+  }
+}
+
+class SoftwareItem {
+  final String id;
+  final String name;
+  final String displayName;
+  final String status;
+  final bool isInstalled;
+  final String version;
+  final String productName;
+  final String detectionSource;
+  final String installLocation;
+  final bool required;
+
+  SoftwareItem({
+    required this.id,
+    required this.name,
+    required this.displayName,
+    required this.status,
+    required this.isInstalled,
+    required this.version,
+    required this.productName,
+    required this.detectionSource,
+    required this.installLocation,
+    required this.required,
+  });
+
+  factory SoftwareItem.fromJson(Map<String, dynamic> json) {
+    return SoftwareItem(
+      id: json['id'] ?? 'unknown',
+      name: json['name'] ?? 'Unknown Software',
+      displayName: json['display_name'] ?? json['name'] ?? 'Unknown Software',
+      status: json['status'] ?? 'Not Installed',
+      isInstalled: json['is_installed'] as bool? ?? (json['status'] == 'Installed'),
+      version: json['version'] ?? 'Not available',
+      productName: json['product_name'] ?? json['display_name'] ?? 'Unknown',
+      detectionSource: json['detection_source'] ?? 'None',
+      installLocation: json['install_location'] ?? 'Not available',
+      required: json['required'] as bool? ?? true,
+    );
+  }
+}
+
+class SoftwareSummary {
+  final int installedCount;
+  final int totalCount;
+  final bool allInstalled;
+
+  SoftwareSummary({
+    required this.installedCount,
+    required this.totalCount,
+    required this.allInstalled,
+  });
+
+  factory SoftwareSummary.empty() => SoftwareSummary(
+        installedCount: 0,
+        totalCount: 0,
+        allInstalled: false,
+      );
+
+  factory SoftwareSummary.fromJson(Map<String, dynamic> json) {
+    return SoftwareSummary(
+      installedCount: json['installed_count'] as int? ?? 0,
+      totalCount: json['total_count'] as int? ?? 0,
+      allInstalled: json['all_installed'] as bool? ?? false,
+    );
+  }
+}
+
+class RequiredFileItem {
+  final String id;
+  final String name;
+  final String displayName;
+  final String path;
+  final String type;
+  final String status;
+  final bool exists;
+  final bool required;
+  final String? errorMessage;
+
+  RequiredFileItem({
+    required this.id,
+    required this.name,
+    required this.displayName,
+    required this.path,
+    required this.type,
+    required this.status,
+    required this.exists,
+    required this.required,
+    this.errorMessage,
+  });
+
+  factory RequiredFileItem.fromJson(Map<String, dynamic> json) {
+    return RequiredFileItem(
+      id: json['id'] ?? 'unknown',
+      name: json['name'] ?? 'Unknown File',
+      displayName: json['display_name'] ?? json['name'] ?? 'Unknown File',
+      path: json['path'] ?? '',
+      type: json['type'] ?? 'folder',
+      status: json['status'] ?? (json['exists'] == true ? 'Present' : 'Missing'),
+      exists: json['exists'] as bool? ?? false,
+      required: json['required'] as bool? ?? true,
+      errorMessage: json['error_message'],
+    );
+  }
+}
+
+class FilesSummary {
+  final int presentCount;
+  final int totalCount;
+  final bool allPresent;
+
+  FilesSummary({
+    required this.presentCount,
+    required this.totalCount,
+    required this.allPresent,
+  });
+
+  factory FilesSummary.empty() => FilesSummary(
+        presentCount: 0,
+        totalCount: 0,
+        allPresent: false,
+      );
+
+  factory FilesSummary.fromJson(Map<String, dynamic> json) {
+    return FilesSummary(
+      presentCount: json['present_count'] as int? ?? 0,
+      totalCount: json['total_count'] as int? ?? 0,
+      allPresent: json['all_present'] as bool? ?? false,
     );
   }
 }

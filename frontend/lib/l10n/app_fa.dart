@@ -5,7 +5,7 @@ class AppLocalizationsFa implements AppLocalizations {
   String get appName => 'مرکزی سیستم چکر';
 
   @override
-  String get appSubtitle => 'اطلاعات سخت‌افزار و ویندوز';
+  String get appSubtitle => 'بررسی سخت‌افزار، ویندوز و نرم‌افزارهای موردنیاز';
 
   @override
   String get liveInspector => 'بررسی زنده';
@@ -17,10 +17,10 @@ class AppLocalizationsFa implements AppLocalizations {
   String get advancedMode => 'پیشرفته';
 
   @override
-  String get simpleModeTooltip => 'حالت ساده: مقایسه سریع با فاکتور کاغذی';
+  String get simpleModeTooltip => 'حالت ساده: مقایسه سریع با فاکتور و چک‌لیست نرم‌افزارها';
 
   @override
-  String get advancedModeTooltip => 'حالت پیشرفته: مشخصات کامل و جزئیات فنی';
+  String get advancedModeTooltip => 'حالت پیشرفته: مشخصات کامل، جزئیات فنی و وضعیت فایل‌ها';
 
   @override
   String get languageEn => 'EN';
@@ -53,10 +53,16 @@ class AppLocalizationsFa implements AppLocalizations {
   String get switchToDarkMode => 'تغییر به تم تاریک';
 
   @override
-  String get simpleModeHeaderTitle => 'مشخصات سخت‌افزاری جهت بررسی فاکتور';
+  String get hardware => 'سخت‌افزار';
 
   @override
-  String get simpleModeHeaderSubtitle => 'مقایسه سریع و آسان مشخصات فنی واقعی قطعات سیستم با فاکتور خرید';
+  String get ready => 'آماده';
+
+  @override
+  String get simpleModeHeaderTitle => 'مشخصات فنی و نرم‌افزارهای موردنیاز';
+
+  @override
+  String get simpleModeHeaderSubtitle => 'بررسی سریع و آسان مشخصات قطعات با فاکتور خرید و چک‌لیست نصب برنامه‌ها';
 
   @override
   String get invoiceCheckBadge => 'بررسی فاکتور';
@@ -244,8 +250,76 @@ class AppLocalizationsFa implements AppLocalizations {
   @override
   String get noNetworkDetected => 'هیچ کارت شبکه‌ای شناسایی نشد';
 
+  // Phase 2: Software
   @override
-  String get loadingMessage => 'در حال شناسایی مشخصات سخت‌افزار و ویندوز...';
+  String get software => 'نرم‌افزارها';
+
+  @override
+  String get installed => 'نصب شده';
+
+  @override
+  String get notInstalled => 'نصب نشده';
+
+  @override
+  String get unknown => 'نامشخص';
+
+  @override
+  String get detectionSource => 'منبع شناسایی';
+
+  @override
+  String get installLocation => 'مسیر نصب';
+
+  @override
+  String get softwareStatus => 'وضعیت نرم‌افزارها';
+
+  @override
+  String softwareSummaryCount(int installed, int total) => '$installed از $total نصب شده';
+
+  @override
+  String get allSoftwareInstalled => 'تمام نرم‌افزارهای موردنیاز نصب شده‌اند';
+
+  @override
+  String get someSoftwareMissing => 'برخی نرم‌افزارها نصب نشده‌اند';
+
+  @override
+  String get noSoftwareConfigured => 'هیچ نرم‌افزاری پیکربندی نشده است';
+
+  // Phase 2: Files
+  @override
+  String get requiredFiles => 'فایل‌ها و پوشه‌های موردنیاز';
+
+  @override
+  String get present => 'موجود است';
+
+  @override
+  String get missing => 'موجود نیست';
+
+  @override
+  String get filePath => 'مسیر';
+
+  @override
+  String get fileType => 'نوع';
+
+  @override
+  String get folder => 'پوشه';
+
+  @override
+  String get file => 'فایل';
+
+  @override
+  String filesSummaryCount(int present, int total) => '$present از $total موجود است';
+
+  @override
+  String get allFilesPresent => 'تمام فایل‌های موردنیاز موجود است';
+
+  @override
+  String get someFilesMissing => 'برخی فایل‌های موردنیاز موجود نیست';
+
+  @override
+  String get noFilesConfigured => 'هیچ فایلی پیکربندی نشده است';
+
+  @override
+  String get loadingMessage => 'در حال شناسایی مشخصات سخت‌افزار، ویندوز و نرم‌افزارها...';
 
   @override
   String get initializingMessage => 'در حال راه‌اندازی بررسی‌کننده سیستم...';

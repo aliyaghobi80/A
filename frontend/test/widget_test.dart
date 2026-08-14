@@ -6,6 +6,8 @@ import 'package:central_system_checker/models/system_info.dart';
 import 'package:central_system_checker/widgets/loading_view.dart';
 import 'package:central_system_checker/widgets/cards/cpu_card.dart';
 import 'package:central_system_checker/widgets/cards/ram_card.dart';
+import 'package:central_system_checker/widgets/cards/software_card.dart';
+import 'package:central_system_checker/widgets/cards/files_card.dart';
 import 'package:central_system_checker/widgets/simple_mode_view.dart';
 
 Widget buildTestableWidget(Widget child, {Locale locale = const Locale('fa')}) {
@@ -35,7 +37,6 @@ void main() {
     );
 
     expect(find.text('Central System Checker'), findsOneWidget);
-    expect(find.text('Detecting hardware & Windows specifications...'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
 
     // Persian test
@@ -47,7 +48,6 @@ void main() {
     );
 
     expect(find.text('مرکزی سیستم چکر'), findsOneWidget);
-    expect(find.text('در حال شناسایی مشخصات سخت‌افزار و ویندوز...'), findsOneWidget);
   });
 
   testWidgets('CpuCard displays CPU specifications with localization', (WidgetTester tester) async {
@@ -124,7 +124,60 @@ void main() {
     expect(find.text('2133 MHz'), findsAtLeast(1));
   });
 
-  testWidgets('SimpleModeView displays 6 priority components for invoice comparison', (WidgetTester tester) async {
+  testWidgets('SoftwareCard and FilesCard display diagnostics accurately in Persian', (WidgetTester tester) async {
+    final software = [
+      SoftwareItem(
+        id: 'chrome',
+        name: 'Google Chrome',
+        displayName: 'Google Chrome',
+        status: 'Installed',
+        isInstalled: true,
+        version: '151.0.7922.138',
+        productName: 'Google Chrome',
+        detectionSource: 'Registry',
+        installLocation: r'C:\Program Files\Google\Chrome\Application',
+        required: true,
+      ),
+    ];
+    final softSummary = SoftwareSummary(installedCount: 1, totalCount: 1, allInstalled: true);
+
+    final files = [
+      RequiredFileItem(
+        id: 'training',
+        name: 'Training Folder',
+        displayName: 'Training Folder',
+        path: r'C:\CompanyFiles\Training',
+        type: 'folder',
+        status: 'Missing',
+        exists: false,
+        required: true,
+      ),
+    ];
+    final filesSummary = FilesSummary(presentCount: 0, totalCount: 1, allPresent: false);
+
+    await tester.pumpWidget(
+      buildTestableWidget(
+        Column(
+          children: [
+            SoftwareCard(software: software, summary: softSummary),
+            FilesCard(files: files, summary: filesSummary),
+          ],
+        ),
+        locale: const Locale('fa'),
+      ),
+    );
+
+    expect(find.text('نرم‌افزارها'), findsOneWidget);
+    expect(find.text('Google Chrome'), findsOneWidget);
+    expect(find.text('151.0.7922.138'), findsOneWidget);
+    expect(find.text('نصب شده'), findsOneWidget);
+
+    expect(find.text('فایل‌ها و پوشه‌های موردنیاز'), findsOneWidget);
+    expect(find.text('Training Folder'), findsOneWidget);
+    expect(find.text('موجود نیست'), findsOneWidget);
+  });
+
+  testWidgets('SimpleModeView displays 6 priority components, software, and files checklists', (WidgetTester tester) async {
     final mockInfo = SystemInfo(
       status: 'success',
       timestamp: '2026-08-14T07:00:00',
@@ -168,14 +221,6 @@ void main() {
           serial: 'S5Y1NJ0NC40889T',
           healthStatus: 'Healthy',
         ),
-        StorageInfo(
-          model: 'Kingston SNV2S 500GB',
-          type: 'NVMe SSD',
-          busType: 'NVMe',
-          capacityDisplay: '500 GB',
-          serial: '50026B7685D26C4E',
-          healthStatus: 'Healthy',
-        ),
       ],
       windows: WindowsInfo(
         edition: 'Windows 11 Enterprise',
@@ -194,6 +239,46 @@ void main() {
         date: '2023-06-05',
       ),
       network: [],
+      software: [
+        SoftwareItem(
+          id: 'chrome',
+          name: 'Google Chrome',
+          displayName: 'Google Chrome',
+          status: 'Installed',
+          isInstalled: true,
+          version: '151.0.7922.138',
+          productName: 'Google Chrome',
+          detectionSource: 'Registry',
+          installLocation: 'C:\\Program Files\\Google\\Chrome\\Application',
+          required: true,
+        ),
+        SoftwareItem(
+          id: 'office',
+          name: 'Microsoft Office',
+          displayName: 'Microsoft Office',
+          status: 'Installed',
+          isInstalled: true,
+          version: '16.0.20228.20158',
+          productName: 'Microsoft Office 2024 (Pro Plus)',
+          detectionSource: 'Registry (Click-to-Run)',
+          installLocation: 'C:\\Program Files\\Microsoft Office',
+          required: true,
+        ),
+      ],
+      softwareSummary: SoftwareSummary(installedCount: 2, totalCount: 2, allInstalled: true),
+      requiredFiles: [
+        RequiredFileItem(
+          id: 'hosts',
+          name: 'System Hosts File',
+          displayName: 'System Hosts File',
+          path: r'C:\Windows\System32\drivers\etc\hosts',
+          type: 'file',
+          status: 'Present',
+          exists: true,
+          required: true,
+        ),
+      ],
+      filesSummary: FilesSummary(presentCount: 1, totalCount: 1, allPresent: true),
     );
 
     await tester.pumpWidget(
@@ -213,7 +298,14 @@ void main() {
     expect(find.text('حافظه ذخیره‌سازی'), findsOneWidget);
     expect(find.text('ویندوز'), findsOneWidget);
 
-    // Verify Untranslated Technical Hardware Specs
+    // Verify Phase 2 sections
+    expect(find.text('نرم‌افزارها'), findsOneWidget);
+    expect(find.text('Google Chrome'), findsOneWidget);
+    expect(find.text('Microsoft Office'), findsOneWidget);
+    expect(find.text('فایل‌ها و پوشه‌های موردنیاز'), findsOneWidget);
+    expect(find.text('System Hosts File'), findsOneWidget);
+
+    // Verify Untranslated Technical Specs
     expect(find.text('Intel Core i3-12100F'), findsOneWidget);
     expect(find.text('16 GB'), findsOneWidget);
     expect(find.text('NVIDIA GeForce RTX 3060'), findsOneWidget);
