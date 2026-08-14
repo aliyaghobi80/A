@@ -6,8 +6,8 @@ import 'package:http/http.dart' as http;
 
 class BackendProcessManager {
   static Process? _process;
-  static int activePort = 18080;
-  static const List<int> candidatePorts = [18080, 18088, 18089];
+  static int activePort = 18088;
+  static const List<int> candidatePorts = [18088, 18080, 18089];
 
   static String get baseUrl => 'http://127.0.0.1:$activePort';
 
@@ -15,12 +15,10 @@ class BackendProcessManager {
     try {
       final response = await http
           .get(Uri.parse('http://127.0.0.1:$port/api/health'))
-          .timeout(const Duration(milliseconds: 1200));
+          .timeout(const Duration(milliseconds: 1500));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final isOk = data['status'] == 'ok';
-        final isSupported = data['phase'] != null || data['version'] != null;
-        if (isOk && isSupported) {
+        if (data['status'] == 'ok') {
           return true;
         }
       }
