@@ -328,16 +328,21 @@ $res | ConvertTo-Json -Compress
 
 
 def _clean_software_keywords(text: str) -> List[str]:
-    """Generates search keywords from an app name or filename (e.g. 'Electro Setup' -> ['electro setup', 'electro'])."""
+    """Generates search keywords from an app name or filename (e.g. 'Electro Setup' -> ['electro', 'electro setup'])."""
+    stop_words = {"windows", "microsoft", "operating", "system", "setup", "installer", "application", "tool", "editor", "explorer"}
     t = text.lower().replace(".exe", "").replace("-", " ").replace("_", " ").strip()
-    words = t.split()
-    keywords = [t]
+    words = [w for w in t.split() if w not in stop_words and len(w) >= 3]
+
+    keywords = []
     cleaned = t.replace("setup", "").replace("installer", "").replace("x64", "").replace("x86", "").strip()
-    if cleaned and cleaned != t:
+    if cleaned and cleaned not in stop_words and len(cleaned) >= 3:
         keywords.append(cleaned)
-    if words:
-        keywords.append(words[0])
-    return [k for k in keywords if len(k) >= 3]
+    if t and t not in stop_words and len(t) >= 3:
+        keywords.append(t)
+    for w in words:
+        if w not in keywords:
+            keywords.append(w)
+    return keywords
 
 
 def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
@@ -443,6 +448,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         installed_version = ""
         installed_exe_path = None
         install_location = None
+        matched_app_name = None
         search_terms = _clean_software_keywords(display_name) + _clean_software_keywords(file) + _clean_software_keywords(product_name)
         if detection_id:
             search_terms.insert(0, detection_id.lower())
@@ -455,6 +461,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
                 # Exact or substring match
                 if term == app_name_lower or term in app_name_lower or app_name_lower in term:
                     is_installed = True
+                    matched_app_name = app["name"]
                     if app.get("version") and app["version"] != "Not available":
                         installed_version = app["version"]
 
@@ -486,9 +493,21 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
 
         status = "Installed" if is_installed else "Not Installed"
 
+        # Resolve accurate display name
+        prod_meta = meta.get("product_name", "").lower()
+        is_generic_pe = "operating system" in prod_meta or "windows" in prod_meta
+        clean_file_title = os.path.splitext(file)[0].replace("_", " ").replace("-", " ").replace(".", " ").strip().title()
+
+        if is_installed and matched_app_name:
+            final_name = matched_app_name
+        elif display_name and not is_generic_pe:
+            final_name = display_name
+        else:
+            final_name = clean_file_title or display_name
+
         packages.append({
             "id": pkg_id,
-            "name": display_name,
+            "name": final_name,
             "filename": file,
             "relative_path": rel_path,
             "full_path": full_path,
