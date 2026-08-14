@@ -9,6 +9,7 @@ import 'services/settings_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/advanced_mode_view.dart';
 import 'widgets/app_header.dart';
+import 'widgets/dialogs/exit_dialog.dart';
 import 'widgets/error_view.dart';
 import 'widgets/loading_view.dart';
 import 'widgets/simple_mode_view.dart';
@@ -81,9 +82,16 @@ class DashboardScreen extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
 
-    return Scaffold(
-      body: SafeArea(
-        child: Obx(() {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          ExitDialog.show(context);
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Obx(() {
           final isLoading = systemCtrl.isLoading.value;
           final isRefreshing = systemCtrl.isRefreshing.value;
           final error = systemCtrl.errorMessage.value;
@@ -173,6 +181,7 @@ class DashboardScreen extends StatelessWidget {
           );
         }),
       ),
+    ),
     );
   }
 }

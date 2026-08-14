@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../services/settings_service.dart';
+import 'dialogs/exit_dialog.dart';
 
 class AppHeader extends StatelessWidget {
   final bool isRefreshing;
@@ -333,6 +334,31 @@ class AppHeader extends StatelessWidget {
                     ],
                   ],
                 ],
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // Exit Application Button
+            Tooltip(
+              message: 'خروج از برنامه',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(9),
+                onTap: () => ExitDialog.show(context),
+                child: Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: (isDark ? const Color(0xFFEF4444) : const Color(0xFFFEE2E2)).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.power_settings_new_rounded,
+                    size: 18,
+                    color: Color(0xFFEF4444),
+                  ),
+                ),
               ),
             ),
           ],

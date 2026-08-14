@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../l10n/app_localizations.dart';
@@ -106,22 +107,35 @@ class SoftwareController extends GetxController {
       installingPackageId.value = targetId;
 
       try {
+        final targetPath = pkg.fullPath.isNotEmpty
+            ? pkg.fullPath
+            : (packagesDirectory.isNotEmpty
+                ? '$packagesDirectory\\${pkg.relativePath.replaceAll('/', '\\')}'
+                : pkg.relativePath);
+
+        // 1. Direct interactive foreground desktop launch via Windows cmd start
+        if (Platform.isWindows && targetPath.isNotEmpty) {
+          try {
+            await Process.run('cmd.exe', ['/c', 'start', '', targetPath], runInShell: true);
+          } catch (pe) {
+            debugPrint('[SoftwareController] Direct desktop start error: $pe');
+          }
+        }
+
+        // 2. Also notify backend API (which invokes ShellExecuteW runas)
         final res = await _apiService.installPackage(targetId);
-        final success = res['success'] == true;
         final message = res['message'] as String? ?? '';
 
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(message.isNotEmpty ? message : 'پنجره نصب با دسترسی مدیر باز شد.'),
-            backgroundColor: success ? const Color(0xFF2563EB) : const Color(0xFFEF4444),
+            content: Text(message.isNotEmpty ? message : 'پنجره نصب ${pkg.name} با دسترسی مدیر باز شد.'),
+            backgroundColor: const Color(0xFF2563EB),
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
           ),
         );
 
-        if (success) {
-          _startAutoDetectionPoll(pkg, scaffoldMessenger);
-        }
+        _startAutoDetectionPoll(pkg, scaffoldMessenger);
       } catch (e) {
         scaffoldMessenger.showSnackBar(
           SnackBar(

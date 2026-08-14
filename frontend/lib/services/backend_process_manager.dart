@@ -152,4 +152,20 @@ class BackendProcessManager {
       _process?.kill();
     } catch (_) {}
   }
+
+  static Future<void> terminateAll() async {
+    try {
+      _process?.kill();
+    } catch (_) {}
+
+    if (Platform.isWindows) {
+      try {
+        await Process.run('powershell.exe', [
+          '-NoProfile',
+          '-Command',
+          'Get-NetTCPConnection -LocalPort 18088,18080 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id \$_ -Force -ErrorAction SilentlyContinue }',
+        ]);
+      } catch (_) {}
+    }
+  }
 }
