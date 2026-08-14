@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:central_system_checker/controllers/activation_controller.dart';
 import 'package:central_system_checker/controllers/software_controller.dart';
 import 'package:central_system_checker/controllers/system_info_controller.dart';
 import 'package:central_system_checker/controllers/theme_language_controller.dart';
@@ -11,6 +12,7 @@ import 'package:central_system_checker/widgets/loading_view.dart';
 import 'package:central_system_checker/widgets/cards/cpu_card.dart';
 import 'package:central_system_checker/widgets/cards/ram_card.dart';
 import 'package:central_system_checker/widgets/cards/driver_card.dart';
+import 'package:central_system_checker/widgets/cards/office_card.dart';
 import 'package:central_system_checker/widgets/cards/packages_card.dart';
 import 'package:central_system_checker/widgets/simple_mode_view.dart';
 
@@ -37,6 +39,7 @@ void main() {
     Get.put(ThemeLanguageController());
     Get.put(SystemInfoController());
     Get.put(SoftwareController());
+    Get.put(ActivationController());
   });
 
   testWidgets('LoadingView displays expected branding and message in English and Persian', (WidgetTester tester) async {
@@ -288,6 +291,35 @@ void main() {
         ),
       ],
       filesSummary: FilesSummary(presentCount: 1, totalCount: 1, allPresent: true),
+      windowsActivation: WindowsActivationInfo(
+        installed: true,
+        activated: true,
+        statusCode: 1,
+        statusText: 'Licensed',
+        channel: 'Retail',
+        partialKey: '8HV2C',
+        edition: 'Windows 11 Enterprise',
+        description: 'Windows(R) Operating System',
+        expiration: null,
+        isPermanent: true,
+        toolAvailable: true,
+        toolPath: r'Tools\WindowsActivation\activate.cmd',
+      ),
+      officeActivation: OfficeActivationInfo(
+        installed: true,
+        product: 'Microsoft Office Professional Plus 2024',
+        version: '16.0.20228.20158',
+        architecture: '64-bit',
+        installType: 'Click-to-Run',
+        activated: true,
+        statusCode: 1,
+        statusText: 'Licensed',
+        channel: 'Retail',
+        partialKey: '88KC6',
+        expiration: null,
+        toolAvailable: true,
+        toolPath: r'Tools\OfficeActivation\activate.cmd',
+      ),
     );
 
     final mockDiscoveredPackages = PackagesResponse(
@@ -356,7 +388,7 @@ void main() {
     expect(find.text('کارت گرافیک'), findsOneWidget);
     expect(find.text('مادربرد'), findsOneWidget);
     expect(find.text('حافظه ذخیره‌سازی'), findsOneWidget);
-    expect(find.text('ویندوز'), findsOneWidget);
+    expect(find.text('ویندوز'), findsAtLeast(1));
 
     // Verify Quick Status
     expect(find.text('وضعیت سیستم'), findsOneWidget);
@@ -368,5 +400,38 @@ void main() {
     expect(find.text('Google Chrome'), findsOneWidget);
     expect(find.text('VLC Media Player'), findsOneWidget);
     expect(find.text('فایل‌های موردنیاز'), findsAtLeast(1));
+    expect(find.text('مایکروسافت آفیس'), findsOneWidget);
+  });
+
+  testWidgets('OfficeCard displays Microsoft Office activation and licensing status', (WidgetTester tester) async {
+    final officeActivated = OfficeActivationInfo(
+      installed: true,
+      product: 'Microsoft Office Professional Plus 2024',
+      version: '16.0.20228.20158',
+      architecture: '64-bit',
+      installType: 'Click-to-Run',
+      activated: true,
+      statusCode: 1,
+      statusText: 'Licensed',
+      channel: 'Retail',
+      partialKey: '88KC6',
+      expiration: null,
+      toolAvailable: true,
+      toolPath: r'Tools\OfficeActivation\activate.cmd',
+    );
+
+    await tester.pumpWidget(
+      buildTestableWidget(
+        OfficeCard(office: officeActivated),
+        locale: const Locale('fa'),
+      ),
+    );
+
+    expect(find.text('مایکروسافت آفیس'), findsOneWidget);
+    expect(find.text('Microsoft Office Professional Plus 2024'), findsAtLeast(1));
+    expect(find.text('فعال است'), findsOneWidget);
+    expect(find.text('Retail'), findsOneWidget);
+    // Activation button should NOT be shown because already activated
+    expect(find.text('فعالسازی آفیس'), findsNothing);
   });
 }

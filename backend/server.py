@@ -14,6 +14,9 @@ if _backend_dir not in sys.path:
 
 from collector import collect_all_system_info
 from packages.manager import scan_packages, install_package, open_package, get_package_icon_path
+from activation.windows_activation import get_windows_activation_info
+from activation.office_activation import get_office_activation_info
+from activation.activation_tools import execute_activation_tool
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +51,8 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Central System Checker Backend",
-                "version": "2.2.0",
-                "phase": 2
+                "version": "3.0.0",
+                "phase": 3
             }
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return
@@ -104,6 +107,22 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(404)
             self._send_cors_headers()
             self.end_headers()
+            return
+
+        elif path == "/api/activation/status":
+            logger.info("Querying Windows & Office activation status...")
+            win_act = get_windows_activation_info()
+            off_act = get_office_activation_info()
+            resp = {
+                "status": "success",
+                "windows": win_act,
+                "office": off_act
+            }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
             return
 
         else:
@@ -208,6 +227,39 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             logger.info(f"Opening installed package: {pkg_id}")
             result = open_package(pkg_id)
             self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/activation/windows":
+            logger.info("Executing configured Windows activation tool...")
+            result = execute_activation_tool("windows")
+            
+            # Invalidate cached system info so next fetch gets updated activation status
+            with _cache_lock:
+                _cached_data = None
+
+            # 200 for completed/cancelled, 400 only for hard server errors
+            status_http = 200 if (result.get("success") or result.get("cancelled")) else 400
+            self.send_response(status_http)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/activation/office":
+            logger.info("Executing configured Office activation tool...")
+            result = execute_activation_tool("office")
+            
+            # Invalidate cached system info so next fetch gets updated activation status
+            with _cache_lock:
+                _cached_data = None
+
+            status_http = 200 if (result.get("success") or result.get("cancelled")) else 400
+            self.send_response(status_http)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
             self.end_headers()

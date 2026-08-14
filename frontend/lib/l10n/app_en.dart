@@ -422,8 +422,117 @@ class AppLocalizationsEn implements AppLocalizations {
   @override
   String get inspectionFailed => 'System Inspection Failed';
 
+  // Phase 3 — Activation Strings
+  @override
+  String get activation => 'Activation';
+
+  @override
+  String get activated => 'Activated';
+
+  @override
+  String get notActivated => 'Not Activated';
+
+  @override
+  String get windowsActivation => 'Windows Activation';
+
+  @override
+  String get officeActivation => 'Office Activation';
+
+  @override
+  String get activateWindows => 'Activate Windows';
+
+  @override
+  String get activateOffice => 'Activate Office';
+
+  @override
+  String get activationTool => 'Activation Tool';
+
+  @override
+  String get toolNotFound => 'Activation tool not found.';
+
+  @override
+  String get toolAvailable => 'Available';
+
+  @override
+  String get activationCompleted => 'Activation Completed';
+
+  @override
+  String get windowsActivationCompleted => 'Windows activation completed successfully.';
+
+  @override
+  String get officeActivationCompleted => 'Microsoft Office activation completed successfully.';
+
+  @override
+  String get activationFailed => 'Activation Failed';
+
+  @override
+  String get windowsActivationFailed => 'Windows activation failed';
+
+  @override
+  String get officeActivationFailed => 'Microsoft Office activation failed';
+
+  @override
+  String get activationCancelled => 'Activation cancelled.';
+
+  @override
+  String get retry => 'Retry';
+
+  @override
+  String get licenseChannel => 'License Channel';
+
+  @override
+  String get partialProductKey => 'Partial Product Key';
+
+  @override
+  String get licenseExpiration => 'Expiration';
+
+  @override
+  String get permanentLicense => 'Permanent';
+
+  @override
+  String get office => 'Office';
+
+  @override
+  String get microsoftOffice => 'Microsoft Office';
+
+  @override
+  String get officeProduct => 'Product Edition';
+
+  @override
+  String get officeVersion => 'Office Version';
+
+  @override
+  String get officeArchitecture => 'Architecture';
+
+  @override
+  String get officeInstallType => 'Installation Type';
+
+  @override
+  String get confirmActivateWindowsTitle => 'Confirm Windows Activation';
+
+  @override
+  String get confirmActivateWindowsMessage =>
+      'Are you sure you want to run the configured Windows activation tool with Administrator privileges (Run as Administrator)?';
+
+  @override
+  String get confirmActivateOfficeTitle => 'Confirm Microsoft Office Activation';
+
+  @override
+  String get confirmActivateOfficeMessage =>
+      'Are you sure you want to run the configured Microsoft Office activation tool with Administrator privileges (Run as Administrator)?';
+
+  @override
+  String get runningActivation => 'Activating...';
+
+  @override
+  String get activatingWindows => 'Activating Windows...';
+
+  @override
+  String get activatingOffice => 'Activating Microsoft Office...';
+
   // Footer
   @override
   String scanCompleted(double durationMs, String hostName) =>
       'Scan completed in ${durationMs.toStringAsFixed(1)}ms on $hostName';
 }
+

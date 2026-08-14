@@ -207,6 +207,43 @@ abstract class AppLocalizations {
   String get initializingMessage;
   String get inspectionFailed;
 
+  // Phase 3 — Activation Getters
+  String get activation;
+  String get activated;
+  String get notActivated;
+  String get windowsActivation;
+  String get officeActivation;
+  String get activateWindows;
+  String get activateOffice;
+  String get activationTool;
+  String get toolNotFound;
+  String get toolAvailable;
+  String get activationCompleted;
+  String get windowsActivationCompleted;
+  String get officeActivationCompleted;
+  String get activationFailed;
+  String get windowsActivationFailed;
+  String get officeActivationFailed;
+  String get activationCancelled;
+  String get retry;
+  String get licenseChannel;
+  String get partialProductKey;
+  String get licenseExpiration;
+  String get permanentLicense;
+  String get office;
+  String get microsoftOffice;
+  String get officeProduct;
+  String get officeVersion;
+  String get officeArchitecture;
+  String get officeInstallType;
+  String get confirmActivateWindowsTitle;
+  String get confirmActivateWindowsMessage;
+  String get confirmActivateOfficeTitle;
+  String get confirmActivateOfficeMessage;
+  String get runningActivation;
+  String get activatingWindows;
+  String get activatingOffice;
+
   // Footer
   String scanCompleted(double durationMs, String hostName);
 }

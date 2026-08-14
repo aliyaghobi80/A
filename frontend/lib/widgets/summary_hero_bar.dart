@@ -179,11 +179,21 @@ class SummaryHeroBar extends StatelessWidget {
             _buildChip(
               context,
               icon: Icons.laptop_windows_rounded,
-              title: l10n.windows,
+              title: '${l10n.windows} (${info.windowsActivation.activated ? l10n.activated : l10n.notActivated})',
               value: info.windows.edition,
-              color: const Color(0xFF0284C7),
+              color: info.windowsActivation.activated ? const Color(0xFF0284C7) : const Color(0xFFEF4444),
               forceLtrValue: true,
             ),
+            // 8. Office Chip
+            if (info.officeActivation.installed)
+              _buildChip(
+                context,
+                icon: Icons.business_center_rounded,
+                title: '${l10n.office} (${info.officeActivation.activated ? l10n.activated : l10n.notActivated})',
+                value: info.officeActivation.product,
+                color: info.officeActivation.activated ? const Color(0xFFD97706) : const Color(0xFFEF4444),
+                forceLtrValue: true,
+              ),
           ],
         );
       },

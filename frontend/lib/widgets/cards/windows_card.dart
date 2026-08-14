@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import '../../controllers/activation_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import 'card_wrapper.dart';
@@ -7,11 +9,13 @@ import 'info_row.dart';
 class WindowsCard extends StatelessWidget {
   final WindowsInfo windows;
   final SystemMetaInfo system;
+  final WindowsActivationInfo? activation;
 
   const WindowsCard({
     super.key,
     required this.windows,
     required this.system,
+    this.activation,
   });
 
   @override
@@ -19,6 +23,12 @@ class WindowsCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
+    final activationCtrl = Get.find<ActivationController>();
+
+    final act = activation ?? WindowsActivationInfo.empty();
+    final isActivated = act.activated;
+    final statusColor = isActivated ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final statusLabel = isActivated ? l10n.activated : l10n.notActivated;
 
     return CardWrapper(
       icon: Icons.window_rounded,
@@ -27,19 +37,28 @@ class WindowsCard extends StatelessWidget {
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+          color: statusColor.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: statusColor.withValues(alpha: 0.3)),
         ),
-        child: Directionality(
-          textDirection: TextDirection.ltr,
-          child: Text(
-            windows.architecture,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isActivated ? Icons.check_circle_rounded : Icons.cancel_rounded,
+              size: 13,
+              color: statusColor,
             ),
-          ),
+            const SizedBox(width: 4),
+            Text(
+              statusLabel,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: statusColor,
+              ),
+            ),
+          ],
         ),
       ),
       child: Column(
@@ -121,6 +140,31 @@ class WindowsCard extends StatelessWidget {
             forceLtrValue: true,
           ),
           InfoRow(
+            label: l10n.licenseChannel,
+            value: act.channel,
+            icon: Icons.tune_rounded,
+            forceLtrValue: true,
+          ),
+          if (act.partialKey != 'Not available')
+            InfoRow(
+              label: l10n.partialProductKey,
+              value: '••••• ••••• ••••• ••••• ${act.partialKey}',
+              icon: Icons.key_rounded,
+              isMonospace: true,
+              copyable: true,
+            ),
+          InfoRow(
+            label: l10n.licenseExpiration,
+            value: act.expiration ?? (isActivated ? l10n.permanentLicense : l10n.notAvailable),
+            icon: Icons.event_available_rounded,
+            forceLtrValue: true,
+          ),
+          InfoRow(
+            label: l10n.activationTool,
+            value: act.toolAvailable ? l10n.toolAvailable : l10n.toolNotFound,
+            icon: Icons.build_circle_rounded,
+          ),
+          InfoRow(
             label: l10n.computerName,
             value: system.computerName,
             icon: Icons.computer_rounded,
@@ -140,6 +184,37 @@ class WindowsCard extends StatelessWidget {
               value: system.manufacturer,
               icon: Icons.business_rounded,
             ),
+
+          // Activation Action Button (Only if not activated & tool is available)
+          if (!isActivated && act.toolAvailable) ...[
+            const SizedBox(height: 12),
+            Obx(() {
+              final isRunning = activationCtrl.isActivatingWindows.value;
+              return SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: isRunning ? null : () => activationCtrl.activateWindows(context),
+                  icon: isRunning
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.verified_user_rounded, size: 16),
+                  label: Text(
+                    isRunning ? l10n.activatingWindows : l10n.activateWindows,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0284C7),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              );
+            }),
+          ],
         ],
       ),
     );

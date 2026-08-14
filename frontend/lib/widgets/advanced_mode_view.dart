@@ -9,6 +9,7 @@ import 'cards/ram_card.dart';
 import 'cards/gpu_card.dart';
 import 'cards/storage_card.dart';
 import 'cards/windows_card.dart';
+import 'cards/office_card.dart';
 import 'cards/bios_card.dart';
 import 'cards/network_card.dart';
 import 'cards/software_card.dart';
@@ -51,7 +52,12 @@ class AdvancedModeView extends StatelessWidget {
 
             final cardRam = RamCard(ram: info.ram);
             final cardMotherboard = MotherboardCard(motherboard: info.motherboard);
-            final cardWindows = WindowsCard(windows: info.windows, system: info.system);
+            final cardWindows = WindowsCard(
+              windows: info.windows,
+              system: info.system,
+              activation: info.windowsActivation,
+            );
+            final cardOffice = OfficeCard(office: info.officeActivation);
             final cardFiles = FilesCard(files: info.requiredFiles, summary: info.filesSummary);
 
             final cardPackages = Obx(() {
@@ -113,6 +119,8 @@ class AdvancedModeView extends StatelessWidget {
                         const SizedBox(height: 16),
                         cardWindows,
                         const SizedBox(height: 16),
+                        cardOffice,
+                        const SizedBox(height: 16),
                         cardFiles,
                         const SizedBox(height: 16),
                         cardPackages,
@@ -138,6 +146,8 @@ class AdvancedModeView extends StatelessWidget {
                   cardStorage,
                   const SizedBox(height: 16),
                   cardWindows,
+                  const SizedBox(height: 16),
+                  cardOffice,
                   const SizedBox(height: 16),
                   cardDrivers,
                   const SizedBox(height: 16),

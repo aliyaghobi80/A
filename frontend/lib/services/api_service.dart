@@ -119,7 +119,10 @@ class ApiService {
   Future<Map<String, dynamic>> openPackage(String packageId) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return {'success': false, 'message': 'Backend service is not running.'};
+      return {
+        'success': false,
+        'message': 'Backend service is not running.',
+      };
     }
 
     try {
@@ -130,13 +133,78 @@ class ApiService {
             headers: {'Content-Type': 'application/json; charset=utf-8'},
             body: json.encode({'package_id': packageId}),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 15));
 
       final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
       return data;
     } catch (e) {
       debugPrint('[ApiService] openPackage error: $e');
-      return {'success': false, 'message': 'Error opening application: $e'};
+      return {
+        'success': false,
+        'message': 'Error opening application: $e',
+      };
+    }
+  }
+
+  Future<ActivationResult> activateWindows() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return ActivationResult.error('Backend service is not running.');
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/activation/windows');
+      final response = await http
+          .post(uri, headers: {'Content-Type': 'application/json; charset=utf-8'})
+          .timeout(const Duration(minutes: 4));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return ActivationResult.fromJson(data);
+    } catch (e) {
+      debugPrint('[ApiService] activateWindows error: $e');
+      return ActivationResult.error('خطا در ارتباط با سرور فعالسازی: $e');
+    }
+  }
+
+  Future<ActivationResult> activateOffice() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return ActivationResult.error('Backend service is not running.');
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/activation/office');
+      final response = await http
+          .post(uri, headers: {'Content-Type': 'application/json; charset=utf-8'})
+          .timeout(const Duration(minutes: 4));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return ActivationResult.fromJson(data);
+    } catch (e) {
+      debugPrint('[ApiService] activateOffice error: $e');
+      return ActivationResult.error('خطا در ارتباط با سرور فعالسازی: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> getActivationStatus() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {};
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/activation/status');
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return data;
+      }
+      return {};
+    } catch (e) {
+      debugPrint('[ApiService] getActivationStatus error: $e');
+      return {};
     }
   }
 }
+

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
+import 'controllers/activation_controller.dart';
 import 'controllers/software_controller.dart';
 import 'controllers/system_info_controller.dart';
 import 'controllers/theme_language_controller.dart';
@@ -26,6 +27,7 @@ void main() async {
 
   Get.put(SystemInfoController());
   Get.put(SoftwareController());
+  Get.put(ActivationController());
 
   runApp(const CentralSystemCheckerApp());
 }

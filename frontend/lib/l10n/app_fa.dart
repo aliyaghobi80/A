@@ -422,8 +422,117 @@ class AppLocalizationsFa implements AppLocalizations {
   @override
   String get inspectionFailed => 'خطا در بررسی مشخصات سیستم';
 
+  // Phase 3 — Activation Strings
+  @override
+  String get activation => 'فعالسازی';
+
+  @override
+  String get activated => 'فعال است';
+
+  @override
+  String get notActivated => 'فعال نیست';
+
+  @override
+  String get windowsActivation => 'فعالسازی ویندوز';
+
+  @override
+  String get officeActivation => 'فعالسازی مایکروسافت آفیس';
+
+  @override
+  String get activateWindows => 'فعالسازی ویندوز';
+
+  @override
+  String get activateOffice => 'فعالسازی آفیس';
+
+  @override
+  String get activationTool => 'ابزار فعالسازی';
+
+  @override
+  String get toolNotFound => 'ابزار فعالسازی پیدا نشد.';
+
+  @override
+  String get toolAvailable => 'موجود است';
+
+  @override
+  String get activationCompleted => 'فعالسازی انجام شد';
+
+  @override
+  String get windowsActivationCompleted => 'فعالسازی ویندوز با موفقیت انجام شد.';
+
+  @override
+  String get officeActivationCompleted => 'فعالسازی مایکروسافت آفیس با موفقیت انجام شد.';
+
+  @override
+  String get activationFailed => 'فعالسازی انجام نشد';
+
+  @override
+  String get windowsActivationFailed => 'فعالسازی ویندوز انجام نشد';
+
+  @override
+  String get officeActivationFailed => 'فعالسازی مایکروسافت آفیس انجام نشد';
+
+  @override
+  String get activationCancelled => 'فعالسازی لغو شد.';
+
+  @override
+  String get retry => 'تلاش مجدد';
+
+  @override
+  String get licenseChannel => 'کانال لایسنس';
+
+  @override
+  String get partialProductKey => '۵ رقم انتهای لایسنس';
+
+  @override
+  String get licenseExpiration => 'اعتبار لایسنس';
+
+  @override
+  String get permanentLicense => 'دائمی';
+
+  @override
+  String get office => 'آفیس';
+
+  @override
+  String get microsoftOffice => 'مایکروسافت آفیس';
+
+  @override
+  String get officeProduct => 'ویرایش محصول';
+
+  @override
+  String get officeVersion => 'نسخه آفیس';
+
+  @override
+  String get officeArchitecture => 'معماری';
+
+  @override
+  String get officeInstallType => 'نوع نصب';
+
+  @override
+  String get confirmActivateWindowsTitle => 'تأیید فعالسازی ویندوز';
+
+  @override
+  String get confirmActivateWindowsMessage =>
+      'آیا از اجرای ابزار فعالسازی ویندوز با دسترسی مدیر (Run as Administrator) اطمینان دارید؟';
+
+  @override
+  String get confirmActivateOfficeTitle => 'تأیید فعالسازی مایکروسافت آفیس';
+
+  @override
+  String get confirmActivateOfficeMessage =>
+      'آیا از اجرای ابزار فعالسازی آفیس با دسترسی مدیر (Run as Administrator) اطمینان دارید؟';
+
+  @override
+  String get runningActivation => 'در حال فعالسازی...';
+
+  @override
+  String get activatingWindows => 'در حال فعالسازی ویندوز...';
+
+  @override
+  String get activatingOffice => 'در حال فعالسازی مایکروسافت آفیس...';
+
   // Footer
   @override
   String scanCompleted(double durationMs, String hostName) =>
       'بررسی در ${durationMs.toStringAsFixed(1)} میلی‌ثانیه برای $hostName انجام شد';
 }
+

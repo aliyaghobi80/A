@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../controllers/activation_controller.dart';
 import '../controllers/software_controller.dart';
 import '../controllers/system_info_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -20,6 +21,7 @@ class SimpleModeView extends StatelessWidget {
   Widget build(BuildContext context) {
     final systemCtrl = Get.find<SystemInfoController>();
     final softwareCtrl = Get.find<SoftwareController>();
+    final activationCtrl = Get.find<ActivationController>();
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -183,6 +185,7 @@ class SimpleModeView extends StatelessWidget {
               ),
             );
 
+            final isWinActivated = info.windowsActivation.activated;
             final cardWindows = _buildProminentSpecCard(
               context: context,
               stepNumber: 6,
@@ -191,8 +194,121 @@ class SimpleModeView extends StatelessWidget {
               accentColor: const Color(0xFF0284C7),
               primaryValue: info.windows.edition,
               secondaryValue: '${info.windows.architecture}${info.windows.version != 'Not available' ? ' • ${info.windows.version}' : ''}',
+              headerTrailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: (isWinActivated ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: (isWinActivated ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  isWinActivated ? '✓ ${l10n.activated}' : '✕ ${l10n.notActivated}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isWinActivated ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  ),
+                ),
+              ),
               copyValue: info.windows.edition,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
+              actionWidget: (!isWinActivated && info.windowsActivation.toolAvailable)
+                  ? Obx(() {
+                      final isRunning = activationCtrl.isActivatingWindows.value;
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: isRunning ? null : () => activationCtrl.activateWindows(context),
+                          icon: isRunning
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.verified_user_rounded, size: 15),
+                          label: Text(
+                            isRunning ? l10n.activatingWindows : l10n.activateWindows,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0284C7),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      );
+                    })
+                  : null,
+            );
+
+            final officeInstalled = info.officeActivation.installed;
+            final officeActivated = info.officeActivation.activated;
+            final officeStatusColor = !officeInstalled
+                ? const Color(0xFF64748B)
+                : (officeActivated ? const Color(0xFF10B981) : const Color(0xFFEF4444));
+            final officeStatusLabel = !officeInstalled
+                ? '✕ ${l10n.notInstalled}'
+                : (officeActivated ? '✓ ${l10n.activated}' : '✕ ${l10n.notActivated}');
+
+            final cardOffice = _buildProminentSpecCard(
+              context: context,
+              stepNumber: 7,
+              categoryTitle: l10n.microsoftOffice,
+              icon: Icons.business_center_rounded,
+              accentColor: const Color(0xFFD97706),
+              primaryValue: officeInstalled ? info.officeActivation.product : l10n.notInstalled,
+              secondaryValue: officeInstalled && info.officeActivation.version != 'Not available'
+                  ? '${info.officeActivation.architecture} • ${info.officeActivation.version}'
+                  : null,
+              headerTrailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: officeStatusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: officeStatusColor.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  officeStatusLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: officeStatusColor,
+                  ),
+                ),
+              ),
+              copyValue: officeInstalled ? info.officeActivation.product : null,
+              onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
+              actionWidget: (officeInstalled && !officeActivated && info.officeActivation.toolAvailable)
+                  ? Obx(() {
+                      final isRunning = activationCtrl.isActivatingOffice.value;
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: isRunning ? null : () => activationCtrl.activateOffice(context),
+                          icon: isRunning
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.verified_user_rounded, size: 15),
+                          label: Text(
+                            isRunning ? l10n.activatingOffice : l10n.activateOffice,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFD97706),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      );
+                    })
+                  : null,
             );
 
             if (isWide) {
@@ -207,6 +323,8 @@ class SimpleModeView extends StatelessWidget {
                         cardGpu,
                         const SizedBox(height: 14),
                         cardStorage,
+                        const SizedBox(height: 14),
+                        cardOffice,
                       ],
                     ),
                   ),
@@ -238,6 +356,8 @@ class SimpleModeView extends StatelessWidget {
                   cardStorage,
                   const SizedBox(height: 14),
                   cardWindows,
+                  const SizedBox(height: 14),
+                  cardOffice,
                 ],
               );
             }
@@ -512,7 +632,9 @@ class SimpleModeView extends StatelessWidget {
   Widget _buildQuickStatusSummary(BuildContext context, SystemInfo info, AppLocalizations l10n, bool isDark) {
     final isSystemReady = info.driverSummary.allHealthy &&
         info.softwareSummary.allInstalled &&
-        info.filesSummary.allPresent;
+        info.filesSummary.allPresent &&
+        info.windowsActivation.activated &&
+        (!info.officeActivation.installed || info.officeActivation.activated);
     final statusColor = isSystemReady ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
     final statusText = isSystemReady ? l10n.ready : l10n.needsAttention;
 
@@ -634,6 +756,24 @@ class SimpleModeView extends StatelessWidget {
             );
           }
 
+          final winBadge = metricBadge(
+            icon: Icons.laptop_windows_rounded,
+            label: l10n.windows,
+            countText: info.windowsActivation.activated ? l10n.activated : l10n.notActivated,
+            color: info.windowsActivation.activated ? const Color(0xFF0284C7) : const Color(0xFFEF4444),
+          );
+
+          final officeBadge = metricBadge(
+            icon: Icons.business_center_rounded,
+            label: l10n.office,
+            countText: !info.officeActivation.installed
+                ? l10n.notInstalled
+                : (info.officeActivation.activated ? l10n.activated : l10n.notActivated),
+            color: !info.officeActivation.installed
+                ? const Color(0xFF64748B)
+                : (info.officeActivation.activated ? const Color(0xFFD97706) : const Color(0xFFEF4444)),
+          );
+
           final drvBadge = metricBadge(
             icon: Icons.settings_suggest_rounded,
             label: l10n.drivers,
@@ -655,6 +795,8 @@ class SimpleModeView extends StatelessWidget {
             color: info.filesSummary.allPresent ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
           );
 
+          final badges = [winBadge, if (info.officeActivation.installed) officeBadge, drvBadge, softBadge, filesBadge];
+
           if (isCompact) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,7 +806,7 @@ class SimpleModeView extends StatelessWidget {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: [drvBadge, softBadge, filesBadge],
+                  children: badges,
                 ),
               ],
             );
@@ -686,7 +828,7 @@ class SimpleModeView extends StatelessWidget {
                   runSpacing: 8,
                   alignment: WrapAlignment.start,
                   crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [drvBadge, softBadge, filesBadge],
+                  children: badges,
                 ),
               ),
             ],
@@ -741,6 +883,8 @@ class SimpleModeView extends StatelessWidget {
     required String primaryValue,
     String? secondaryValue,
     Widget? customContent,
+    Widget? headerTrailing,
+    Widget? actionWidget,
     String? copyValue,
     required ValueChanged<String> onCopy,
   }) {
@@ -806,6 +950,10 @@ class SimpleModeView extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              if (headerTrailing != null) ...[
+                headerTrailing,
+                const SizedBox(width: 8),
+              ],
               if (copyValue != null && copyValue.isNotEmpty)
                 Tooltip(
                   message: l10n.copy,
@@ -861,6 +1009,11 @@ class SimpleModeView extends StatelessWidget {
                 ),
               ),
             ],
+          ],
+
+          if (actionWidget != null) ...[
+            const SizedBox(height: 14),
+            actionWidget,
           ],
         ],
       ),

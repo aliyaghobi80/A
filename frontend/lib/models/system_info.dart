@@ -17,6 +17,8 @@ class SystemInfo {
   final SoftwareSummary softwareSummary;
   final List<RequiredFileItem> requiredFiles;
   final FilesSummary filesSummary;
+  final WindowsActivationInfo windowsActivation;
+  final OfficeActivationInfo officeActivation;
 
   SystemInfo({
     required this.status,
@@ -37,9 +39,13 @@ class SystemInfo {
     SoftwareSummary? softwareSummary,
     this.requiredFiles = const [],
     FilesSummary? filesSummary,
+    WindowsActivationInfo? windowsActivation,
+    OfficeActivationInfo? officeActivation,
   })  : driverSummary = driverSummary ?? DriverSummary.empty(),
         softwareSummary = softwareSummary ?? SoftwareSummary.empty(),
-        filesSummary = filesSummary ?? FilesSummary.empty();
+        filesSummary = filesSummary ?? FilesSummary.empty(),
+        windowsActivation = windowsActivation ?? WindowsActivationInfo.empty(),
+        officeActivation = officeActivation ?? OfficeActivationInfo.empty();
 
   factory SystemInfo.fromJson(Map<String, dynamic> json) {
     return SystemInfo(
@@ -73,6 +79,8 @@ class SystemInfo {
           .map((e) => RequiredFileItem.fromJson(e as Map<String, dynamic>))
           .toList(),
       filesSummary: FilesSummary.fromJson(json['files_summary'] as Map<String, dynamic>? ?? {}),
+      windowsActivation: WindowsActivationInfo.fromJson(json['windows_activation'] as Map<String, dynamic>? ?? {}),
+      officeActivation: OfficeActivationInfo.fromJson(json['office_activation'] as Map<String, dynamic>? ?? {}),
     );
   }
 }
@@ -726,3 +734,172 @@ class NetworkInfo {
     );
   }
 }
+
+class WindowsActivationInfo {
+  final bool installed;
+  final bool activated;
+  final int statusCode;
+  final String statusText;
+  final String channel;
+  final String partialKey;
+  final String edition;
+  final String description;
+  final String? expiration;
+  final bool isPermanent;
+  final bool toolAvailable;
+  final String? toolPath;
+
+  WindowsActivationInfo({
+    required this.installed,
+    required this.activated,
+    required this.statusCode,
+    required this.statusText,
+    required this.channel,
+    required this.partialKey,
+    required this.edition,
+    required this.description,
+    this.expiration,
+    required this.isPermanent,
+    required this.toolAvailable,
+    this.toolPath,
+  });
+
+  factory WindowsActivationInfo.empty() => WindowsActivationInfo(
+        installed: true,
+        activated: false,
+        statusCode: 0,
+        statusText: 'Not available',
+        channel: 'Not available',
+        partialKey: 'Not available',
+        edition: 'Windows',
+        description: 'Not available',
+        expiration: null,
+        isPermanent: true,
+        toolAvailable: false,
+        toolPath: null,
+      );
+
+  factory WindowsActivationInfo.fromJson(Map<String, dynamic> json) {
+    return WindowsActivationInfo(
+      installed: json['installed'] as bool? ?? true,
+      activated: json['activated'] as bool? ?? false,
+      statusCode: json['status_code'] as int? ?? 0,
+      statusText: json['status_text'] ?? (json['activated'] == true ? 'Licensed' : 'Not Activated'),
+      channel: json['channel'] ?? 'Not available',
+      partialKey: json['partial_key'] ?? 'Not available',
+      edition: json['edition'] ?? 'Windows',
+      description: json['description'] ?? 'Not available',
+      expiration: json['expiration'] as String?,
+      isPermanent: json['is_permanent'] as bool? ?? (json['expiration'] == null),
+      toolAvailable: json['tool_available'] as bool? ?? false,
+      toolPath: json['tool_path'] as String?,
+    );
+  }
+}
+
+class OfficeActivationInfo {
+  final bool installed;
+  final String product;
+  final String version;
+  final String architecture;
+  final String installType;
+  final bool activated;
+  final int statusCode;
+  final String statusText;
+  final String channel;
+  final String partialKey;
+  final String? expiration;
+  final bool toolAvailable;
+  final String? toolPath;
+
+  OfficeActivationInfo({
+    required this.installed,
+    required this.product,
+    required this.version,
+    required this.architecture,
+    required this.installType,
+    required this.activated,
+    required this.statusCode,
+    required this.statusText,
+    required this.channel,
+    required this.partialKey,
+    this.expiration,
+    required this.toolAvailable,
+    this.toolPath,
+  });
+
+  factory OfficeActivationInfo.empty() => OfficeActivationInfo(
+        installed: false,
+        product: 'Not installed',
+        version: 'Not available',
+        architecture: 'Not available',
+        installType: 'Unknown',
+        activated: false,
+        statusCode: 0,
+        statusText: 'Not installed',
+        channel: 'Not available',
+        partialKey: 'Not available',
+        expiration: null,
+        toolAvailable: false,
+        toolPath: null,
+      );
+
+  factory OfficeActivationInfo.fromJson(Map<String, dynamic> json) {
+    final isInst = json['installed'] as bool? ?? false;
+    final isAct = json['activated'] as bool? ?? false;
+    return OfficeActivationInfo(
+      installed: isInst,
+      product: json['product'] ?? (isInst ? 'Microsoft Office' : 'Not installed'),
+      version: json['version'] ?? 'Not available',
+      architecture: json['architecture'] ?? 'Not available',
+      installType: json['install_type'] ?? 'Unknown',
+      activated: isAct,
+      statusCode: json['status_code'] as int? ?? 0,
+      statusText: json['status_text'] ?? (!isInst ? 'Not installed' : (isAct ? 'Licensed' : 'Not Activated')),
+      channel: json['channel'] ?? 'Not available',
+      partialKey: json['partial_key'] ?? 'Not available',
+      expiration: json['expiration'] as String?,
+      toolAvailable: json['tool_available'] as bool? ?? false,
+      toolPath: json['tool_path'] as String?,
+    );
+  }
+}
+
+class ActivationResult {
+  final bool success;
+  final bool cancelled;
+  final int exitCode;
+  final String output;
+  final String error;
+  final String message;
+
+  ActivationResult({
+    required this.success,
+    required this.cancelled,
+    required this.exitCode,
+    required this.output,
+    required this.error,
+    required this.message,
+  });
+
+  factory ActivationResult.fromJson(Map<String, dynamic> json) {
+    return ActivationResult(
+      success: json['success'] as bool? ?? false,
+      cancelled: json['cancelled'] as bool? ?? false,
+      exitCode: json['exit_code'] as int? ?? (json['success'] == true ? 0 : -1),
+      output: json['output'] ?? '',
+      error: json['error'] ?? '',
+      message: json['message'] ?? '',
+    );
+  }
+
+  factory ActivationResult.error(String msg) => ActivationResult(
+        success: false,
+        cancelled: false,
+        exitCode: -1,
+        output: '',
+        error: msg,
+        message: msg,
+      );
+}
+

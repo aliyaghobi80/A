@@ -75,7 +75,15 @@ class SystemInfoController extends GetxController {
       buffer.writeln('${l10n.storage}: ${l10n.noStorageDetected}');
     }
 
-    buffer.writeln('${l10n.windows}: ${info.windows.edition} (${info.windows.architecture})');
+    final winAct = info.windowsActivation.activated ? l10n.activated : l10n.notActivated;
+    buffer.writeln('${l10n.windows}: ${info.windows.edition} (${info.windows.architecture}) - ${l10n.activation}: $winAct');
+
+    if (info.officeActivation.installed) {
+      final offAct = info.officeActivation.activated ? l10n.activated : l10n.notActivated;
+      buffer.writeln('${l10n.microsoftOffice}: ${info.officeActivation.product} (${info.officeActivation.version}) - ${l10n.activation}: $offAct');
+    } else {
+      buffer.writeln('${l10n.microsoftOffice}: ${l10n.notInstalled}');
+    }
 
     if (info.drivers.isNotEmpty) {
       buffer.writeln('\n[${l10n.drivers}]');

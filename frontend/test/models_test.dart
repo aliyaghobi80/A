@@ -236,4 +236,66 @@ void main() {
     expect(resp.packages[1].installAllowed, false);
     expect(resp.summary.availableToInstall, 1);
   });
+
+  test('WindowsActivationInfo & OfficeActivationInfo parse correctly from json', () {
+    final winJson = {
+      'status': 'Licensed',
+      'activated': true,
+      'channel': 'Retail',
+      'partial_key': '8HV2C',
+      'description': 'Windows(R) Operating System, RETAIL channel',
+      'expiration': null,
+      'is_permanent': true,
+      'tool_available': true,
+      'tool_path': 'Tools\\WindowsActivation\\activate.cmd'
+    };
+
+    final winInfo = WindowsActivationInfo.fromJson(winJson);
+    expect(winInfo.statusText, 'Licensed');
+    expect(winInfo.activated, true);
+    expect(winInfo.channel, 'Retail');
+    expect(winInfo.partialKey, '8HV2C');
+    expect(winInfo.isPermanent, true);
+    expect(winInfo.toolAvailable, true);
+
+    final officeJson = {
+      'installed': true,
+      'product': 'Microsoft Office Professional Plus 2024',
+      'version': '16.0.20228.20158',
+      'architecture': '64-bit',
+      'install_type': 'Click-to-Run',
+      'status': 'Licensed',
+      'status_text': 'Licensed',
+      'activated': true,
+      'channel': 'Retail',
+      'partial_key': '88KC6',
+      'expiration': null,
+      'tool_available': true,
+      'tool_path': 'Tools\\OfficeActivation\\activate.cmd'
+    };
+
+    final officeInfo = OfficeActivationInfo.fromJson(officeJson);
+    expect(officeInfo.installed, true);
+    expect(officeInfo.product, 'Microsoft Office Professional Plus 2024');
+    expect(officeInfo.architecture, '64-bit');
+    expect(officeInfo.installType, 'Click-to-Run');
+    expect(officeInfo.statusText, 'Licensed');
+    expect(officeInfo.activated, true);
+    expect(officeInfo.partialKey, '88KC6');
+    expect(officeInfo.toolAvailable, true);
+
+    final resultJson = {
+      'success': true,
+      'cancelled': false,
+      'message': 'Windows activation tool launched successfully',
+      'exit_code': 0,
+      'output': 'Activation OK'
+    };
+
+    final actResult = ActivationResult.fromJson(resultJson);
+    expect(actResult.success, true);
+    expect(actResult.cancelled, false);
+    expect(actResult.message, 'Windows activation tool launched successfully');
+    expect(actResult.exitCode, 0);
+  });
 }
