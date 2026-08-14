@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pc_system_inspector/models/system_info.dart';
+import 'package:central_system_checker/models/system_info.dart';
 
 void main() {
   test('SystemInfo.fromJson parses full schema correctly with fallbacks', () {

@@ -1,6 +1,6 @@
-# PC System Inspector - Demo Launcher (PowerShell)
+# Central System Checker - Demo Launcher (PowerShell)
 Write-Host "=======================================================" -ForegroundColor Cyan
-Write-Host "         PC System Inspector - Phase 1 Demo            " -ForegroundColor Cyan
+Write-Host "    Central System Checker / مرکزی سیستم چکر - Demo    " -ForegroundColor Cyan
 Write-Host "=======================================================" -ForegroundColor Cyan
 
 # Verify Python
@@ -23,19 +23,27 @@ if (-not $portActive) {
 }
 
 # Check Frontend executable
-$releaseExe = "frontend\build\windows\x64\runner\Release\pc_system_inspector.exe"
-$debugExe = "frontend\build\windows\x64\runner\Debug\pc_system_inspector.exe"
+$releaseExeNew = "frontend\build\windows\x64\runner\Release\central_system_checker.exe"
+$releaseExeOld = "frontend\build\windows\x64\runner\Release\pc_system_inspector.exe"
+$debugExeNew = "frontend\build\windows\x64\runner\Debug\central_system_checker.exe"
+$debugExeOld = "frontend\build\windows\x64\runner\Debug\pc_system_inspector.exe"
 
-if (Test-Path $releaseExe) {
+if (Test-Path $releaseExeNew) {
     Write-Host "[2/2] Launching Windows Desktop Application (Release)..." -ForegroundColor Green
-    Start-Process $releaseExe
-} elseif (Test-Path $debugExe) {
+    Start-Process $releaseExeNew
+} elseif (Test-Path $releaseExeOld) {
+    Write-Host "[2/2] Launching Windows Desktop Application (Release)..." -ForegroundColor Green
+    Start-Process $releaseExeOld
+} elseif (Test-Path $debugExeNew) {
     Write-Host "[2/2] Launching Windows Desktop Application (Debug)..." -ForegroundColor Green
-    Start-Process $debugExe
+    Start-Process $debugExeNew
+} elseif (Test-Path $debugExeOld) {
+    Write-Host "[2/2] Launching Windows Desktop Application (Debug)..." -ForegroundColor Green
+    Start-Process $debugExeOld
 } else {
     Write-Host "[2/2] Running via Flutter CLI..." -ForegroundColor Yellow
     Set-Location frontend
     flutter run -d windows
 }
 
-Write-Host "`nPC System Inspector launched successfully!" -ForegroundColor Cyan
+Write-Host "`nCentral System Checker launched successfully!" -ForegroundColor Cyan

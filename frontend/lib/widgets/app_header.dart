@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
+import '../services/settings_service.dart';
 
 class AppHeader extends StatelessWidget {
   final bool isRefreshing;
   final VoidCallback onRefresh;
   final bool isDarkMode;
   final VoidCallback onToggleTheme;
+  final DisplayMode displayMode;
+  final ValueChanged<DisplayMode> onModeChanged;
+  final String currentLanguage;
+  final ValueChanged<String> onLanguageChanged;
   final String? lastUpdated;
 
   const AppHeader({
@@ -13,174 +19,325 @@ class AppHeader extends StatelessWidget {
     required this.onRefresh,
     required this.isDarkMode,
     required this.onToggleTheme,
+    required this.displayMode,
+    required this.onModeChanged,
+    required this.currentLanguage,
+    required this.onLanguageChanged,
     this.lastUpdated,
   });
+
+  Widget _buildSegmentedButton<T>({
+    required BuildContext context,
+    required T selectedValue,
+    required List<({T value, String label, String? tooltip, IconData? icon})> options,
+    required ValueChanged<T> onSelected,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? const Color(0xFF263554) : const Color(0xFFE2E8F0),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: options.map((opt) {
+          final isSelected = selectedValue == opt.value;
+
+          Widget btn = InkWell(
+            borderRadius: BorderRadius.circular(7),
+            onTap: () => onSelected(opt.value),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? (isDark ? const Color(0xFF2563EB) : Colors.white)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(7),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (opt.icon != null) ...[
+                    Icon(
+                      opt.icon,
+                      size: 14,
+                      color: isSelected
+                          ? (isDark ? Colors.white : const Color(0xFF2563EB))
+                          : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    ),
+                    const SizedBox(width: 5),
+                  ],
+                  Text(
+                    opt.label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                      color: isSelected
+                          ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                          : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+
+          if (opt.tooltip != null) {
+            btn = Tooltip(
+              message: opt.tooltip!,
+              child: btn,
+            );
+          }
+
+          return btn;
+        }).toList(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // App Logo Icon
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF2563EB), Color(0xFF06B6D4)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2563EB).withValues(alpha: 0.35),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.computer_rounded,
-            size: 24,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(width: 14),
-        // Title & Subtitle
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 800;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              children: [
-                Text(
-                  'PC System Inspector',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.4,
-                    color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                  ),
+            // App Logo Icon
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2563EB), Color(0xFF06B6D4)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: (isDark ? const Color(0xFF10B981) : const Color(0xFF059669)).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(
-                      color: (isDark ? const Color(0xFF10B981) : const Color(0xFF059669)).withValues(alpha: 0.3),
-                      width: 1,
-                    ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF10B981),
+                ],
+              ),
+              child: const Icon(
+                Icons.computer_rounded,
+                size: 24,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Title & Subtitle
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.appName,
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: (isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(
+                          color: (isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
+                              .withValues(alpha: 0.3),
+                          width: 1,
                         ),
                       ),
-                      const SizedBox(width: 5),
-                      Text(
-                        'Live Inspector',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857),
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFF10B981),
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            l10n.liveInspector,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.appSubtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              'Hardware & Windows Information',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            const Spacer(),
+
+            // Mode Switcher [ Simple | Advanced ]
+            _buildSegmentedButton<DisplayMode>(
+              context: context,
+              selectedValue: displayMode,
+              onSelected: onModeChanged,
+              options: [
+                (
+                  value: DisplayMode.simple,
+                  label: l10n.simpleMode,
+                  tooltip: l10n.simpleModeTooltip,
+                  icon: Icons.receipt_long_rounded,
+                ),
+                (
+                  value: DisplayMode.advanced,
+                  label: l10n.advancedMode,
+                  tooltip: l10n.advancedModeTooltip,
+                  icon: Icons.dashboard_customize_rounded,
+                ),
+              ],
+            ),
+            const SizedBox(width: 10),
+
+            // Language Switcher [ EN | FA ]
+            _buildSegmentedButton<String>(
+              context: context,
+              selectedValue: currentLanguage,
+              onSelected: onLanguageChanged,
+              options: [
+                (
+                  value: 'en',
+                  label: 'EN',
+                  tooltip: 'English',
+                  icon: null,
+                ),
+                (
+                  value: 'fa',
+                  label: 'FA',
+                  tooltip: 'فارسی',
+                  icon: null,
+                ),
+              ],
+            ),
+            const SizedBox(width: 10),
+
+            // Theme Toggle Button
+            Tooltip(
+              message: isDarkMode ? l10n.switchToLightMode : l10n.switchToDarkMode,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(9),
+                onTap: onToggleTheme,
+                child: Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF192238) : Colors.white,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF263554) : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Icon(
+                    isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                    size: 18,
+                    color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // Refresh Button
+            ElevatedButton(
+              onPressed: isRefreshing ? null : onRefresh,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.6),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isCompact ? 12 : 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                elevation: 0,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isRefreshing) ...[
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                    if (!isCompact) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        l10n.refreshing,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ] else ...[
+                    const Icon(Icons.refresh_rounded, size: 16),
+                    if (!isCompact) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        l10n.refresh,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ],
+                ],
               ),
             ),
           ],
-        ),
-        const Spacer(),
-
-        // Theme Toggle Button
-        Tooltip(
-          message: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-          child: InkWell(
-            borderRadius: BorderRadius.circular(9),
-            onTap: onToggleTheme,
-            child: Container(
-              padding: const EdgeInsets.all(9),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF192238) : Colors.white,
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(
-                  color: isDark ? const Color(0xFF263554) : const Color(0xFFE2E8F0),
-                ),
-              ),
-              child: Icon(
-                isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                size: 18,
-                color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF475569),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-
-        // Refresh Button
-        ElevatedButton(
-          onPressed: isRefreshing ? null : onRefresh,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2563EB),
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.6),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
-            ),
-            elevation: 0,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isRefreshing) ...[
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'Refreshing...',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-              ] else ...[
-                const Icon(Icons.refresh_rounded, size: 16),
-                const SizedBox(width: 6),
-                const Text(
-                  'Refresh',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }

@@ -36,7 +36,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             resp = {
                 "status": "ok",
-                "service": "PC System Inspector Backend",
+                "service": "Central System Checker Backend",
                 "version": "1.0.0"
             }
             self.wfile.write(json.dumps(resp).encode("utf-8"))
@@ -99,7 +99,7 @@ def run_server(host: str = "127.0.0.1", port: int = 18080):
     """Starts the ThreadingHTTPServer on the specified host and port."""
     server_address = (host, port)
     httpd = http.server.ThreadingHTTPServer(server_address, SystemInspectorRequestHandler)
-    logger.info(f"PC System Inspector Backend API running at http://{host}:{port}/")
+    logger.info(f"Central System Checker Backend API running at http://{host}:{port}/")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

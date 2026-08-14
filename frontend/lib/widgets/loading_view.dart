@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 
 class LoadingView extends StatelessWidget {
-  final String message;
+  final String? message;
 
   const LoadingView({
     super.key,
-    this.message = 'Detecting system information...',
+    this.message,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
+
+    final displayMessage = message ?? l10n.loadingMessage;
 
     return Center(
       child: Column(
@@ -42,7 +46,7 @@ class LoadingView extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'PC System Inspector',
+            l10n.appName,
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
@@ -52,7 +56,7 @@ class LoadingView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            message,
+            displayMessage,
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,

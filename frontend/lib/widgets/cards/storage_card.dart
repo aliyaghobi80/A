@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
@@ -12,10 +13,11 @@ class StorageCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return CardWrapper(
       icon: Icons.album_rounded,
-      title: 'Physical Storage Devices',
+      title: l10n.physicalStorageDevices,
       iconColor: const Color(0xFF06B6D4),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -24,7 +26,7 @@ class StorageCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
-          '${storage.length} Drive${storage.length > 1 ? 's' : ''}',
+          l10n.drivesCount(storage.length),
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -36,7 +38,7 @@ class StorageCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (storage.isEmpty)
-            const Text('No physical storage devices found')
+            Text(l10n.noStorageDetected)
           else
             ...storage.asMap().entries.map((entry) {
               final idx = entry.key;
@@ -79,12 +81,15 @@ class StorageCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              drive.model,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                            Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Text(
+                                drive.model,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                                ),
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -96,22 +101,28 @@ class StorageCard extends StatelessWidget {
                                     color: badgeColor.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
-                                  child: Text(
-                                    drive.type,
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: badgeColor,
+                                  child: Directionality(
+                                    textDirection: TextDirection.ltr,
+                                    child: Text(
+                                      drive.type,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: badgeColor,
+                                      ),
                                     ),
                                   ),
                                 ),
                                 if (drive.busType != 'Not available') ...[
                                   const SizedBox(width: 6),
-                                  Text(
-                                    '•   ${drive.busType}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  Directionality(
+                                    textDirection: TextDirection.ltr,
+                                    child: Text(
+                                      '•   ${drive.busType}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -120,29 +131,34 @@ class StorageCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Text(
-                        drive.capacityDisplay,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                      Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          drive.capacityDisplay,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   InfoRow(
-                    label: 'Capacity',
+                    label: l10n.capacity,
                     value: drive.capacityDisplay,
                     icon: Icons.pie_chart_outline_rounded,
+                    forceLtrValue: true,
                   ),
                   InfoRow(
-                    label: 'Interface / Bus',
+                    label: l10n.interfaceBus,
                     value: drive.busType,
                     icon: Icons.cable_rounded,
+                    forceLtrValue: true,
                   ),
                   InfoRow(
-                    label: 'Serial Number',
+                    label: l10n.serialNumber,
                     value: drive.serial,
                     icon: Icons.qr_code_rounded,
                     copyable: true,

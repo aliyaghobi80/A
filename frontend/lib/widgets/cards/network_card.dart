@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
@@ -12,12 +13,13 @@ class NetworkCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     final activeAdapters = network.where((a) => a.isConnected).toList();
 
     return CardWrapper(
       icon: Icons.lan_rounded,
-      title: 'Network Adapters',
+      title: l10n.networkAdapters,
       iconColor: const Color(0xFF14B8A6),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -43,7 +45,7 @@ class NetworkCard extends StatelessWidget {
             ),
             const SizedBox(width: 5),
             Text(
-              '${activeAdapters.length} Active / ${network.length} Total',
+              l10n.activeAdaptersCount(activeAdapters.length, network.length),
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -59,7 +61,7 @@ class NetworkCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (network.isEmpty)
-            const Text('No network adapters detected')
+            Text(l10n.noNetworkDetected)
           else
             ...network.asMap().entries.map((entry) {
               final idx = entry.key;
@@ -69,6 +71,8 @@ class NetworkCard extends StatelessWidget {
               final statusColor = isUp
                   ? (isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
                   : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8));
+
+              final statusText = isUp ? l10n.connected : l10n.disconnected;
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -93,12 +97,15 @@ class NetworkCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                          adapter.name,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                        child: Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            adapter.name,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                            ),
                           ),
                         ),
                       ),
@@ -109,7 +116,7 @@ class NetworkCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          adapter.status,
+                          statusText,
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
@@ -123,19 +130,22 @@ class NetworkCard extends StatelessWidget {
                       adapter.description != adapter.name) ...[
                     const SizedBox(height: 2),
                     Padding(
-                      padding: const EdgeInsets.only(left: 16),
-                      child: Text(
-                        adapter.description,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          adapter.description,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          ),
                         ),
                       ),
                     ),
                   ],
                   const SizedBox(height: 6),
                   InfoRow(
-                    label: 'IPv4 Address',
+                    label: l10n.ipv4Address,
                     value: adapter.ipv4Address,
                     icon: Icons.link_rounded,
                     isMonospace: true,
@@ -143,7 +153,7 @@ class NetworkCard extends StatelessWidget {
                     isPrimary: isUp && adapter.ipv4Address != 'Not available',
                   ),
                   InfoRow(
-                    label: 'MAC Address',
+                    label: l10n.macAddress,
                     value: adapter.macAddress,
                     icon: Icons.fingerprint_rounded,
                     isMonospace: true,
@@ -151,9 +161,10 @@ class NetworkCard extends StatelessWidget {
                   ),
                   if (adapter.linkSpeed != 'Not available' && adapter.linkSpeed != '0 bps')
                     InfoRow(
-                      label: 'Link Speed',
+                      label: l10n.linkSpeed,
                       value: adapter.linkSpeed,
                       icon: Icons.speed_rounded,
+                      forceLtrValue: true,
                     ),
                 ],
               );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 
 class ErrorView extends StatelessWidget {
   final String errorMessage;
@@ -14,6 +15,7 @@ class ErrorView extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return Center(
       child: Container(
@@ -50,7 +52,7 @@ class ErrorView extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              'System Inspection Failed',
+              l10n.inspectionFailed,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -71,7 +73,7 @@ class ErrorView extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 16),
-              label: const Text('Retry Connection'),
+              label: Text(l10n.retryConnection),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,

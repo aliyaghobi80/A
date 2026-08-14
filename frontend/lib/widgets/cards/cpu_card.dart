@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
@@ -12,10 +13,11 @@ class CpuCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return CardWrapper(
       icon: Icons.memory_rounded,
-      title: 'CPU',
+      title: l10n.cpu,
       iconColor: const Color(0xFF3B82F6),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -24,7 +26,7 @@ class CpuCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
-          cpu.coresThreadsDisplay,
+          l10n.coresThreads(cpu.cores, cpu.threads),
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -49,13 +51,16 @@ class CpuCard extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    cpu.name,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                      letterSpacing: -0.2,
+                  child: Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      cpu.name,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        letterSpacing: -0.2,
+                      ),
                     ),
                   ),
                 ),
@@ -64,24 +69,25 @@ class CpuCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           InfoRow(
-            label: 'Manufacturer',
+            label: l10n.manufacturer,
             value: cpu.manufacturer,
             icon: Icons.business_rounded,
           ),
           InfoRow(
-            label: 'Physical Cores',
+            label: l10n.physicalCores,
             value: cpu.cores.toString(),
             icon: Icons.grid_view_rounded,
           ),
           InfoRow(
-            label: 'Logical Threads',
+            label: l10n.logicalThreads,
             value: cpu.threads.toString(),
             icon: Icons.timeline_rounded,
           ),
           InfoRow(
-            label: 'Max Clock Speed',
+            label: l10n.maxClockSpeed,
             value: cpu.maxClockDisplay,
             icon: Icons.speed_rounded,
+            forceLtrValue: true,
           ),
         ],
       ),

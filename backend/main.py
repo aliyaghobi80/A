@@ -23,7 +23,7 @@ def setup_logging(verbose: bool = False):
     )
 
 def main():
-    parser = argparse.ArgumentParser(description="PC System Inspector - Windows Hardware Detection Backend")
+    parser = argparse.ArgumentParser(description="Central System Checker - Windows Hardware Detection Backend")
     parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"Port to bind (default: {DEFAULT_PORT})")
     parser.add_argument("--test", action="store_true", help="Run system inspection once, print JSON to stdout, and exit")
@@ -47,7 +47,7 @@ def main():
         return 0
 
     print(f"==================================================")
-    print(f" PC System Inspector - Local Backend Service v1.0 ")
+    print(f" Central System Checker - Local Backend Service   ")
     print(f" Running at: http://{args.host}:{args.port}/        ")
     print(f"==================================================")
     

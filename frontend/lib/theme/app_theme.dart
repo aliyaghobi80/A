@@ -10,7 +10,7 @@ class AppTheme {
   static const Color darkTextPrimary = Color(0xFFF1F5F9);
   static const Color darkTextSecondary = Color(0xFF94A3B8);
   static const Color darkTextMuted = Color(0xFF64748B);
-  
+
   // Light Palette
   static const Color lightBackground = Color(0xFFF4F6F9);
   static const Color lightSurface = Color(0xFFFFFFFF);
@@ -30,8 +30,23 @@ class AppTheme {
   static const Color statusDanger = Color(0xFFEF4444);
   static const Color statusNeutral = Color(0xFF6B7280);
 
-  static ThemeData get darkTheme {
-    final textTheme = GoogleFonts.interTextTheme(ThemeData.dark().textTheme);
+  static TextTheme _buildTextTheme(Brightness brightness, String languageCode) {
+    final base = brightness == Brightness.dark
+        ? ThemeData.dark().textTheme
+        : ThemeData.light().textTheme;
+
+    try {
+      if (languageCode == 'fa') {
+        return GoogleFonts.vazirmatnTextTheme(base);
+      }
+      return GoogleFonts.interTextTheme(base);
+    } catch (_) {
+      return base;
+    }
+  }
+
+  static ThemeData getDarkTheme({String languageCode = 'fa'}) {
+    final textTheme = _buildTextTheme(Brightness.dark, languageCode);
 
     return ThemeData(
       useMaterial3: true,
@@ -44,12 +59,29 @@ class AppTheme {
         error: statusDanger,
       ),
       textTheme: textTheme.copyWith(
-        displayLarge: textTheme.displayLarge?.copyWith(color: darkTextPrimary, fontWeight: FontWeight.bold),
-        titleLarge: textTheme.titleLarge?.copyWith(color: darkTextPrimary, fontWeight: FontWeight.w600, letterSpacing: -0.3),
-        titleMedium: textTheme.titleMedium?.copyWith(color: darkTextPrimary, fontWeight: FontWeight.w600),
-        bodyLarge: textTheme.bodyLarge?.copyWith(color: darkTextPrimary),
-        bodyMedium: textTheme.bodyMedium?.copyWith(color: darkTextSecondary),
-        labelSmall: textTheme.labelSmall?.copyWith(color: darkTextMuted, fontWeight: FontWeight.w500),
+        displayLarge: textTheme.displayLarge?.copyWith(
+          color: darkTextPrimary,
+          fontWeight: FontWeight.bold,
+        ),
+        titleLarge: textTheme.titleLarge?.copyWith(
+          color: darkTextPrimary,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.3,
+        ),
+        titleMedium: textTheme.titleMedium?.copyWith(
+          color: darkTextPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+        bodyLarge: textTheme.bodyLarge?.copyWith(
+          color: darkTextPrimary,
+        ),
+        bodyMedium: textTheme.bodyMedium?.copyWith(
+          color: darkTextSecondary,
+        ),
+        labelSmall: textTheme.labelSmall?.copyWith(
+          color: darkTextMuted,
+          fontWeight: FontWeight.w500,
+        ),
       ),
       cardTheme: CardThemeData(
         color: darkCard,
@@ -75,8 +107,8 @@ class AppTheme {
     );
   }
 
-  static ThemeData get lightTheme {
-    final textTheme = GoogleFonts.interTextTheme(ThemeData.light().textTheme);
+  static ThemeData getLightTheme({String languageCode = 'fa'}) {
+    final textTheme = _buildTextTheme(Brightness.light, languageCode);
 
     return ThemeData(
       useMaterial3: true,
@@ -89,12 +121,29 @@ class AppTheme {
         error: statusDanger,
       ),
       textTheme: textTheme.copyWith(
-        displayLarge: textTheme.displayLarge?.copyWith(color: lightTextPrimary, fontWeight: FontWeight.bold),
-        titleLarge: textTheme.titleLarge?.copyWith(color: lightTextPrimary, fontWeight: FontWeight.w600, letterSpacing: -0.3),
-        titleMedium: textTheme.titleMedium?.copyWith(color: lightTextPrimary, fontWeight: FontWeight.w600),
-        bodyLarge: textTheme.bodyLarge?.copyWith(color: lightTextPrimary),
-        bodyMedium: textTheme.bodyMedium?.copyWith(color: lightTextSecondary),
-        labelSmall: textTheme.labelSmall?.copyWith(color: lightTextMuted, fontWeight: FontWeight.w500),
+        displayLarge: textTheme.displayLarge?.copyWith(
+          color: lightTextPrimary,
+          fontWeight: FontWeight.bold,
+        ),
+        titleLarge: textTheme.titleLarge?.copyWith(
+          color: lightTextPrimary,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.3,
+        ),
+        titleMedium: textTheme.titleMedium?.copyWith(
+          color: lightTextPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+        bodyLarge: textTheme.bodyLarge?.copyWith(
+          color: lightTextPrimary,
+        ),
+        bodyMedium: textTheme.bodyMedium?.copyWith(
+          color: lightTextSecondary,
+        ),
+        labelSmall: textTheme.labelSmall?.copyWith(
+          color: lightTextMuted,
+          fontWeight: FontWeight.w500,
+        ),
       ),
       cardTheme: CardThemeData(
         color: lightCard,
@@ -118,4 +167,7 @@ class AppTheme {
       ),
     );
   }
+
+  static ThemeData get darkTheme => getDarkTheme();
+  static ThemeData get lightTheme => getLightTheme();
 }

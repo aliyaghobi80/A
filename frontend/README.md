@@ -1,17 +1,11 @@
-# pc_system_inspector
+# Central System Checker - Frontend (مرکزی سیستم چکر)
 
-A new Flutter project.
+Desktop frontend application for **Central System Checker** built with Flutter for Windows.
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Features
+- **Bilingual Localization**: English & Persian (Farsi) with native RTL support
+- **Display Modes**:
+  - **Simple Mode** (Default): Fast, invoice-comparison checklist view for store employees
+  - **Advanced Mode**: Detailed hardware diagnostic cards for technicians
+- **Light & Dark Theme** support
+- **Local Preferences Persistence**: Remembers language, display mode, and theme between sessions

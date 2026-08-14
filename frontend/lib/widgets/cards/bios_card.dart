@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
@@ -10,29 +11,32 @@ class BiosCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return CardWrapper(
       icon: Icons.settings_input_component_rounded,
-      title: 'BIOS / UEFI',
+      title: l10n.biosUefi,
       iconColor: const Color(0xFFEC4899),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InfoRow(
-            label: 'Manufacturer / Vendor',
+            label: l10n.manufacturerVendor,
             value: bios.manufacturer,
             icon: Icons.business_rounded,
           ),
           InfoRow(
-            label: 'BIOS Version',
+            label: l10n.biosVersion,
             value: bios.version,
             icon: Icons.info_outline_rounded,
             copyable: true,
             isMonospace: true,
           ),
           InfoRow(
-            label: 'Release Date',
+            label: l10n.releaseDate,
             value: bios.date,
             icon: Icons.calendar_today_rounded,
+            forceLtrValue: true,
           ),
         ],
       ),

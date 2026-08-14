@@ -1,53 +1,100 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'l10n/app_localizations.dart';
 import 'models/system_info.dart';
 import 'services/api_service.dart';
 import 'services/backend_process_manager.dart';
+import 'services/settings_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_header.dart';
-import 'widgets/summary_hero_bar.dart';
+import 'widgets/simple_mode_view.dart';
+import 'widgets/advanced_mode_view.dart';
 import 'widgets/loading_view.dart';
 import 'widgets/error_view.dart';
-import 'widgets/cards/cpu_card.dart';
-import 'widgets/cards/motherboard_card.dart';
-import 'widgets/cards/ram_card.dart';
-import 'widgets/cards/gpu_card.dart';
-import 'widgets/cards/storage_card.dart';
-import 'widgets/cards/windows_card.dart';
-import 'widgets/cards/bios_card.dart';
-import 'widgets/cards/network_card.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const PcSystemInspectorApp());
+  final settings = await SettingsService.loadSettings();
+  runApp(CentralSystemCheckerApp(initialSettings: settings));
 }
 
-class PcSystemInspectorApp extends StatefulWidget {
-  const PcSystemInspectorApp({super.key});
+class CentralSystemCheckerApp extends StatefulWidget {
+  final AppSettings initialSettings;
+
+  const CentralSystemCheckerApp({
+    super.key,
+    required this.initialSettings,
+  });
 
   @override
-  State<PcSystemInspectorApp> createState() => _PcSystemInspectorAppState();
+  State<CentralSystemCheckerApp> createState() => _CentralSystemCheckerAppState();
 }
 
-class _PcSystemInspectorAppState extends State<PcSystemInspectorApp> {
-  bool _isDarkMode = true;
+class _CentralSystemCheckerAppState extends State<CentralSystemCheckerApp> {
+  late String _languageCode;
+  late DisplayMode _displayMode;
+  late bool _isDarkMode;
 
-  void _toggleTheme() {
+  @override
+  void initState() {
+    super.initState();
+    _languageCode = widget.initialSettings.languageCode;
+    _displayMode = widget.initialSettings.displayMode;
+    _isDarkMode = widget.initialSettings.isDarkMode;
+  }
+
+  void _updateSettings({
+    String? languageCode,
+    DisplayMode? displayMode,
+    bool? isDarkMode,
+  }) {
     setState(() {
-      _isDarkMode = !_isDarkMode;
+      if (languageCode != null) _languageCode = languageCode;
+      if (displayMode != null) _displayMode = displayMode;
+      if (isDarkMode != null) _isDarkMode = isDarkMode;
     });
+
+    SettingsService.saveSettings(
+      AppSettings(
+        languageCode: _languageCode,
+        displayMode: _displayMode,
+        isDarkMode: _isDarkMode,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isPersian = _languageCode == 'fa';
+    final textDirection = isPersian ? TextDirection.rtl : TextDirection.ltr;
+
     return MaterialApp(
-      title: 'PC System Inspector',
+      title: isPersian ? 'مرکزی سیستم چکر' : 'Central System Checker',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      locale: Locale(_languageCode),
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      theme: AppTheme.getLightTheme(languageCode: _languageCode),
+      darkTheme: AppTheme.getDarkTheme(languageCode: _languageCode),
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      builder: (context, child) {
+        return Directionality(
+          textDirection: textDirection,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: DashboardScreen(
         isDarkMode: _isDarkMode,
-        onToggleTheme: _toggleTheme,
+        onToggleTheme: () => _updateSettings(isDarkMode: !_isDarkMode),
+        displayMode: _displayMode,
+        onModeChanged: (mode) => _updateSettings(displayMode: mode),
+        currentLanguage: _languageCode,
+        onLanguageChanged: (lang) => _updateSettings(languageCode: lang),
       ),
     );
   }
@@ -56,11 +103,19 @@ class _PcSystemInspectorAppState extends State<PcSystemInspectorApp> {
 class DashboardScreen extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback onToggleTheme;
+  final DisplayMode displayMode;
+  final ValueChanged<DisplayMode> onModeChanged;
+  final String currentLanguage;
+  final ValueChanged<String> onLanguageChanged;
 
   const DashboardScreen({
     super.key,
     required this.isDarkMode,
     required this.onToggleTheme,
+    required this.displayMode,
+    required this.onModeChanged,
+    required this.currentLanguage,
+    required this.onLanguageChanged,
   });
 
   @override
@@ -124,18 +179,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       body: SafeArea(
-        child: _buildBody(context, isDark),
+        child: _buildBody(context, isDark, l10n),
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context, bool isDark) {
+  Widget _buildBody(BuildContext context, bool isDark, AppLocalizations l10n) {
     if (_isLoading) {
-      return const LoadingView(
-        message: 'Detecting hardware & Windows specifications...',
+      return LoadingView(
+        message: l10n.loadingMessage,
       );
     }
 
@@ -147,8 +203,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     if (_systemInfo == null) {
-      return const LoadingView(
-        message: 'Initializing inspector...',
+      return LoadingView(
+        message: l10n.initializingMessage,
       );
     }
 
@@ -172,102 +228,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onRefresh: () => _loadSystemInfo(forceRefresh: true),
             isDarkMode: widget.isDarkMode,
             onToggleTheme: widget.onToggleTheme,
+            displayMode: widget.displayMode,
+            onModeChanged: widget.onModeChanged,
+            currentLanguage: widget.currentLanguage,
+            onLanguageChanged: widget.onLanguageChanged,
             lastUpdated: info.timestamp,
           ),
         ),
 
-        // Main Scrollable Area
+        // Main Scrollable Content Area
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Hero Overview Bar
-                SummaryHeroBar(info: info),
-                const SizedBox(height: 20),
+                // Render Simple Mode or Advanced Mode
+                if (widget.displayMode == DisplayMode.simple)
+                  SimpleModeView(info: info)
+                else
+                  AdvancedModeView(info: info),
 
-                // Responsive Grid of Cards
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isWide = constraints.maxWidth > 950;
-
-                    if (isWide) {
-                      // 2-Column Desktop Grid
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Left Column
-                          Expanded(
-                            child: Column(
-                              children: [
-                                CpuCard(cpu: info.cpu),
-                                const SizedBox(height: 16),
-                                GpuCard(gpus: info.gpu),
-                                const SizedBox(height: 16),
-                                StorageCard(storage: info.storage),
-                                const SizedBox(height: 16),
-                                BiosCard(bios: info.bios),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          // Right Column
-                          Expanded(
-                            child: Column(
-                              children: [
-                                RamCard(ram: info.ram),
-                                const SizedBox(height: 16),
-                                MotherboardCard(motherboard: info.motherboard),
-                                const SizedBox(height: 16),
-                                WindowsCard(
-                                  windows: info.windows,
-                                  system: info.system,
-                                ),
-                                const SizedBox(height: 16),
-                                NetworkCard(network: info.network),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    } else {
-                      // Single Column Layout for narrow windows
-                      return Column(
-                        children: [
-                          CpuCard(cpu: info.cpu),
-                          const SizedBox(height: 16),
-                          RamCard(ram: info.ram),
-                          const SizedBox(height: 16),
-                          GpuCard(gpus: info.gpu),
-                          const SizedBox(height: 16),
-                          MotherboardCard(motherboard: info.motherboard),
-                          const SizedBox(height: 16),
-                          StorageCard(storage: info.storage),
-                          const SizedBox(height: 16),
-                          WindowsCard(
-                            windows: info.windows,
-                            system: info.system,
-                          ),
-                          const SizedBox(height: 16),
-                          BiosCard(bios: info.bios),
-                          const SizedBox(height: 16),
-                          NetworkCard(network: info.network),
-                        ],
-                      );
-                    }
-                  },
-                ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
 
                 // Footer Status
                 Center(
-                  child: Text(
-                    'Inspection scan completed in ${info.scanDurationMs.toStringAsFixed(0)} ms • Local Windows Host (${info.system.computerName})',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  child: Directionality(
+                    textDirection: widget.currentLanguage == 'fa'
+                        ? TextDirection.rtl
+                        : TextDirection.ltr,
+                    child: Text(
+                      l10n.scanCompleted(info.scanDurationMs, info.system.computerName),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      ),
                     ),
                   ),
                 ),

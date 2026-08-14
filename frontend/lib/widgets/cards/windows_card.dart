@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
@@ -17,10 +18,11 @@ class WindowsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return CardWrapper(
       icon: Icons.window_rounded,
-      title: 'Windows Information',
+      title: l10n.windowsInformation,
       iconColor: const Color(0xFF0284C7),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -28,12 +30,15 @@ class WindowsCard extends StatelessWidget {
           color: const Color(0xFF0284C7).withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(
-          windows.architecture,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Text(
+            windows.architecture,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1),
+            ),
           ),
         ),
       ),
@@ -54,13 +59,16 @@ class WindowsCard extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    windows.edition,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                      letterSpacing: -0.2,
+                  child: Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      windows.edition,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        letterSpacing: -0.2,
+                      ),
                     ),
                   ),
                 ),
@@ -71,12 +79,15 @@ class WindowsCard extends StatelessWidget {
                       color: const Color(0xFF0284C7).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(5),
                     ),
-                    child: Text(
-                      windows.version,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1),
+                    child: Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Text(
+                        windows.version,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1),
+                        ),
                       ),
                     ),
                   ),
@@ -85,42 +96,47 @@ class WindowsCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           InfoRow(
-            label: 'OS Edition',
+            label: l10n.osEdition,
             value: windows.edition,
             icon: Icons.laptop_windows_rounded,
+            forceLtrValue: true,
           ),
           InfoRow(
-            label: 'Version',
+            label: l10n.version,
             value: windows.version,
             icon: Icons.flag_circle_rounded,
+            forceLtrValue: true,
           ),
           InfoRow(
-            label: 'Build Number',
+            label: l10n.buildNumber,
             value: windows.build,
             icon: Icons.numbers_rounded,
             isMonospace: true,
             copyable: true,
           ),
           InfoRow(
-            label: 'Architecture',
+            label: l10n.architecture,
             value: windows.architecture,
             icon: Icons.architecture_rounded,
+            forceLtrValue: true,
           ),
           InfoRow(
-            label: 'Computer Name',
+            label: l10n.computerName,
             value: system.computerName,
             icon: Icons.computer_rounded,
             copyable: true,
+            forceLtrValue: true,
           ),
           if (system.model != 'Not available')
             InfoRow(
-              label: 'System Model',
+              label: l10n.systemModel,
               value: system.model,
               icon: Icons.devices_rounded,
+              forceLtrValue: true,
             ),
           if (system.manufacturer != 'Not available')
             InfoRow(
-              label: 'Manufacturer',
+              label: l10n.manufacturer,
               value: system.manufacturer,
               icon: Icons.business_rounded,
             ),

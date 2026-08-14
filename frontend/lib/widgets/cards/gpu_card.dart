@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
@@ -12,10 +13,11 @@ class GpuCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return CardWrapper(
       icon: Icons.videogame_asset_rounded,
-      title: 'GPU (Graphics)',
+      title: l10n.gpuGraphics,
       iconColor: const Color(0xFF8B5CF6),
       trailing: gpus.length > 1
           ? Container(
@@ -25,7 +27,7 @@ class GpuCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                '${gpus.length} GPUs Detected',
+                l10n.gpusDetected(gpus.length),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -38,7 +40,7 @@ class GpuCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (gpus.isEmpty)
-            const Text('No graphics card detected')
+            Text(l10n.noGpuDetected)
           else
             ...gpus.asMap().entries.map((entry) {
               final idx = entry.key;
@@ -68,13 +70,16 @@ class GpuCard extends StatelessWidget {
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            gpu.name,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                              letterSpacing: -0.2,
+                          child: Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text(
+                              gpu.name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                                letterSpacing: -0.2,
+                              ),
                             ),
                           ),
                         ),
@@ -85,12 +90,15 @@ class GpuCard extends StatelessWidget {
                               color: const Color(0xFF8B5CF6).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: Text(
-                              gpu.vramDisplay,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: isDark ? const Color(0xFFDDD6FE) : const Color(0xFF6D28D9),
+                            child: Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Text(
+                                gpu.vramDisplay,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? const Color(0xFFDDD6FE) : const Color(0xFF6D28D9),
+                                ),
                               ),
                             ),
                           ),
@@ -99,17 +107,18 @@ class GpuCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   InfoRow(
-                    label: 'Manufacturer',
+                    label: l10n.manufacturer,
                     value: gpu.manufacturer,
                     icon: Icons.business_rounded,
                   ),
                   InfoRow(
-                    label: 'Dedicated VRAM',
+                    label: l10n.dedicatedVram,
                     value: gpu.vramDisplay,
                     icon: Icons.sd_storage_rounded,
+                    forceLtrValue: true,
                   ),
                   InfoRow(
-                    label: 'Driver Version',
+                    label: l10n.driverVersion,
                     value: gpu.driverVersion,
                     icon: Icons.settings_system_daydream_rounded,
                     isMonospace: true,

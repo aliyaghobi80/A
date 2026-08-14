@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
@@ -12,10 +13,11 @@ class RamCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return CardWrapper(
       icon: Icons.storage_rounded,
-      title: 'RAM (Memory)',
+      title: l10n.ramMemory,
       iconColor: const Color(0xFFF59E0B),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -23,12 +25,15 @@ class RamCard extends StatelessWidget {
           color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(
-          ram.totalDisplay,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: isDark ? const Color(0xFFFCD34D) : const Color(0xFFD97706),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Text(
+            ram.totalDisplay,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: isDark ? const Color(0xFFFCD34D) : const Color(0xFFD97706),
+            ),
           ),
         ),
       ),
@@ -36,32 +41,34 @@ class RamCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InfoRow(
-            label: 'Total Capacity',
+            label: l10n.totalCapacity,
             value: ram.totalDisplay,
             icon: Icons.pie_chart_rounded,
             isPrimary: true,
+            forceLtrValue: true,
           ),
           InfoRow(
-            label: 'Installed Modules',
-            value: ram.moduleCount > 0 ? '${ram.moduleCount} Module${ram.moduleCount > 1 ? 's' : ''}' : 'Not available',
+            label: l10n.installedModules,
+            value: ram.moduleCount > 0 ? l10n.modulesCount(ram.moduleCount) : l10n.notAvailable,
             icon: Icons.view_column_rounded,
           ),
           if (ram.moduleSummary != 'Not available')
             InfoRow(
-              label: 'Configuration',
+              label: l10n.configuration,
               value: ram.moduleSummary,
               icon: Icons.splitscreen_rounded,
+              forceLtrValue: true,
             ),
           InfoRow(
-            label: 'Configured Speed',
+            label: l10n.configuredSpeed,
             value: ram.speedDisplay,
             icon: Icons.speed_rounded,
+            forceLtrValue: true,
           ),
-          
           if (ram.modules.isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(
-              'Module Details',
+              l10n.moduleDetails,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -99,19 +106,25 @@ class RamCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '${mod.capacityDisplay} ${mod.type} • ${mod.speedDisplay}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text(
+                              '${mod.capacityDisplay} ${mod.type} • ${mod.speedDisplay}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                              ),
                             ),
                           ),
-                          Text(
-                            '${mod.manufacturer != 'Not available' ? mod.manufacturer : 'Module'} (${mod.slot})',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text(
+                              '${mod.manufacturer != 'Not available' ? mod.manufacturer : 'Module'} (${mod.slot})',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                              ),
                             ),
                           ),
                         ],
