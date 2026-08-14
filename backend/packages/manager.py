@@ -508,9 +508,8 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
 
 def install_package(target_identifier: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:
     """
-    Interactively launches the selected .exe installer on Windows.
-    Enables employees to customize destination paths, options, and proceed manually through the wizard.
-    Waits for completion and re-scans the Windows registry to verify installed status and version.
+    Launches the selected .exe installer with Administrator privileges (Run as Administrator).
+    Returns immediately so the employee can interact with the installer wizard.
     """
     data = scan_packages(custom_dir)
     if not data.get("directory_exists"):
@@ -549,53 +548,72 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
             "exit_code": -1,
         }
 
-    working_dir = os.path.dirname(full_path)
-    logger.info(f"Interactively launching installer: {full_path} in {working_dir}")
+    abs_path = os.path.abspath(full_path)
+    working_dir = os.path.dirname(abs_path)
+    logger.info(f"Launching installer as Administrator: {abs_path} in {working_dir}")
 
+    launched = False
+    launch_err = ""
+
+    # Method 1: Win32 ShellExecuteW with verb 'runas' (Triggers Windows UAC & Run as Administrator)
     try:
-        # Launch interactively with normal GUI window
-        proc = subprocess.Popen(
-            [full_path],
-            cwd=working_dir,
-        )
-
-        # Wait for the installer wizard to close (max 10 minutes)
-        try:
-            exit_code = proc.wait(timeout=600)
-        except subprocess.TimeoutExpired:
-            logger.info("Installer is still running or finished asynchronously.")
-            exit_code = 0
-
-        # Perform deep registry search to verify if newly installed
-        rescan_data = scan_packages(custom_dir)
-
-        # Find the updated package item
-        updated_pkg = None
-        for p in rescan_data.get("packages", []):
-            if p.get("id") == target_pkg.get("id") or p.get("relative_path") == target_pkg.get("relative_path"):
-                updated_pkg = p
-                break
-
-        is_now_installed = updated_pkg.get("is_installed", False) if updated_pkg else False
-        detected_version = updated_pkg.get("installed_version", "") if updated_pkg else ""
-
-        if is_now_installed:
-            msg = f"{target_pkg.get('name')} با موفقیت نصب شد (نسخه {detected_version})." if detected_version and detected_version != "Not available" else f"{target_pkg.get('name')} با موفقیت نصب شد."
+        ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", abs_path, "", working_dir, 1)
+        if ret > 32:
+            launched = True
+            logger.info(f"ShellExecuteW runas successful (code {ret}) for {abs_path}")
         else:
-            msg = f"نصب دستی {target_pkg.get('name')} انجام شد."
+            launch_err = f"ShellExecute error code: {ret}"
+    except Exception as e:
+        launch_err = str(e)
+        logger.warning(f"ShellExecuteW runas exception: {e}")
 
+    # Method 2: os.startfile with 'runas'
+    if not launched:
+        try:
+            os.startfile(abs_path, "runas")
+            launched = True
+            logger.info(f"os.startfile runas successful for {abs_path}")
+        except Exception as e:
+            launch_err = str(e)
+            logger.warning(f"os.startfile runas exception: {e}")
+
+    # Method 3: PowerShell Start-Process -Verb RunAs
+    if not launched:
+        try:
+            ps_cmd = f'Start-Process -FilePath "{abs_path}" -WorkingDirectory "{working_dir}" -Verb RunAs'
+            proc = subprocess.run(["powershell.exe", "-NoProfile", "-Command", ps_cmd], capture_output=True, timeout=5)
+            if proc.returncode == 0:
+                launched = True
+                logger.info(f"PowerShell Start-Process -Verb RunAs successful for {abs_path}")
+            else:
+                launch_err = proc.stderr.strip() or f"PowerShell exit code: {proc.returncode}"
+        except Exception as e:
+            launch_err = str(e)
+            logger.warning(f"PowerShell RunAs exception: {e}")
+
+    # Method 4: Fallback standard subprocess.Popen
+    if not launched:
+        try:
+            subprocess.Popen([abs_path], cwd=working_dir)
+            launched = True
+            logger.info(f"Standard subprocess.Popen successful for {abs_path}")
+        except Exception as e:
+            launch_err = str(e)
+            logger.warning(f"Standard subprocess.Popen exception: {e}")
+
+    if launched:
         return {
             "success": True,
-            "exit_code": exit_code,
-            "is_installed": is_now_installed,
-            "installed_version": detected_version,
-            "message": msg,
-            "packages_result": rescan_data,
+            "launched": True,
+            "package_id": target_pkg.get("id"),
+            "name": target_pkg.get("name"),
+            "message": f"پنجره نصب {target_pkg.get('name')} با دسترسی مدیر (Run as Administrator) باز شد.",
         }
-    except Exception as e:
-        logger.error(f"Error launching installer: {e}")
+    else:
         return {
             "success": False,
-            "message": f"خطا در اجرای فایل نصبی: {str(e)}",
+            "launched": False,
+            "message": f"خطا در اجرای برنامه با دسترسی مدیر: {launch_err}",
             "exit_code": -3,
         }
+

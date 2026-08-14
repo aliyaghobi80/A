@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../l10n/app_localizations.dart';
@@ -10,6 +11,7 @@ class SoftwareController extends GetxController {
   final Rx<PackagesResponse> packagesResponse = PackagesResponse.empty().obs;
   final RxBool isScanning = false.obs;
   final RxString installingPackageId = ''.obs;
+  Timer? _pollTimer;
 
   List<SoftwarePackage> get packages => packagesResponse.value.packages;
   PackageSummary get summary => packagesResponse.value.summary;
@@ -20,6 +22,12 @@ class SoftwareController extends GetxController {
   void onInit() {
     super.onInit();
     fetchPackages();
+  }
+
+  @override
+  void onClose() {
+    _pollTimer?.cancel();
+    super.onClose();
   }
 
   Future<void> fetchPackages({String? customDir}) async {
@@ -56,7 +64,7 @@ class SoftwareController extends GetxController {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.install_desktop_rounded, color: Color(0xFF2563EB), size: 24),
+            const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF2563EB), size: 24),
             const SizedBox(width: 10),
             Text(
               l10n.confirmInstallTitle,
@@ -69,7 +77,7 @@ class SoftwareController extends GetxController {
           ],
         ),
         content: Text(
-          l10n.confirmInstallMessage(pkg.name),
+          'آیا مایل به اجرای نصاب ${pkg.name} با دسترسی مدیر (Run as Administrator) هستید؟',
           style: TextStyle(
             fontSize: 14,
             color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
@@ -80,14 +88,15 @@ class SoftwareController extends GetxController {
             onPressed: () => Navigator.of(dialogCtx).pop(false),
             child: Text(l10n.cancel),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             onPressed: () => Navigator.of(dialogCtx).pop(true),
+            icon: const Icon(Icons.play_arrow_rounded, size: 16),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2563EB),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: Text(l10n.install),
+            label: Text(l10n.install),
           ),
         ],
       ),
@@ -96,43 +105,22 @@ class SoftwareController extends GetxController {
     if (confirmed == true) {
       installingPackageId.value = targetId;
 
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text('${l10n.installing} ${pkg.name}... (پنجره نصب باز شد)'),
-          duration: const Duration(seconds: 4),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
       try {
         final res = await _apiService.installPackage(targetId);
         final success = res['success'] == true;
-        final isNowInstalled = res['is_installed'] == true;
-        final installedVer = res['installed_version'] as String? ?? '';
-
-        String resultMsg;
-        if (isNowInstalled) {
-          resultMsg = installedVer.isNotEmpty && installedVer != 'Not available'
-              ? '✓ ${pkg.name} با موفقیت نصب شد (نسخه $installedVer).'
-              : '✓ ${pkg.name} با موفقیت نصب شد.';
-        } else {
-          resultMsg = res['message'] ?? (success ? l10n.installSuccess(pkg.name) : l10n.installFailed(pkg.name));
-        }
+        final message = res['message'] as String? ?? '';
 
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(resultMsg),
-            backgroundColor: isNowInstalled ? const Color(0xFF10B981) : (success ? const Color(0xFF2563EB) : const Color(0xFFEF4444)),
+            content: Text(message.isNotEmpty ? message : 'پنجره نصب با دسترسی مدیر باز شد.'),
+            backgroundColor: success ? const Color(0xFF2563EB) : const Color(0xFFEF4444),
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
           ),
         );
 
-        // Update package list from result or fetch
-        if (res['packages_result'] != null) {
-          packagesResponse.value = PackagesResponse.fromJson(Map<String, dynamic>.from(res['packages_result']));
-        } else {
-          await scanPackages();
+        if (success) {
+          _startAutoDetectionPoll(pkg, scaffoldMessenger);
         }
       } catch (e) {
         scaffoldMessenger.showSnackBar(
@@ -146,5 +134,37 @@ class SoftwareController extends GetxController {
         installingPackageId.value = '';
       }
     }
+  }
+
+  void _startAutoDetectionPoll(SoftwarePackage pkg, ScaffoldMessengerState scaffoldMessenger) {
+    _pollTimer?.cancel();
+    int attempts = 0;
+    const maxAttempts = 20; // 20 * 3s = 60 seconds
+
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      attempts++;
+      await fetchPackages();
+
+      final targetId = pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id;
+      final updated = packages.firstWhereOrNull(
+        (p) => (p.relativePath.isNotEmpty ? p.relativePath : p.id) == targetId,
+      );
+
+      if (updated != null && updated.isInstalled) {
+        timer.cancel();
+        final ver = updated.installedVersion;
+        final verStr = (ver.isNotEmpty && ver != 'Not available') ? ' (نسخه $ver)' : '';
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('✓ ${pkg.name} با موفقیت در سیستم شناسایی شد$verStr.'),
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else if (attempts >= maxAttempts) {
+        timer.cancel();
+      }
+    });
   }
 }
