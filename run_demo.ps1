@@ -12,14 +12,14 @@ try {
     exit 1
 }
 
-# Check Backend
-$portActive = (Get-NetTCPConnection -LocalPort 18080 -ErrorAction SilentlyContinue)
+# Check Backend on port 18088
+$portActive = (Get-NetTCPConnection -LocalPort 18088 -ErrorAction SilentlyContinue)
 if (-not $portActive) {
-    Write-Host "[1/2] Starting Python backend service (port 18080)..." -ForegroundColor Yellow
-    Start-Process python -ArgumentList "backend\main.py --port 18080" -WindowStyle Hidden
+    Write-Host "[1/2] Starting Python backend service (port 18088)..." -ForegroundColor Yellow
+    Start-Process python -ArgumentList "backend\main.py --port 18088" -WindowStyle Hidden
     Start-Sleep -Seconds 2
 } else {
-    Write-Host "[1/2] Python backend already active on port 18080." -ForegroundColor Green
+    Write-Host "[1/2] Python backend active on port 18088." -ForegroundColor Green
 }
 
 $releaseExeMain = "frontend\build\windows\x64\runner\Release\CentralSystemChecker.exe"

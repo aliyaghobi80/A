@@ -6,17 +6,23 @@ import 'package:http/http.dart' as http;
 
 class BackendProcessManager {
   static Process? _process;
-  static const int port = 18080;
-  static const String baseUrl = 'http://127.0.0.1:$port';
+  static int activePort = 18088;
+  static const List<int> candidatePorts = [18088, 18080, 18089];
 
-  static Future<bool> isBackendRunning() async {
+  static String get baseUrl => 'http://127.0.0.1:$activePort';
+
+  static Future<bool> isBackendRunningOnPort(int port) async {
     try {
       final response = await http
-          .get(Uri.parse('$baseUrl/api/health'))
-          .timeout(const Duration(milliseconds: 1500));
+          .get(Uri.parse('http://127.0.0.1:$port/api/health'))
+          .timeout(const Duration(milliseconds: 1200));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return data['status'] == 'ok';
+        final isOk = data['status'] == 'ok';
+        final isPhase2 = data['phase'] == 2 || data['version'] == '2.2.0';
+        if (isOk && isPhase2) {
+          return true;
+        }
       }
     } catch (_) {}
     return false;
@@ -70,8 +76,13 @@ class BackendProcessManager {
   }
 
   static Future<bool> ensureBackendRunning() async {
-    if (await isBackendRunning()) {
-      return true;
+    // 1. Check if an active Phase 2 backend is already running on any candidate port
+    for (final port in candidatePorts) {
+      if (await isBackendRunningOnPort(port)) {
+        activePort = port;
+        debugPrint('[BackendProcessManager] Connected to active Phase 2 backend on port $activePort.');
+        return true;
+      }
     }
 
     final scriptPath = findBackendScript();
@@ -81,8 +92,9 @@ class BackendProcessManager {
     }
 
     final scriptFile = File(scriptPath);
-    final workDir = scriptFile.parent.path;
-    debugPrint('[BackendProcessManager] Found backend at: $scriptPath');
+    // Use repository root as working directory so relative config/Packages paths work
+    final workDir = scriptFile.parent.parent.path;
+    debugPrint('[BackendProcessManager] Spawning backend script: $scriptPath with workingDir: $workDir');
 
     // List of python executable commands to try
     final pythonCommands = [
@@ -98,14 +110,15 @@ class BackendProcessManager {
       r'C:\Program Files\Python311\python.exe',
     ];
 
+    final targetPort = activePort;
     bool started = false;
 
     for (final cmd in pythonCommands) {
       try {
-        debugPrint('[BackendProcessManager] Attempting to spawn backend with "$cmd"...');
+        debugPrint('[BackendProcessManager] Attempting to spawn backend with "$cmd" on port $targetPort...');
         _process = await Process.start(
           cmd,
-          [scriptFile.path, '--port', '$port'],
+          [scriptFile.path, '--port', '$targetPort'],
           workingDirectory: workDir,
           mode: ProcessStartMode.detached,
         );
@@ -124,8 +137,9 @@ class BackendProcessManager {
     // Wait up to 10 seconds for backend to become available
     for (int i = 0; i < 20; i++) {
       await Future.delayed(const Duration(milliseconds: 500));
-      if (await isBackendRunning()) {
-        debugPrint('[BackendProcessManager] Backend is UP and responding on port $port.');
+      if (await isBackendRunningOnPort(targetPort)) {
+        activePort = targetPort;
+        debugPrint('[BackendProcessManager] Backend is UP and responding on port $activePort.');
         return true;
       }
     }

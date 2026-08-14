@@ -6,8 +6,7 @@ import '../models/system_info.dart';
 import 'backend_process_manager.dart';
 
 class ApiService {
-  static const int port = 18080;
-  static const String baseUrl = 'http://127.0.0.1:$port';
+  static String get baseUrl => BackendProcessManager.baseUrl;
   static const Duration timeoutDuration = Duration(seconds: 25);
 
   Future<SystemInfo> fetchSystemInfo({bool forceRefresh = false}) async {

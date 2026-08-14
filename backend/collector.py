@@ -1,8 +1,15 @@
 import logging
+import os
+import sys
 import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
+
+# Ensure backend directory is in sys.path
+_backend_dir = os.path.dirname(os.path.abspath(__file__))
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
 
 from hardware.cpu import get_cpu_info
 from hardware.motherboard import get_motherboard_info

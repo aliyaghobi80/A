@@ -13,14 +13,14 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: Check if backend is already listening on port 18080
-netstat -ano | findstr :18080 >nul 2>&1
+:: Ensure latest Phase 2 backend service is started on port 18088
+netstat -ano | findstr :18088 >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [1/2] Starting Python system inspection backend (port 18080)...
-    start /min "Central System Checker Backend" cmd /c "python backend\main.py --port 18080"
+    echo [1/2] Starting Python system inspection backend (port 18088)...
+    start /min "Central System Checker Backend" cmd /c "python backend\main.py --port 18088"
     timeout /t 2 /nobreak >nul
 ) else (
-    echo [1/2] Python backend already active on port 18080.
+    echo [1/2] Python backend active on port 18088.
 )
 
 :: Launch Flutter application

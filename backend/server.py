@@ -2,9 +2,15 @@ import http.server
 import json
 import logging
 import os
+import sys
 import threading
 from typing import Optional
 from urllib.parse import parse_qs, urlparse
+
+# Ensure backend directory is in sys.path
+_backend_dir = os.path.dirname(os.path.abspath(__file__))
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
 
 from collector import collect_all_system_info
 from packages.manager import scan_packages, install_package, get_package_icon_path
@@ -42,7 +48,8 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Central System Checker Backend",
-                "version": "1.0.0"
+                "version": "2.2.0",
+                "phase": 2
             }
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return
