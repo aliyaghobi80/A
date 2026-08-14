@@ -1,0 +1,3 @@
+@echo off
+echo Installing VLC Media Player Package...
+exit /b 0

@@ -5,7 +5,7 @@ class AppLocalizationsFa implements AppLocalizations {
   String get appName => 'مرکزی سیستم چکر';
 
   @override
-  String get appSubtitle => 'بررسی سخت‌افزار، ویندوز و نرم‌افزارهای موردنیاز';
+  String get appSubtitle => 'شناسایی و بررسی خودکار مشخصات سخت‌افزار، ویندوز، نرم‌افزارها و درایورها';
 
   @override
   String get liveInspector => 'بررسی زنده';
@@ -17,10 +17,10 @@ class AppLocalizationsFa implements AppLocalizations {
   String get advancedMode => 'پیشرفته';
 
   @override
-  String get simpleModeTooltip => 'حالت ساده: مقایسه سریع با فاکتور و چک‌لیست نرم‌افزارها';
+  String get simpleModeTooltip => 'حالت ساده: مقایسه سریع با فاکتور خرید و چک‌لیست‌ها';
 
   @override
-  String get advancedModeTooltip => 'حالت پیشرفته: مشخصات کامل، جزئیات فنی و وضعیت فایل‌ها';
+  String get advancedModeTooltip => 'حالت پیشرفته: مشخصات کامل فنی، جزئیات درایورها و پکیج‌ها';
 
   @override
   String get languageEn => 'EN';
@@ -53,25 +53,37 @@ class AppLocalizationsFa implements AppLocalizations {
   String get switchToDarkMode => 'تغییر به تم تاریک';
 
   @override
+  String get cancel => 'انصراف';
+
+  @override
   String get hardware => 'سخت‌افزار';
 
   @override
   String get ready => 'آماده';
 
   @override
-  String get simpleModeHeaderTitle => 'مشخصات فنی و نرم‌افزارهای موردنیاز';
+  String get needsAttention => 'نیاز به بررسی';
 
   @override
-  String get simpleModeHeaderSubtitle => 'بررسی سریع و آسان مشخصات قطعات با فاکتور خرید و چک‌لیست نصب برنامه‌ها';
+  String get checking => 'در حال بررسی...';
 
   @override
-  String get invoiceCheckBadge => 'بررسی فاکتور';
+  String get systemStatus => 'وضعیت سیستم';
+
+  @override
+  String get simpleModeHeaderTitle => 'بررسی سریع سیستم و مقایسه با فاکتور';
+
+  @override
+  String get simpleModeHeaderSubtitle => 'مشخصات سخت‌افزار، درایورها، نرم‌افزارها و فایل‌های موجود در سیستم را با فاکتور خرید مقایسه کنید.';
+
+  @override
+  String get invoiceCheckBadge => 'چک فاکتور';
 
   @override
   String get copyAllSpecs => 'کپی خلاصه مشخصات';
 
   @override
-  String get specsCopied => 'مشخصات با موفقیت کپی شد';
+  String get specsCopied => 'مشخصات کامل سیستم در حافظه کپی شد';
 
   @override
   String get cpu => 'سی‌پی‌یو';
@@ -80,13 +92,13 @@ class AppLocalizationsFa implements AppLocalizations {
   String get ram => 'رم';
 
   @override
-  String get ramMemory => 'رم';
+  String get ramMemory => 'حافظه رم';
 
   @override
   String get gpu => 'کارت گرافیک';
 
   @override
-  String get gpuGraphics => 'کارت گرافیک';
+  String get gpuGraphics => 'کارت گرافیک (GPU)';
 
   @override
   String get motherboard => 'مادربرد';
@@ -95,19 +107,19 @@ class AppLocalizationsFa implements AppLocalizations {
   String get storage => 'حافظه ذخیره‌سازی';
 
   @override
-  String get physicalStorageDevices => 'حافظه ذخیره‌سازی';
+  String get physicalStorageDevices => 'دیسک‌های فیزیکی ذخیره‌سازی';
 
   @override
   String get windows => 'ویندوز';
 
   @override
-  String get windowsInformation => 'ویندوز';
+  String get windowsInformation => 'مشخصات سیستم‌عامل ویندوز';
 
   @override
   String get bios => 'BIOS / UEFI';
 
   @override
-  String get biosUefi => 'BIOS / UEFI';
+  String get biosUefi => 'فریم‌ور BIOS / UEFI';
 
   @override
   String get network => 'شبکه';
@@ -125,16 +137,7 @@ class AppLocalizationsFa implements AppLocalizations {
   String get maxClockSpeed => 'حداکثر فرکانس';
 
   @override
-  String coresThreads(dynamic cores, dynamic threads) {
-    if (cores != 'Not available' && threads != 'Not available') {
-      return '$cores هسته / $threads رشته';
-    } else if (cores != 'Not available') {
-      return '$cores هسته';
-    } else if (threads != 'Not available') {
-      return '$threads رشته';
-    }
-    return notAvailable;
-  }
+  String coresThreads(dynamic cores, dynamic threads) => '$cores هسته / $threads رشته';
 
   @override
   String get totalCapacity => 'ظرفیت کل';
@@ -143,7 +146,7 @@ class AppLocalizationsFa implements AppLocalizations {
   String get installedModules => 'ماژول‌های نصب‌شده';
 
   @override
-  String get configuration => 'ترکیب ماژول‌ها';
+  String get configuration => 'پیکربندی';
 
   @override
   String get configuredSpeed => 'فرکانس کاری';
@@ -158,22 +161,22 @@ class AppLocalizationsFa implements AppLocalizations {
   String modulesCount(int count) => '$count ماژول';
 
   @override
-  String get dedicatedVram => 'حافظه اختصاصی VRAM';
+  String get dedicatedVram => 'حافظه اختصاصی (VRAM)';
 
   @override
   String get driverVersion => 'نسخه درایور';
 
   @override
-  String gpusDetected(int count) => '$count کارت گرافیک';
+  String gpusDetected(int count) => '$count کارت گرافیک شناسایی شد';
 
   @override
   String get noGpuDetected => 'کارت گرافیکی شناسایی نشد';
 
   @override
-  String get dedicatedGraphics => 'گرافیک اختصاصی';
+  String get dedicatedGraphics => 'کارت گرافیک مجزا';
 
   @override
-  String get modelProduct => 'مدل سیستم';
+  String get modelProduct => 'مدل / محصول';
 
   @override
   String get manufacturer => 'سازنده';
@@ -185,7 +188,7 @@ class AppLocalizationsFa implements AppLocalizations {
   String get capacity => 'ظرفیت';
 
   @override
-  String get interfaceBus => 'نوع رابط / باس';
+  String get interfaceBus => 'نوع رابط';
 
   @override
   String get healthStatus => 'وضعیت سلامت';
@@ -197,10 +200,10 @@ class AppLocalizationsFa implements AppLocalizations {
   String drivesCount(int count) => '$count درایو';
 
   @override
-  String get noStorageDetected => 'هیچ درایو ذخیره‌سازی شناسایی نشد';
+  String get noStorageDetected => 'حافظه ذخیره‌سازی شناسایی نشد';
 
   @override
-  String get osEdition => 'ویرایش سیستم‌عامل';
+  String get osEdition => 'ویرایش ویندوز';
 
   @override
   String get version => 'نسخه';
@@ -221,7 +224,7 @@ class AppLocalizationsFa implements AppLocalizations {
   String get manufacturerVendor => 'سازنده';
 
   @override
-  String get biosVersion => 'نسخه بایوس';
+  String get biosVersion => 'نسخه BIOS';
 
   @override
   String get releaseDate => 'تاریخ انتشار';
@@ -230,7 +233,7 @@ class AppLocalizationsFa implements AppLocalizations {
   String get ipv4Address => 'آدرس IPv4';
 
   @override
-  String get macAddress => 'آدرس فیزیکی (MAC)';
+  String get macAddress => 'آدرس MAC';
 
   @override
   String get linkSpeed => 'سرعت اتصال';
@@ -245,12 +248,37 @@ class AppLocalizationsFa implements AppLocalizations {
   String get disconnected => 'قطع';
 
   @override
-  String activeAdaptersCount(int active, int total) => '$active فعال از $total';
+  String activeAdaptersCount(int active, int total) => '$active متصل از مجموع $total';
 
   @override
-  String get noNetworkDetected => 'هیچ کارت شبکه‌ای شناسایی نشد';
+  String get noNetworkDetected => 'کارت شبکه‌ای یافت نشد';
 
-  // Phase 2: Software
+  // Drivers Section
+  @override
+  String get drivers => 'درایورها';
+
+  @override
+  String get driverStatus => 'وضعیت درایورهای مهم';
+
+  @override
+  String get driverOk => 'سالم';
+
+  @override
+  String get driverProblem => 'خطای درایور';
+
+  @override
+  String get notPresent => 'وجود ندارد';
+
+  @override
+  String get driverDeviceName => 'نام قطعه';
+
+  @override
+  String get driverCategory => 'دسته‌بندی';
+
+  @override
+  String driverSummaryCount(int healthy, int total) => '$healthy از $total درایور مهم سالم';
+
+  // Software Requirements
   @override
   String get software => 'نرم‌افزارها';
 
@@ -270,7 +298,7 @@ class AppLocalizationsFa implements AppLocalizations {
   String get installLocation => 'مسیر نصب';
 
   @override
-  String get softwareStatus => 'وضعیت نرم‌افزارها';
+  String get softwareStatus => 'وضعیت نرم‌افزار';
 
   @override
   String softwareSummaryCount(int installed, int total) => '$installed از $total نصب شده';
@@ -282,11 +310,51 @@ class AppLocalizationsFa implements AppLocalizations {
   String get someSoftwareMissing => 'برخی نرم‌افزارها نصب نشده‌اند';
 
   @override
-  String get noSoftwareConfigured => 'هیچ نرم‌افزاری پیکربندی نشده است';
+  String get noSoftwareConfigured => 'نرم‌افزاری در لیست الزامات تعریف نشده است.';
 
-  // Phase 2: Files
+  // Packages Section
   @override
-  String get requiredFiles => 'فایل‌ها و پوشه‌های موردنیاز';
+  String get packages => 'پکیج‌های نرم‌افزاری';
+
+  @override
+  String get scanPackages => 'اسکن پکیج‌ها';
+
+  @override
+  String get scanningPackages => 'در حال اسکن پکیج‌ها...';
+
+  @override
+  String get packagesDirectory => 'مسیر پکیج‌ها';
+
+  @override
+  String get install => 'نصب';
+
+  @override
+  String get installing => 'در حال نصب...';
+
+  @override
+  String get confirmInstallTitle => 'تأیید نصب نرم‌افزار';
+
+  @override
+  String confirmInstallMessage(String name) => 'آیا از اجرای نصب پکیج $name اطمینان دارید؟';
+
+  @override
+  String get availableToInstall => 'آماده نصب';
+
+  @override
+  String get noPackagesFound => 'پکیجی در این مسیر یافت نشد';
+
+  @override
+  String installSuccess(String name) => 'پکیج $name با موفقیت نصب شد';
+
+  @override
+  String installFailed(String name) => 'خطا در اجرای نصب پکیج $name';
+
+  @override
+  String versionBadge(String ver) => 'نسخه $ver';
+
+  // File Requirements
+  @override
+  String get requiredFiles => 'فایل‌های موردنیاز';
 
   @override
   String get present => 'موجود است';
@@ -310,24 +378,26 @@ class AppLocalizationsFa implements AppLocalizations {
   String filesSummaryCount(int present, int total) => '$present از $total موجود است';
 
   @override
-  String get allFilesPresent => 'تمام فایل‌های موردنیاز موجود است';
+  String get allFilesPresent => 'تمام فایل‌های موردنیاز موجود هستند';
 
   @override
-  String get someFilesMissing => 'برخی فایل‌های موردنیاز موجود نیست';
+  String get someFilesMissing => 'برخی فایل‌های موردنیاز یافت نشدند';
 
   @override
-  String get noFilesConfigured => 'هیچ فایلی پیکربندی نشده است';
+  String get noFilesConfigured => 'فایلی در لیست الزامات تعریف نشده است.';
+
+  // Loading & Error Views
+  @override
+  String get loadingMessage => 'در حال شناسایی مشخصات سخت‌افزار، ویندوز، نرم‌افزارها و درایورها...';
 
   @override
-  String get loadingMessage => 'در حال شناسایی مشخصات سخت‌افزار، ویندوز و نرم‌افزارها...';
-
-  @override
-  String get initializingMessage => 'در حال راه‌اندازی بررسی‌کننده سیستم...';
+  String get initializingMessage => 'در حال راه‌اندازی موتور شناسایی...';
 
   @override
   String get inspectionFailed => 'خطا در بررسی مشخصات سیستم';
 
+  // Footer
   @override
   String scanCompleted(double durationMs, String hostName) =>
-      'بررسی مشخصات در ${durationMs.toStringAsFixed(0)} میلی‌ثانیه انجام شد • سیستم میزبان ($hostName)';
+      'بررسی در ${durationMs.toStringAsFixed(1)} میلی‌ثانیه برای $hostName انجام شد';
 }

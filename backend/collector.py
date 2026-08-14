@@ -14,19 +14,20 @@ from windows.system import get_windows_and_system_info
 from windows.network import get_network_info
 from software.detector import detect_required_software
 from files.checker import check_required_files
+from drivers.checker import check_important_drivers
 
 logger = logging.getLogger(__name__)
 
 def collect_all_system_info() -> Dict[str, Any]:
     """
-    Collects complete hardware, Windows specifications, installed required software,
-    and required file/folder presence checks.
-    Uses concurrent workers to inspect hardware and software components in parallel.
+    Collects complete hardware, Windows specifications, important device drivers,
+    installed required software, and required file/folder presence checks.
+    Uses concurrent workers to inspect components in parallel.
     Guarantees a clean, non-crashing structured dictionary.
     """
     start_time = time.perf_counter()
     
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         future_cpu = executor.submit(get_cpu_info)
         future_mb = executor.submit(get_motherboard_info)
         future_ram = executor.submit(get_ram_info)
@@ -37,6 +38,7 @@ def collect_all_system_info() -> Dict[str, Any]:
         future_net = executor.submit(get_network_info)
         future_soft = executor.submit(detect_required_software)
         future_files = executor.submit(check_required_files)
+        future_drivers = executor.submit(check_important_drivers)
 
         def safe_get(future, default_val, name):
             try:
@@ -55,6 +57,7 @@ def collect_all_system_info() -> Dict[str, Any]:
         network = safe_get(future_net, [], "Network")
         soft_data = safe_get(future_soft, {"items": [], "summary": {}}, "Software")
         files_data = safe_get(future_files, {"items": [], "summary": {}}, "Files")
+        drivers_data = safe_get(future_drivers, {"drivers": [], "driver_summary": {}}, "Drivers")
 
     elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
@@ -71,6 +74,8 @@ def collect_all_system_info() -> Dict[str, Any]:
         "system": win_sys.get("system", {}),
         "bios": bios,
         "network": network,
+        "drivers": drivers_data.get("drivers", []),
+        "driver_summary": drivers_data.get("driver_summary", {}),
         "software": soft_data.get("items", []),
         "software_summary": soft_data.get("summary", {}),
         "required_files": files_data.get("items", []),

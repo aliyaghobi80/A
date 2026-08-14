@@ -1,0 +1,10 @@
+{
+  "id": "chrome",
+  "name": "Google Chrome",
+  "version": "139.0",
+  "publisher": "Google LLC",
+  "installer": "installer.bat",
+  "icon": "app.ico",
+  "silentArguments": "/silent /install",
+  "detectionId": "chrome"
+}

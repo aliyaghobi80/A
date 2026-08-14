@@ -11,7 +11,6 @@ class ApiService {
   static const Duration timeoutDuration = Duration(seconds: 25);
 
   Future<SystemInfo> fetchSystemInfo({bool forceRefresh = false}) async {
-    // Ensure backend is running
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
       throw Exception(
@@ -40,6 +39,81 @@ class ApiService {
     } catch (e) {
       debugPrint('[ApiService] fetchSystemInfo error: $e');
       rethrow;
+    }
+  }
+
+  Future<PackagesResponse> fetchPackages({String? customDir}) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return PackagesResponse.empty();
+    }
+
+    try {
+      final uri = customDir != null && customDir.isNotEmpty
+          ? Uri.parse('$baseUrl/api/packages?dir=${Uri.encodeComponent(customDir)}')
+          : Uri.parse('$baseUrl/api/packages');
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return PackagesResponse.fromJson(data);
+      }
+      return PackagesResponse.empty();
+    } catch (e) {
+      debugPrint('[ApiService] fetchPackages error: $e');
+      return PackagesResponse.empty();
+    }
+  }
+
+  Future<PackagesResponse> scanPackages() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return PackagesResponse.empty();
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/packages/scan');
+      final response = await http.post(uri).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return PackagesResponse.fromJson(data);
+      }
+      return PackagesResponse.empty();
+    } catch (e) {
+      debugPrint('[ApiService] scanPackages error: $e');
+      return PackagesResponse.empty();
+    }
+  }
+
+  Future<Map<String, dynamic>> installPackage(String packageId) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {
+        'success': false,
+        'message': 'Backend service is not running.',
+      };
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/packages/install');
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'package_id': packageId}),
+          )
+          .timeout(const Duration(minutes: 5));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] installPackage error: $e');
+      return {
+        'success': false,
+        'message': 'Error executing package installer: $e',
+      };
     }
   }
 }

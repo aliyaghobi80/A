@@ -2,11 +2,59 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
+import '../services/api_service.dart';
 
-class SimpleModeView extends StatelessWidget {
+class SimpleModeView extends StatefulWidget {
   final SystemInfo info;
+  final PackagesResponse? initialPackages;
 
-  const SimpleModeView({super.key, required this.info});
+  const SimpleModeView({
+    super.key,
+    required this.info,
+    this.initialPackages,
+  });
+
+  @override
+  State<SimpleModeView> createState() => _SimpleModeViewState();
+}
+
+class _SimpleModeViewState extends State<SimpleModeView> {
+  final ApiService _apiService = ApiService();
+  PackagesResponse _packagesResponse = PackagesResponse.empty();
+  bool _isScanningPackages = false;
+  String? _installingPackageId;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPackages != null) {
+      _packagesResponse = widget.initialPackages!;
+    } else {
+      _loadPackages();
+    }
+  }
+
+  Future<void> _loadPackages() async {
+    final res = await _apiService.fetchPackages();
+    if (mounted) {
+      setState(() {
+        _packagesResponse = res;
+      });
+    }
+  }
+
+  Future<void> _handleScanPackages() async {
+    setState(() {
+      _isScanningPackages = true;
+    });
+    final res = await _apiService.scanPackages();
+    if (mounted) {
+      setState(() {
+        _packagesResponse = res;
+        _isScanningPackages = false;
+      });
+    }
+  }
 
   void _copyToClipboard(BuildContext context, String text, String message) {
     Clipboard.setData(ClipboardData(text: text));
@@ -19,13 +67,95 @@ class SimpleModeView extends StatelessWidget {
     );
   }
 
-  String _buildAllSpecsSummary(AppLocalizations l10n) {
+  Future<void> _confirmAndInstall(BuildContext context, SoftwarePackage pkg) async {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF131D33) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.install_desktop_rounded, color: Color(0xFF2563EB), size: 24),
+            const SizedBox(width: 10),
+            Text(
+              l10n.confirmInstallTitle,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          l10n.confirmInstallMessage(pkg.name),
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text(l10n.install),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      setState(() {
+        _installingPackageId = pkg.id;
+      });
+
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('${l10n.installing} ${pkg.name}...'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      final res = await _apiService.installPackage(pkg.id);
+      if (mounted) {
+        setState(() {
+          _installingPackageId = null;
+        });
+
+        final success = res['success'] == true;
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              res['message'] ?? (success ? l10n.installSuccess(pkg.name) : l10n.installFailed(pkg.name)),
+            ),
+            backgroundColor: success ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _loadPackages();
+      }
+    }
+  }
+
+  String _buildAllSpecsSummary(AppLocalizations l10n, SystemInfo info) {
     final buffer = StringBuffer();
     buffer.writeln('=== ${l10n.appName} ===');
     buffer.writeln('[${l10n.hardware}]');
     buffer.writeln('${l10n.cpu}: ${info.cpu.name}');
     buffer.writeln('${l10n.ram}: ${info.ram.totalDisplay}${info.ram.speedDisplay != 'Not available' ? ' (${info.ram.speedDisplay})' : ''}');
-    
+
     if (info.gpu.isNotEmpty) {
       final gpuList = info.gpu.map((g) => '${g.name}${g.vramDisplay != 'Not available' ? ' (${g.vramDisplay})' : ''}').join(', ');
       buffer.writeln('${l10n.gpu}: $gpuList');
@@ -34,7 +164,7 @@ class SimpleModeView extends StatelessWidget {
     }
 
     buffer.writeln('${l10n.motherboard}: ${info.motherboard.model != 'Not available' ? info.motherboard.model : info.motherboard.manufacturer}');
-    
+
     if (info.storage.isNotEmpty) {
       final drives = info.storage.map((d) => '${d.capacityDisplay} ${d.type} (${d.model})').join('\n  - ');
       buffer.writeln('${l10n.storage}:\n  - $drives');
@@ -43,6 +173,14 @@ class SimpleModeView extends StatelessWidget {
     }
 
     buffer.writeln('${l10n.windows}: ${info.windows.edition} (${info.windows.architecture})');
+
+    if (info.drivers.isNotEmpty) {
+      buffer.writeln('\n[${l10n.drivers}]');
+      for (final d in info.drivers) {
+        final st = !d.isPresent ? l10n.notPresent : (d.isHealthy ? l10n.driverOk : l10n.driverProblem);
+        buffer.writeln('- ${d.displayName} (${d.deviceName}): $st');
+      }
+    }
 
     if (info.software.isNotEmpty) {
       buffer.writeln('\n[${l10n.software}]');
@@ -63,6 +201,194 @@ class SimpleModeView extends StatelessWidget {
     return buffer.toString();
   }
 
+  Widget _buildQuickStatusSummary(BuildContext context, SystemInfo info, AppLocalizations l10n, bool isDark) {
+    // Determine overall state
+    final isSystemReady = info.driverSummary.allHealthy &&
+        info.softwareSummary.allInstalled &&
+        info.filesSummary.allPresent;
+    final statusColor = isSystemReady ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+    final statusText = isSystemReady ? l10n.ready : l10n.needsAttention;
+
+    final drvHealthy = info.driverSummary.healthyCount;
+    final drvTotal = info.driverSummary.totalPresentCount;
+
+    final softInstalled = info.softwareSummary.installedCount;
+    final softTotal = info.softwareSummary.totalCount;
+
+    final filesPresent = info.filesSummary.presentCount;
+    final filesTotal = info.filesSummary.totalCount;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131D33) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF22304E) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 750;
+
+          final statusTile = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: statusColor.withValues(alpha: 0.5),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    l10n.systemStatus,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                  Text(
+                    statusText,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+
+          Widget metricBadge({
+            required IconData icon,
+            required String label,
+            required String countText,
+            required Color color,
+          }) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: isDark ? 0.15 : 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 16, color: color),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                        ),
+                      ),
+                      Text(
+                        countText,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final drvBadge = metricBadge(
+            icon: Icons.settings_suggest_rounded,
+            label: l10n.drivers,
+            countText: l10n.driverSummaryCount(drvHealthy, drvTotal),
+            color: info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+          );
+
+          final softBadge = metricBadge(
+            icon: Icons.apps_rounded,
+            label: l10n.software,
+            countText: l10n.softwareSummaryCount(softInstalled, softTotal),
+            color: info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+          );
+
+          final filesBadge = metricBadge(
+            icon: Icons.folder_special_rounded,
+            label: l10n.requiredFiles,
+            countText: l10n.filesSummaryCount(filesPresent, filesTotal),
+            color: info.filesSummary.allPresent ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+          );
+
+          if (isCompact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                statusTile,
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [drvBadge, softBadge, filesBadge],
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              statusTile,
+              const SizedBox(width: 24),
+              Container(
+                height: 32,
+                width: 1,
+                color: isDark ? const Color(0xFF22304E) : const Color(0xFFE2E8F0),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.start,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [drvBadge, softBadge, filesBadge],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildSectionHeader({
     required BuildContext context,
     required IconData icon,
@@ -76,21 +402,21 @@ class SimpleModeView extends StatelessWidget {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(7),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, size: 18, color: color),
+          child: Icon(icon, size: 20, color: color),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Text(
           title,
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 18,
             fontWeight: FontWeight.w800,
-            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-            letterSpacing: -0.2,
+            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+            letterSpacing: -0.3,
           ),
         ),
         const Spacer(),
@@ -99,15 +425,16 @@ class SimpleModeView extends StatelessWidget {
     );
   }
 
-  Widget _buildInvoiceCard({
+  Widget _buildProminentSpecCard({
     required BuildContext context,
     required int stepNumber,
     required String categoryTitle,
     required IconData icon,
     required Color accentColor,
-    required Widget mainContent,
+    required String primaryValue,
+    String? secondaryValue,
+    Widget? customContent,
     String? copyValue,
-    Widget? secondaryBadge,
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -129,97 +456,116 @@ class SimpleModeView extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(18.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header Row: Step number + Category name + Trailing badge + Copy button
-            Row(
-              children: [
-                // Step Indicator Badge
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: isDark ? 0.2 : 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: accentColor.withValues(alpha: isDark ? 0.5 : 0.3),
-                      width: 1,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header Row
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: isDark ? 0.2 : 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: accentColor.withValues(alpha: isDark ? 0.5 : 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    '$stepNumber',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: accentColor,
                     ),
                   ),
-                  child: Center(
-                    child: Text(
-                      '$stepNumber',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: accentColor,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(icon, size: 20, color: accentColor),
+              const SizedBox(width: 8),
+              Text(
+                categoryTitle,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                ),
+              ),
+              const Spacer(),
+              if (copyValue != null && copyValue.isNotEmpty)
+                Tooltip(
+                  message: l10n.copy,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => _copyToClipboard(
+                      context,
+                      copyValue,
+                      '${l10n.copiedToClipboard}: $copyValue',
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9)),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        Icons.copy_rounded,
+                        size: 14,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Icon(icon, size: 20, color: accentColor),
-                const SizedBox(width: 8),
-                Text(
-                  categoryTitle,
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Main Prominent Value (20–24pt font for 5–10s invoice check)
+          if (customContent != null)
+            customContent
+          else ...[
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                primaryValue,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                  letterSpacing: -0.4,
+                  height: 1.2,
+                ),
+              ),
+            ),
+            if (secondaryValue != null && secondaryValue.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: Text(
+                  secondaryValue,
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                    letterSpacing: -0.2,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: accentColor,
                   ),
                 ),
-                const Spacer(),
-                if (secondaryBadge != null) ...[
-                  secondaryBadge,
-                  const SizedBox(width: 8),
-                ],
-                if (copyValue != null && copyValue.isNotEmpty)
-                  Tooltip(
-                    message: l10n.copy,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: () => _copyToClipboard(
-                        context,
-                        copyValue,
-                        '${l10n.copiedToClipboard}: $copyValue',
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9)),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          Icons.copy_rounded,
-                          size: 14,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Divider(
-              color: isDark ? const Color(0xFF1E2C4A) : const Color(0xFFF1F5F9),
-              thickness: 1,
-              height: 1,
-            ),
-            const SizedBox(height: 14),
-            mainContent,
+              ),
+            ],
           ],
-        ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final info = widget.info;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
@@ -227,645 +573,165 @@ class SimpleModeView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Top Banner / Instruction Bar for Simple Mode
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isDark
-                  ? [const Color(0xFF162340), const Color(0xFF131D33)]
-                  : [const Color(0xFFEFF6FF), const Color(0xFFF8FAFC)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark ? const Color(0xFF253966) : const Color(0xFFDBEAFE),
-            ),
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 650;
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withValues(alpha: isDark ? 0.25 : 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.receipt_long_rounded,
-                          size: 24,
-                          color: Color(0xFF3B82F6),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 10,
-                          runSpacing: 4,
-                          children: [
-                            Text(
-                              l10n.simpleModeHeaderTitle,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                l10n.invoiceCheckBadge,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF3B82F6),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (!isNarrow) ...[
-                        const SizedBox(width: 12),
-                        OutlinedButton.icon(
-                          onPressed: () => _copyToClipboard(
-                            context,
-                            _buildAllSpecsSummary(l10n),
-                            l10n.specsCopied,
-                          ),
-                          icon: const Icon(Icons.copy_all_rounded, size: 16),
-                          label: Text(l10n.copyAllSpecs),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF3B82F6),
-                            side: BorderSide(
-                              color: const Color(0xFF3B82F6).withValues(alpha: isDark ? 0.6 : 0.4),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    l10n.simpleModeHeaderSubtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                    ),
-                  ),
-                  if (isNarrow) ...[
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: () => _copyToClipboard(
-                        context,
-                        _buildAllSpecsSummary(l10n),
-                        l10n.specsCopied,
-                      ),
-                      icon: const Icon(Icons.copy_all_rounded, size: 16),
-                      label: Text(l10n.copyAllSpecs),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF3B82F6),
-                        side: BorderSide(
-                          color: const Color(0xFF3B82F6).withValues(alpha: isDark ? 0.6 : 0.4),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              );
-            },
-          ),
-        ),
+        // 1. Quick Status Summary Bar (Top)
+        _buildQuickStatusSummary(context, info, l10n, isDark),
         const SizedBox(height: 22),
 
-        // SECTION 1: Hardware Specifications Header
+        // 2. Hardware Section Header with 1-click Copy
         _buildSectionHeader(
           context: context,
           icon: Icons.memory_rounded,
           title: l10n.hardware,
           color: const Color(0xFF3B82F6),
+          trailing: OutlinedButton.icon(
+            onPressed: () => _copyToClipboard(
+              context,
+              _buildAllSpecsSummary(l10n, info),
+              l10n.specsCopied,
+            ),
+            icon: const Icon(Icons.copy_all_rounded, size: 16),
+            label: Text(l10n.copyAllSpecs),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF3B82F6),
+              side: BorderSide(
+                color: const Color(0xFF3B82F6).withValues(alpha: isDark ? 0.6 : 0.4),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
         ),
         const SizedBox(height: 14),
 
-        // 6 Priority Hardware Cards in 2-Column Responsive Grid
+        // 6 Large Prominent Hardware Spec Cards
         LayoutBuilder(
           builder: (context, constraints) {
             final isWide = constraints.maxWidth > 850;
 
-            final card1Cpu = _buildInvoiceCard(
+            final cardCpu = _buildProminentSpecCard(
               context: context,
               stepNumber: 1,
               categoryTitle: l10n.cpu,
               icon: Icons.memory_rounded,
               accentColor: const Color(0xFF3B82F6),
+              primaryValue: info.cpu.name,
+              secondaryValue: l10n.coresThreads(info.cpu.cores, info.cpu.threads),
               copyValue: info.cpu.name,
-              secondaryBadge: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  l10n.coresThreads(info.cpu.cores, info.cpu.threads),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF1D4ED8),
-                  ),
-                ),
-              ),
-              mainContent: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Directionality(
-                    textDirection: TextDirection.ltr,
-                    child: Text(
-                      info.cpu.name,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.business_rounded, size: 14, color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
-                      const SizedBox(width: 6),
-                      Text(
-                        info.cpu.manufacturer,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        ),
-                      ),
-                      if (info.cpu.maxClockDisplay != 'Not available') ...[
-                        const SizedBox(width: 12),
-                        Icon(Icons.speed_rounded, size: 14, color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
-                        const SizedBox(width: 6),
-                        Directionality(
-                          textDirection: TextDirection.ltr,
-                          child: Text(
-                            info.cpu.maxClockDisplay,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
             );
 
-            final card2Ram = _buildInvoiceCard(
+            final cardRam = _buildProminentSpecCard(
               context: context,
               stepNumber: 2,
               categoryTitle: l10n.ram,
               icon: Icons.storage_rounded,
               accentColor: const Color(0xFFF59E0B),
+              primaryValue: info.ram.totalDisplay,
+              secondaryValue: info.ram.moduleSummary != 'Not available'
+                  ? '${info.ram.moduleSummary}${info.ram.speedDisplay != 'Not available' ? ' • ${info.ram.speedDisplay}' : ''}'
+                  : info.ram.speedDisplay,
               copyValue: info.ram.totalDisplay,
-              secondaryBadge: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Text(
-                    info.ram.speedDisplay != 'Not available' ? info.ram.speedDisplay : l10n.modulesCount(info.ram.moduleCount),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFFFCD34D) : const Color(0xFFD97706),
-                    ),
-                  ),
-                ),
-              ),
-              mainContent: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Directionality(
-                    textDirection: TextDirection.ltr,
-                    child: Text(
-                      info.ram.totalDisplay,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: isDark ? const Color(0xFFFCD34D) : const Color(0xFFD97706),
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(Icons.splitscreen_rounded, size: 14, color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
-                      const SizedBox(width: 6),
-                      Directionality(
-                        textDirection: TextDirection.ltr,
-                        child: Text(
-                          info.ram.moduleSummary != 'Not available'
-                              ? info.ram.moduleSummary
-                              : l10n.modulesCount(info.ram.moduleCount),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
-                          ),
-                        ),
-                      ),
-                      if (info.ram.modules.isNotEmpty && info.ram.modules.first.type != 'Not available') ...[
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: (isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706)).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            info.ram.modules.first.type,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? const Color(0xFFFCD34D) : const Color(0xFFD97706),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
             );
 
-            final card3Gpu = _buildInvoiceCard(
+            final gpuPrimary = info.gpu.isNotEmpty ? info.gpu.first.name : l10n.noGpuDetected;
+            final gpuSecondary = info.gpu.isNotEmpty && info.gpu.first.vramDisplay != 'Not available'
+                ? '${l10n.dedicatedVram}: ${info.gpu.first.vramDisplay}'
+                : null;
+
+            final cardGpu = _buildProminentSpecCard(
               context: context,
               stepNumber: 3,
               categoryTitle: l10n.gpu,
               icon: Icons.videogame_asset_rounded,
               accentColor: const Color(0xFF8B5CF6),
-              copyValue: info.gpu.isNotEmpty ? info.gpu.first.name : l10n.noGpuDetected,
-              secondaryBadge: info.gpu.isNotEmpty && info.gpu.first.vramDisplay != 'Not available'
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF8B5CF6).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Directionality(
-                        textDirection: TextDirection.ltr,
-                        child: Text(
-                          info.gpu.first.vramDisplay,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? const Color(0xFFDDD6FE) : const Color(0xFF6D28D9),
-                          ),
-                        ),
-                      ),
-                    )
-                  : null,
-              mainContent: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (info.gpu.isEmpty)
-                    Text(
-                      l10n.noGpuDetected,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontStyle: FontStyle.italic,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-                      ),
-                    )
-                  else
-                    ...info.gpu.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final g = entry.value;
-                      return Padding(
-                        padding: EdgeInsets.only(top: idx > 0 ? 8 : 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Directionality(
-                              textDirection: TextDirection.ltr,
-                              child: Text(
-                                g.name,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                                  letterSpacing: -0.2,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(Icons.business_rounded, size: 14, color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
-                                const SizedBox(width: 6),
-                                Text(
-                                  g.manufacturer,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                  ),
-                                ),
-                                if (g.vramDisplay != 'Not available') ...[
-                                  const SizedBox(width: 10),
-                                  Text('•', style: TextStyle(color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1))),
-                                  const SizedBox(width: 10),
-                                  Directionality(
-                                    textDirection: TextDirection.ltr,
-                                    child: Text(
-                                      '${l10n.dedicatedVram}: ${g.vramDisplay}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark ? const Color(0xFFC4B5FD) : const Color(0xFF7C3AED),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                ],
-              ),
+              primaryValue: gpuPrimary,
+              secondaryValue: gpuSecondary,
+              copyValue: gpuPrimary,
             );
 
-            final card4Motherboard = _buildInvoiceCard(
+            final cardMotherboard = _buildProminentSpecCard(
               context: context,
               stepNumber: 4,
               categoryTitle: l10n.motherboard,
               icon: Icons.developer_board_rounded,
               accentColor: const Color(0xFF10B981),
+              primaryValue: info.motherboard.model != 'Not available' ? info.motherboard.model : info.motherboard.manufacturer,
+              secondaryValue: info.motherboard.manufacturer,
               copyValue: info.motherboard.model,
-              mainContent: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Directionality(
-                    textDirection: TextDirection.ltr,
-                    child: Text(
-                      info.motherboard.model,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(Icons.domain_rounded, size: 14, color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
-                      const SizedBox(width: 6),
-                      Text(
-                        info.motherboard.manufacturer,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             );
 
-            final card5Storage = _buildInvoiceCard(
+            final cardStorage = _buildProminentSpecCard(
               context: context,
               stepNumber: 5,
               categoryTitle: l10n.storage,
               icon: Icons.album_rounded,
               accentColor: const Color(0xFF06B6D4),
+              primaryValue: '',
               copyValue: info.storage.map((d) => '${d.capacityDisplay} ${d.type}').join(', '),
-              secondaryBadge: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF06B6D4).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  l10n.drivesCount(info.storage.length),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? const Color(0xFF67E8F9) : const Color(0xFF0E7490),
-                  ),
-                ),
-              ),
-              mainContent: Column(
+              customContent: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (info.storage.isEmpty)
                     Text(
                       l10n.noStorageDetected,
                       style: TextStyle(
-                        fontSize: 14,
-                        fontStyle: FontStyle.italic,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        fontSize: 16,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                       ),
                     )
                   else
-                    ...info.storage.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final drive = entry.value;
-                      final isSsd = drive.type.toUpperCase().contains('SSD') || drive.type.toUpperCase().contains('NVME');
-                      final badgeColor = isSsd
-                          ? (isDark ? const Color(0xFF06B6D4) : const Color(0xFF0891B2))
-                          : (isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706));
-
-                      return Container(
-                        margin: EdgeInsets.only(top: idx > 0 ? 8 : 0),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: badgeColor.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Icon(
-                                isSsd ? Icons.speed_rounded : Icons.dns_rounded,
-                                size: 16,
-                                color: badgeColor,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Directionality(
-                                    textDirection: TextDirection.ltr,
-                                    child: Text(
-                                      '${drive.capacityDisplay} ${drive.type}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Directionality(
-                                    textDirection: TextDirection.ltr,
-                                    child: Text(
-                                      drive.model,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Directionality(
-                              textDirection: TextDirection.ltr,
-                              child: Container(
+                    ...info.storage.map((d) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6.0),
+                          child: Row(
+                            children: [
+                              Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: badgeColor.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(5),
+                                  color: const Color(0xFF06B6D4).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  drive.capacityDisplay,
-                                  style: TextStyle(
-                                    fontSize: 12,
+                                  d.capacityDisplay,
+                                  style: const TextStyle(
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w800,
-                                    color: badgeColor,
+                                    color: Color(0xFF06B6D4),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Directionality(
+                                  textDirection: TextDirection.ltr,
+                                  child: Text(
+                                    '${d.type} (${d.model})',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
                 ],
               ),
             );
 
-            final card6Windows = _buildInvoiceCard(
+            final cardWindows = _buildProminentSpecCard(
               context: context,
               stepNumber: 6,
               categoryTitle: l10n.windows,
               icon: Icons.window_rounded,
               accentColor: const Color(0xFF0284C7),
-              copyValue: '${info.windows.edition} (${info.windows.architecture})',
-              secondaryBadge: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0284C7).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Text(
-                    info.windows.architecture,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1),
-                    ),
-                  ),
-                ),
-              ),
-              mainContent: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Directionality(
-                    textDirection: TextDirection.ltr,
-                    child: Text(
-                      info.windows.edition,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(Icons.computer_rounded, size: 14, color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
-                      const SizedBox(width: 6),
-                      Directionality(
-                        textDirection: TextDirection.ltr,
-                        child: Text(
-                          info.system.computerName,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                          ),
-                        ),
-                      ),
-                      if (info.windows.version != 'Not available') ...[
-                        const SizedBox(width: 10),
-                        Text('•', style: TextStyle(color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1))),
-                        const SizedBox(width: 10),
-                        Directionality(
-                          textDirection: TextDirection.ltr,
-                          child: Text(
-                            '${l10n.version} ${info.windows.version}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
+              primaryValue: info.windows.edition,
+              secondaryValue: '${info.windows.architecture}${info.windows.version != 'Not available' ? ' • ${info.windows.version}' : ''}',
+              copyValue: info.windows.edition,
             );
 
             if (isWide) {
@@ -875,11 +741,11 @@ class SimpleModeView extends StatelessWidget {
                   Expanded(
                     child: Column(
                       children: [
-                        card1Cpu,
+                        cardCpu,
                         const SizedBox(height: 14),
-                        card3Gpu,
+                        cardGpu,
                         const SizedBox(height: 14),
-                        card5Storage,
+                        cardStorage,
                       ],
                     ),
                   ),
@@ -887,11 +753,11 @@ class SimpleModeView extends StatelessWidget {
                   Expanded(
                     child: Column(
                       children: [
-                        card2Ram,
+                        cardRam,
                         const SizedBox(height: 14),
-                        card4Motherboard,
+                        cardMotherboard,
                         const SizedBox(height: 14),
-                        card6Windows,
+                        cardWindows,
                       ],
                     ),
                   ),
@@ -900,17 +766,17 @@ class SimpleModeView extends StatelessWidget {
             } else {
               return Column(
                 children: [
-                  card1Cpu,
+                  cardCpu,
                   const SizedBox(height: 14),
-                  card2Ram,
+                  cardRam,
                   const SizedBox(height: 14),
-                  card3Gpu,
+                  cardGpu,
                   const SizedBox(height: 14),
-                  card4Motherboard,
+                  cardMotherboard,
                   const SizedBox(height: 14),
-                  card5Storage,
+                  cardStorage,
                   const SizedBox(height: 14),
-                  card6Windows,
+                  cardWindows,
                 ],
               );
             }
@@ -918,34 +784,34 @@ class SimpleModeView extends StatelessWidget {
         ),
         const SizedBox(height: 28),
 
-        // SECTION 2: Required Software Checklist
+        // 3. Important Drivers Checklist Section
         _buildSectionHeader(
           context: context,
-          icon: Icons.apps_rounded,
-          title: l10n.software,
-          color: const Color(0xFF6366F1),
+          icon: Icons.settings_suggest_rounded,
+          title: l10n.drivers,
+          color: const Color(0xFF0D9488),
           trailing: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: (info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.12),
+              color: (info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: (info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.3),
+                color: (info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.3),
               ),
             ),
             child: Text(
-              l10n.softwareSummaryCount(info.softwareSummary.installedCount, info.softwareSummary.totalCount),
+              l10n.driverSummaryCount(info.driverSummary.healthyCount, info.driverSummary.totalPresentCount),
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                color: info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
               ),
             ),
           ),
         ),
         const SizedBox(height: 12),
 
-        // Software Checklist Grid
+        // Drivers Grid
         Container(
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF131D33) : Colors.white,
@@ -956,24 +822,17 @@ class SimpleModeView extends StatelessWidget {
             ),
           ),
           padding: const EdgeInsets.all(16),
-          child: info.software.isEmpty
+          child: info.drivers.isEmpty
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Text(
-                      l10n.noSoftwareConfigured,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                      ),
-                    ),
+                    child: Text(l10n.notAvailable),
                   ),
                 )
               : LayoutBuilder(
                   builder: (context, constraints) {
-                    final isMultiCol = constraints.maxWidth > 600;
-
-                    final items = info.software.map((s) => _buildSoftwareRow(context, s, isDark, l10n)).toList();
+                    final isMultiCol = constraints.maxWidth > 650;
+                    final items = info.drivers.map((d) => _buildSimpleDriverRow(context, d, isDark, l10n)).toList();
 
                     if (isMultiCol) {
                       return Wrap(
@@ -991,7 +850,136 @@ class SimpleModeView extends StatelessWidget {
         ),
         const SizedBox(height: 28),
 
-        // SECTION 3: Required Files & Folders Checklist
+        // 4. Required Software Checklist & Packages Section
+        _buildSectionHeader(
+          context: context,
+          icon: Icons.apps_rounded,
+          title: l10n.software,
+          color: const Color(0xFF6366F1),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton.icon(
+                onPressed: _isScanningPackages ? null : _handleScanPackages,
+                icon: _isScanningPackages
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.refresh_rounded, size: 15),
+                label: Text(
+                  _isScanningPackages ? l10n.scanningPackages : l10n.scanPackages,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: (info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: (info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  l10n.softwareSummaryCount(info.softwareSummary.installedCount, info.softwareSummary.totalCount),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Software & Packages Container
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF131D33) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF22304E) : const Color(0xFFE2E8F0),
+              width: 1.2,
+            ),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Configured Required Software Checklist
+              if (info.software.isNotEmpty) ...[
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMultiCol = constraints.maxWidth > 650;
+                    final items = info.software.map((s) => _buildSimpleSoftwareRow(context, s, isDark, l10n)).toList();
+
+                    if (isMultiCol) {
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: items.map((w) => SizedBox(width: (constraints.maxWidth - 12) / 2, child: w)).toList(),
+                      );
+                    } else {
+                      return Column(
+                        children: items.map((w) => Padding(padding: const EdgeInsets.only(bottom: 8), child: w)).toList(),
+                      );
+                    }
+                  },
+                ),
+              ],
+
+              // Scanned Packages Section (if any packages discovered)
+              if (_packagesResponse.packages.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Divider(
+                  color: isDark ? const Color(0xFF1E2C4A) : const Color(0xFFF1F5F9),
+                  thickness: 1,
+                  height: 1,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Icon(Icons.inventory_2_rounded, size: 16, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n.packages,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${_packagesResponse.summary.availableToInstall} ${l10n.availableToInstall}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2563EB),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ..._packagesResponse.packages.map((pkg) => _buildSimplePackageRow(context, pkg, isDark, l10n)),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 28),
+
+        // 5. Required Files & Folders Checklist Section
         _buildSectionHeader(
           context: context,
           icon: Icons.folder_special_rounded,
@@ -1018,7 +1006,7 @@ class SimpleModeView extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        // Files Checklist Grid
+        // Files Grid
         Container(
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF131D33) : Colors.white,
@@ -1033,20 +1021,13 @@ class SimpleModeView extends StatelessWidget {
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Text(
-                      l10n.noFilesConfigured,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                      ),
-                    ),
+                    child: Text(l10n.noFilesConfigured),
                   ),
                 )
               : LayoutBuilder(
                   builder: (context, constraints) {
-                    final isMultiCol = constraints.maxWidth > 600;
-
-                    final items = info.requiredFiles.map((f) => _buildFileRow(context, f, isDark, l10n)).toList();
+                    final isMultiCol = constraints.maxWidth > 650;
+                    final items = info.requiredFiles.map((f) => _buildSimpleFileRow(context, f, isDark, l10n)).toList();
 
                     if (isMultiCol) {
                       return Wrap(
@@ -1066,7 +1047,102 @@ class SimpleModeView extends StatelessWidget {
     );
   }
 
-  Widget _buildSoftwareRow(BuildContext context, SoftwareItem item, bool isDark, AppLocalizations l10n) {
+  Widget _buildSimpleDriverRow(BuildContext context, DriverItem drv, bool isDark, AppLocalizations l10n) {
+    final isPresent = drv.isPresent;
+    final isHealthy = drv.isHealthy;
+
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
+
+    if (!isPresent) {
+      statusColor = isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
+      statusText = l10n.notPresent;
+      statusIcon = Icons.remove_rounded;
+    } else if (isHealthy) {
+      statusColor = const Color(0xFF10B981);
+      statusText = l10n.driverOk;
+      statusIcon = Icons.check_rounded;
+    } else {
+      statusColor = const Color(0xFFEF4444);
+      statusText = l10n.driverProblem;
+      statusIcon = Icons.close_rounded;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: (!isPresent)
+              ? (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0))
+              : isHealthy
+                  ? statusColor.withValues(alpha: isDark ? 0.3 : 0.2)
+                  : statusColor.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(statusIcon, size: 16, color: statusColor),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  drv.displayName,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                  ),
+                ),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    drv.deviceName,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              statusText,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: statusColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleSoftwareRow(BuildContext context, SoftwareItem item, bool isDark, AppLocalizations l10n) {
     final isInstalled = item.isInstalled;
     final statusColor = isInstalled ? const Color(0xFF10B981) : const Color(0xFFEF4444);
 
@@ -1153,7 +1229,114 @@ class SimpleModeView extends StatelessWidget {
     );
   }
 
-  Widget _buildFileRow(BuildContext context, RequiredFileItem item, bool isDark, AppLocalizations l10n) {
+  Widget _buildSimplePackageRow(BuildContext context, SoftwarePackage pkg, bool isDark, AppLocalizations l10n) {
+    final isInstalled = pkg.isInstalled;
+    final installAllowed = pkg.installAllowed;
+    final isCurrentInstalling = _installingPackageId == pkg.id;
+
+    final statusColor = isInstalled ? const Color(0xFF10B981) : const Color(0xFF6366F1);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(
+              isInstalled ? Icons.check_circle_rounded : Icons.download_rounded,
+              size: 16,
+              color: statusColor,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Text(
+                        pkg.name,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Text(
+                        l10n.versionBadge(pkg.version),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (installAllowed)
+            ElevatedButton.icon(
+              onPressed: isCurrentInstalling ? null : () => _confirmAndInstall(context, pkg),
+              icon: isCurrentInstalling
+                  ? const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.install_desktop_rounded, size: 13),
+              label: Text(isCurrentInstalling ? l10n.installing : l10n.install),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                isInstalled ? l10n.installed : l10n.notInstalled,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: statusColor,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleFileRow(BuildContext context, RequiredFileItem item, bool isDark, AppLocalizations l10n) {
     final exists = item.exists;
     final statusColor = exists ? const Color(0xFF10B981) : const Color(0xFFEF4444);
     final isFolder = item.type.toLowerCase() == 'folder';

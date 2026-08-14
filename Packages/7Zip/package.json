@@ -1,0 +1,10 @@
+{
+  "id": "7zip",
+  "name": "7-Zip",
+  "version": "24.09",
+  "publisher": "Igor Pavlov",
+  "installer": "installer.bat",
+  "icon": "app.ico",
+  "silentArguments": "/S",
+  "detectionId": "7zip"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "winrar",
+  "name": "WinRAR",
+  "version": "7.13",
+  "publisher": "win.rar GmbH",
+  "installer": "installer.bat",
+  "icon": "app.ico",
+  "silentArguments": "/s",
+  "detectionId": "winrar"
+}

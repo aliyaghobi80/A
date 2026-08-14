@@ -1,0 +1,3 @@
+@echo off
+echo Installing WinRAR Package...
+exit /b 0

@@ -5,10 +5,10 @@ class AppLocalizationsEn implements AppLocalizations {
   String get appName => 'Central System Checker';
 
   @override
-  String get appSubtitle => 'Hardware, Windows & Software Verification';
+  String get appSubtitle => 'Automated Hardware, OS, Software & Driver Verification';
 
   @override
-  String get liveInspector => 'Live Inspector';
+  String get liveInspector => 'LIVE INSPECTOR';
 
   @override
   String get simpleMode => 'Simple';
@@ -17,10 +17,10 @@ class AppLocalizationsEn implements AppLocalizations {
   String get advancedMode => 'Advanced';
 
   @override
-  String get simpleModeTooltip => 'Simple Mode: Fast Invoice & Software Checklist';
+  String get simpleModeTooltip => 'Simple Mode: Fast Invoice Comparison & Checklists';
 
   @override
-  String get advancedModeTooltip => 'Advanced Mode: Detailed System & Diagnostics';
+  String get advancedModeTooltip => 'Advanced Mode: Complete Diagnostics, Drivers & Packages';
 
   @override
   String get languageEn => 'EN';
@@ -53,25 +53,37 @@ class AppLocalizationsEn implements AppLocalizations {
   String get switchToDarkMode => 'Switch to Dark Mode';
 
   @override
+  String get cancel => 'Cancel';
+
+  @override
   String get hardware => 'Hardware';
 
   @override
   String get ready => 'Ready';
 
   @override
-  String get simpleModeHeaderTitle => 'Specifications for Invoice & Setup Check';
+  String get needsAttention => 'Needs Attention';
 
   @override
-  String get simpleModeHeaderSubtitle => 'Quickly verify PC hardware, installed software, and required folders';
+  String get checking => 'Checking...';
 
   @override
-  String get invoiceCheckBadge => 'Invoice Check';
+  String get systemStatus => 'System Status';
+
+  @override
+  String get simpleModeHeaderTitle => 'Quick System Verification & Invoice Check';
+
+  @override
+  String get simpleModeHeaderSubtitle => 'Compare detected hardware components, drivers, software, and company files with your invoice.';
+
+  @override
+  String get invoiceCheckBadge => 'INVOICE CHECK';
 
   @override
   String get copyAllSpecs => 'Copy Specifications';
 
   @override
-  String get specsCopied => 'All specifications copied to clipboard';
+  String get specsCopied => 'Full specifications copied to clipboard';
 
   @override
   String get cpu => 'CPU';
@@ -80,13 +92,13 @@ class AppLocalizationsEn implements AppLocalizations {
   String get ram => 'RAM';
 
   @override
-  String get ramMemory => 'RAM (Memory)';
+  String get ramMemory => 'RAM Memory';
 
   @override
   String get gpu => 'GPU';
 
   @override
-  String get gpuGraphics => 'GPU (Graphics)';
+  String get gpuGraphics => 'Graphics Card (GPU)';
 
   @override
   String get motherboard => 'Motherboard';
@@ -95,19 +107,19 @@ class AppLocalizationsEn implements AppLocalizations {
   String get storage => 'Storage';
 
   @override
-  String get physicalStorageDevices => 'Physical Storage Devices';
+  String get physicalStorageDevices => 'Physical Storage Disks';
 
   @override
   String get windows => 'Windows';
 
   @override
-  String get windowsInformation => 'Windows Information';
+  String get windowsInformation => 'Windows OS Information';
 
   @override
-  String get bios => 'BIOS';
+  String get bios => 'BIOS / UEFI';
 
   @override
-  String get biosUefi => 'BIOS / UEFI';
+  String get biosUefi => 'BIOS / UEFI Firmware';
 
   @override
   String get network => 'Network';
@@ -125,16 +137,7 @@ class AppLocalizationsEn implements AppLocalizations {
   String get maxClockSpeed => 'Max Clock Speed';
 
   @override
-  String coresThreads(dynamic cores, dynamic threads) {
-    if (cores != 'Not available' && threads != 'Not available') {
-      return '$cores Cores / $threads Threads';
-    } else if (cores != 'Not available') {
-      return '$cores Cores';
-    } else if (threads != 'Not available') {
-      return '$threads Threads';
-    }
-    return notAvailable;
-  }
+  String coresThreads(dynamic cores, dynamic threads) => '$cores Cores / $threads Threads';
 
   @override
   String get totalCapacity => 'Total Capacity';
@@ -155,7 +158,7 @@ class AppLocalizationsEn implements AppLocalizations {
   String get slot => 'Slot';
 
   @override
-  String modulesCount(int count) => '$count ${count == 1 ? 'Module' : 'Modules'}';
+  String modulesCount(int count) => '$count Module${count == 1 ? '' : 's'}';
 
   @override
   String get dedicatedVram => 'Dedicated VRAM';
@@ -164,10 +167,10 @@ class AppLocalizationsEn implements AppLocalizations {
   String get driverVersion => 'Driver Version';
 
   @override
-  String gpusDetected(int count) => '$count ${count == 1 ? 'GPU Detected' : 'GPUs Detected'}';
+  String gpusDetected(int count) => '$count GPU${count == 1 ? '' : 's'} Detected';
 
   @override
-  String get noGpuDetected => 'No graphics card detected';
+  String get noGpuDetected => 'No GPU detected';
 
   @override
   String get dedicatedGraphics => 'Dedicated Graphics';
@@ -194,10 +197,10 @@ class AppLocalizationsEn implements AppLocalizations {
   String get healthy => 'Healthy';
 
   @override
-  String drivesCount(int count) => '$count ${count == 1 ? 'Drive' : 'Drives'}';
+  String drivesCount(int count) => '$count Drive${count == 1 ? '' : 's'}';
 
   @override
-  String get noStorageDetected => 'No physical storage devices found';
+  String get noStorageDetected => 'No storage drives detected';
 
   @override
   String get osEdition => 'OS Edition';
@@ -218,7 +221,7 @@ class AppLocalizationsEn implements AppLocalizations {
   String get systemModel => 'System Model';
 
   @override
-  String get manufacturerVendor => 'Manufacturer / Vendor';
+  String get manufacturerVendor => 'Vendor';
 
   @override
   String get biosVersion => 'BIOS Version';
@@ -250,7 +253,32 @@ class AppLocalizationsEn implements AppLocalizations {
   @override
   String get noNetworkDetected => 'No network adapters detected';
 
-  // Phase 2: Software
+  // Drivers Section
+  @override
+  String get drivers => 'Drivers';
+
+  @override
+  String get driverStatus => 'Important Driver Status';
+
+  @override
+  String get driverOk => 'OK';
+
+  @override
+  String get driverProblem => 'Driver Problem';
+
+  @override
+  String get notPresent => 'Not Present';
+
+  @override
+  String get driverDeviceName => 'Device Name';
+
+  @override
+  String get driverCategory => 'Category';
+
+  @override
+  String driverSummaryCount(int healthy, int total) => '$healthy / $total Important Drivers OK';
+
+  // Software Requirements
   @override
   String get software => 'Software';
 
@@ -279,14 +307,54 @@ class AppLocalizationsEn implements AppLocalizations {
   String get allSoftwareInstalled => 'All Required Software Installed';
 
   @override
-  String get someSoftwareMissing => 'Missing Required Software';
+  String get someSoftwareMissing => 'Some Software Missing';
 
   @override
-  String get noSoftwareConfigured => 'No software requirements configured';
+  String get noSoftwareConfigured => 'No required software configured.';
 
-  // Phase 2: Files
+  // Packages Section
   @override
-  String get requiredFiles => 'Required Files & Folders';
+  String get packages => 'Software Packages';
+
+  @override
+  String get scanPackages => 'Scan Packages';
+
+  @override
+  String get scanningPackages => 'Scanning packages...';
+
+  @override
+  String get packagesDirectory => 'Packages Directory';
+
+  @override
+  String get install => 'Install';
+
+  @override
+  String get installing => 'Installing...';
+
+  @override
+  String get confirmInstallTitle => 'Confirm Software Installation';
+
+  @override
+  String confirmInstallMessage(String name) => 'Are you sure you want to install $name?';
+
+  @override
+  String get availableToInstall => 'Available to Install';
+
+  @override
+  String get noPackagesFound => 'No packages found in directory';
+
+  @override
+  String installSuccess(String name) => '$name installed successfully';
+
+  @override
+  String installFailed(String name) => 'Failed to install $name';
+
+  @override
+  String versionBadge(String ver) => 'v$ver';
+
+  // File Requirements
+  @override
+  String get requiredFiles => 'Required Files';
 
   @override
   String get present => 'Present';
@@ -313,21 +381,23 @@ class AppLocalizationsEn implements AppLocalizations {
   String get allFilesPresent => 'All Required Files Present';
 
   @override
-  String get someFilesMissing => 'Missing Required Files';
+  String get someFilesMissing => 'Some Files Missing';
 
   @override
-  String get noFilesConfigured => 'No file requirements configured';
+  String get noFilesConfigured => 'No required files configured.';
+
+  // Loading & Error Views
+  @override
+  String get loadingMessage => 'Detecting hardware & Windows specifications...';
 
   @override
-  String get loadingMessage => 'Detecting hardware, software & Windows specifications...';
-
-  @override
-  String get initializingMessage => 'Initializing system inspector...';
+  String get initializingMessage => 'Initializing inspection engine...';
 
   @override
   String get inspectionFailed => 'System Inspection Failed';
 
+  // Footer
   @override
   String scanCompleted(double durationMs, String hostName) =>
-      'Inspection scan completed in ${durationMs.toStringAsFixed(0)} ms • Local Windows Host ($hostName)';
+      'Scan completed in ${durationMs.toStringAsFixed(1)}ms on $hostName';
 }

@@ -1,0 +1,10 @@
+{
+  "id": "vlc",
+  "name": "VLC Media Player",
+  "version": "3.0.21",
+  "publisher": "VideoLAN",
+  "installer": "installer.bat",
+  "icon": "app.ico",
+  "silentArguments": "/S",
+  "detectionId": "vlc"
+}

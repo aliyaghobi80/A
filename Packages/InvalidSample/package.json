@@ -1,0 +1,8 @@
+{
+  "id": "invalid_tool",
+  "name": "Invalid Sample Tool",
+  "version": "1.0.0",
+  "publisher": "Unknown",
+  "installer": "non_existent_installer.exe",
+  "icon": "app.ico"
+}

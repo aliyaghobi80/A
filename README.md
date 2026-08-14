@@ -1,72 +1,94 @@
-# Central System Checker (مرکزی سیستم چکر) - Phase 2
+# Central System Checker (مرکزی سیستم چکر) - Phase 2 Refined
 
-A modern Windows desktop application built with **Flutter** (Frontend UI/UX) and **Python** (Modular Hardware & Software Verification Engine) designed to automatically inspect, verify, and display hardware specifications, Windows operating system metrics, required installed software, and required file/folder presence.
+A modern Windows desktop application built with **Flutter** (Frontend UI/UX) and **Python** (Modular Hardware, OS, Software, Driver & Package Engine) designed for fast, accurate hardware verification, invoice audits, driver health inspections, and software package management.
 
 ---
 
-## 🌟 Key Features (Phase 1 & Phase 2)
+## 🌟 Key Features (Phase 1 & Phase 2 Refined)
 
-### 1. Automated Required Software Verification (Phase 2)
-- **Configuration-Driven**: Required software items are configured via [`config/software_requirements.json`](file:///g:/MarkaziSystem/config/software_requirements.json) without hardcoding logic in UI widgets.
-- **Deep Windows Inspection**:
-  - 64-bit Uninstall Registry (`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`)
-  - 32-bit WOW6432Node Registry (`HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`)
-  - Current User Registry (`HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall`)
-  - App Paths Registry (`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths`)
-  - Win32 `GetFileVersionInfoW` binary version extraction via `ctypes`.
-- **Microsoft Office Detection**:
-  - Automatically identifies Click-to-Run (C2R) and MSI Office installations (e.g. `Microsoft Office 2024`, `Microsoft Office 2021`, `Microsoft 365`).
-  - Reports product edition and version without checking or modifying activation state.
-- **Default Software Checklist**:
-  - Google Chrome
-  - WinRAR
-  - VLC Media Player
-  - Microsoft Office
+### 1. Simple Mode UI/UX (5–10s Paper Invoice Comparison)
+- **Prominent Hardware Values**:
+  - High-contrast, large (22–26pt) main values for **CPU**, **RAM**, **GPU**, **Motherboard**, **Storage**, and **Windows**.
+  - Immediate visual clarity for non-technical retail staff comparing physical PC specs against purchase invoices.
+- **Top Quick Status Summary**:
+  - **System Status**: `● Ready` (`● آماده`) / `● Needs Attention` (`● نیاز به بررسی`).
+  - **Drivers**: `X / Y Important Drivers OK` (`X از Y درایور مهم سالم`).
+  - **Software**: `X / Y Installed` (`X از Y نصب شده`).
+  - **Files**: `X / Y Present` (`X از Y موجود است`).
+- **1-Click Copy Summary**:
+  - "Copy Specifications" / "کپی خلاصه مشخصات" formats all specs cleanly to clipboard.
 
-### 2. Required Files and Folders Presence (Phase 2)
-- **Configuration-Driven**: Required files and folders are configured via [`config/file_requirements.json`](file:///g:/MarkaziSystem/config/file_requirements.json).
-- **Inspection**: Determines `Present` (`موجود است`) vs `Missing` (`موجود نیست`) without altering file system state.
+### 2. Important Hardware Driver Checker
+- **Critical Device Coverage**:
+  - **Graphics / GPU**: NVIDIA, AMD, Intel display controllers.
+  - **Audio Controller**: High Definition Audio / Realtek controllers.
+  - **Ethernet**: Physical PCIe GbE / Gigabit network adapters.
+  - **Wi-Fi**: Wireless LAN adapters.
+  - **Bluetooth**: Bluetooth controllers (gracefully reports `Not Present` / `وجود ندارد` without penalizing systems lacking physical Bluetooth hardware).
+  - **Chipset & System Devices**: Detects missing drivers (Code 28), startup failures (Code 10), and hardware issues.
 
-### 3. Minimum Window Size Protection (Phase 1 Final UI Fix)
-- Enforces an appropriate minimum desktop window size ($1100 \times 700$ px with DPI scaling) via `WM_GETMINMAXINFO` in the Windows runner.
-- Prevents UI card distortion, text clipping, and header overflow in both English (LTR) and Persian (RTL). Normal resizing larger is fully preserved.
+### 3. Software Package System & Manifests
+- **Structured Package System**:
+  ```
+  Packages/
+  ├── Chrome/
+  │   ├── package.json
+  │   ├── installer.exe
+  │   └── app.ico
+  ├── WinRAR/
+  │   ├── package.json
+  │   ├── installer.exe
+  │   └── app.ico
+  ├── VLC/
+  │   ├── package.json
+  │   ├── installer.exe
+  │   └── app.ico
+  └── ...
+  ```
+- **Package Manifest Schema (`package.json`)**:
+  ```json
+  {
+    "id": "vlc",
+    "name": "VLC Media Player",
+    "version": "3.0.21",
+    "publisher": "VideoLAN",
+    "installer": "installer.exe",
+    "icon": "app.ico",
+    "silentArguments": "/S",
+    "detectionId": "vlc"
+  }
+  ```
+- **Security & Integrity**:
+  - Validates manifest schema and verifies installer exists directly inside the package folder.
+  - Blocks path traversal (e.g. `../` or arbitrary root executables).
+  - Dedicated **"Scan Packages"** button rescans the Packages directory on-demand.
+  - Safe **[ Install ]** button with confirmation dialog, enabled only for valid, uninstalled packages.
 
-### 4. Bilingual Support (English & Persian) with Native RTL
+### 4. Required Files and Folders Checker
+- Configuration-driven check via [`config/file_requirements.json`](file:///g:/MarkaziSystem/config/file_requirements.json) (`Training Folder`, `Desktop Tools`, `System Hosts File`).
+
+### 5. Bilingual Support (English & Persian) with Native RTL
 - **English**: LTR layout, clear technical terminology.
-- **Persian (فارسی)**: Native RTL layout with exact technical terminology:
-  - CPU: **سی‌پی‌یو**
-  - RAM: **رم**
-  - GPU: **کارت گرافیک**
-  - Motherboard: **مادربرد**
-  - Storage: **حافظه ذخیره‌سازی**
-  - Windows: **ویندوز**
-  - BIOS / UEFI: **BIOS / UEFI**
-  - Network: **شبکه**
+- **Persian (فارسی)**: Native RTL layout with technical terminology:
   - Software: **نرم‌افزارها**
-  - Required Files: **فایل‌ها و پوشه‌های موردنیاز**
-  - Installed / Not Installed: **نصب شده / نصب نشده**
-  - Present / Missing: **موجود است / موجود نیست**
-  - Version: **نسخه**
-  - Path: **مسیر**
-  - Fallback: **موجود نیست**
-- Hardware product names and software brand names remain in their clean original Latin form.
+  - Required Files: **فایل‌های موردنیاز**
+  - Drivers: **درایورها**
+  - Scan: **اسکن** / **اسکن پکیج‌ها**
+  - Install: **نصب**
+  - Installed: **نصب شده**
+  - Not Installed: **نصب نشده**
+  - Present: **موجود است**
+  - Missing: **موجود نیست**
+  - Ready: **آماده**
+  - Needs Attention: **نیاز به بررسی**
+  - Not Present: **وجود ندارد**
+  - Driver OK: **سالم**
+  - Driver Problem: **خطای درایور**
+  - System Status: **وضعیت سیستم**
+- Product and hardware model names remain in Latin form.
 
-### 5. Dual Display Modes
-- **Simple Mode (Default)**:
-  - Fast invoice comparison for store staff:
-    1. **Hardware Specifications**: CPU, RAM, GPU, Motherboard, Storage, Windows.
-    2. **Required Software Checklist**: Google Chrome, WinRAR, VLC, Office with status badges (`✓` / `✗`).
-    3. **Required Files & Folders Checklist**: Training Folder, Desktop Tools with presence badges (`✓` / `✗`).
-  - 1-Click **"Copy Specifications" / "کپی خلاصه مشخصات"** clipboard export.
-- **Advanced Mode**:
-  - Full diagnostic dashboard including `SoftwareCard` (version, detection source, install location) and `FilesCard` (type, path, status).
-
-### 6. Header Controls & Persistent User Preferences
-- **Mode Switcher**: `[ Simple | Advanced ]` / `[ ساده | پیشرفته ]`
-- **Language Switcher**: `[ EN | FA ]`
-- **Theme Toggle**: Light / Dark mode
-- **Refresh Button**: Live re-scan of hardware, software, and files.
-- **Settings Persistence**: Stored in `%APPDATA%\CentralSystemChecker\settings.json`.
+### 6. Minimum Window Size Protection
+- Enforces an appropriate minimum desktop window size ($1100 \times 700$ px with DPI scaling) via `WM_GETMINMAXINFO` in the Windows runner.
 
 ---
 
@@ -74,58 +96,48 @@ A modern Windows desktop application built with **Flutter** (Frontend UI/UX) and
 
 ```
 MarkaziSystem/
+├── Packages/                        # Configured Software Packages Directory
+│   ├── Chrome/                      # Valid Package (package.json + installer)
+│   ├── WinRAR/                      # Valid Package
+│   ├── VLC/                         # Valid Package
+│   ├── 7Zip/                        # Valid Package (available to install)
+│   └── InvalidSample/               # Invalid package test case
+│
 ├── config/
 │   ├── software_requirements.json   # Configurable list of required software
 │   └── file_requirements.json       # Configurable list of required files/folders
 │
 ├── frontend/                        # Flutter Desktop Application (Windows)
 │   ├── lib/
-│   │   ├── main.dart                # App Entry, Locale & Mode State Management
-│   │   ├── l10n/                    # Localization System
-│   │   │   ├── app_localizations.dart # Abstract Base & Delegate
-│   │   │   ├── app_en.dart          # English Strings
-│   │   │   └── app_fa.dart          # Persian Strings (Official Technical Terms)
-│   │   ├── models/
-│   │   │   └── system_info.dart     # Type-safe Dart Data Models
-│   │   ├── services/
-│   │   │   ├── api_service.dart     # HTTP client for Python Backend API
-│   │   │   ├── backend_process_manager.dart # Lifecycle & auto-launcher
-│   │   │   └── settings_service.dart # Lightweight JSON Preferences Storage
-│   │   ├── theme/
-│   │   │   └── app_theme.dart       # Modern Dark/Light Themes + Persian Typography
+│   │   ├── main.dart                # App Entry & State
+│   │   ├── l10n/                    # Localization System (EN & FA)
+│   │   ├── models/                  # SystemInfo, DriverItem, SoftwarePackage
+│   │   ├── services/                # ApiService (system-info, packages, install)
+│   │   ├── theme/                   # Dark/Light Themes + Persian Typography
 │   │   └── widgets/
-│   │       ├── app_header.dart      # Brand Title, Mode & Language Switchers, Theme Toggle
-│   │       ├── simple_mode_view.dart # Simple Invoice & Checklist View
-│   │       ├── advanced_mode_view.dart # Full Hardware & Diagnostic Dashboard Grid
+│   │       ├── simple_mode_view.dart # 5-10s Invoice Dashboard & Quick Status
+│   │       ├── advanced_mode_view.dart # Detailed Diagnostics Grid
 │   │       ├── summary_hero_bar.dart # Overview Metric Chips
-│   │       ├── loading_view.dart    # Inspection Loader
-│   │       ├── error_view.dart      # Error Boundary & Retry
-│   │       └── cards/               # Hardware, Software, & File Diagnostic Cards
+│   │       └── cards/               # Hardware, Software, Driver, & Package Cards
+│   │           ├── driver_card.dart
+│   │           ├── packages_card.dart
 │   │           ├── software_card.dart
 │   │           ├── files_card.dart
-│   │           ├── cpu_card.dart
-│   │           ├── ram_card.dart
-│   │           ├── gpu_card.dart
-│   │           ├── motherboard_card.dart
-│   │           ├── storage_card.dart
-│   │           ├── windows_card.dart
-│   │           ├── bios_card.dart
-│   │           └── network_card.dart
-│   └── test/                        # Automated Widget & Unit Tests
+│   │           └── ... (CPU, RAM, GPU, Motherboard, Storage, Windows, BIOS, Network)
+│   └── test/                        # Automated Unit & Widget Tests
 │
-├── backend/                         # Modular Python Verification Engine
+├── backend/                         # Modular Python Engine
 │   ├── main.py                      # CLI & Server Runner (Host: 127.0.0.1:18080)
-│   ├── server.py                    # Multi-threaded HTTP Server with CORS
-│   ├── collector.py                 # Concurrent Task Orchestrator
-│   ├── hardware/                    # Hardware Collectors (CPU, RAM, GPU, Storage, Motherboard, BIOS)
-│   ├── software/                    # Software Collectors (Registry, Office, Binary Versioning)
-│   │   ├── detector.py
-│   │   ├── registry.py
-│   │   └── office.py
-│   ├── files/                       # File/Folder Presence Checker
+│   ├── server.py                    # Multi-threaded HTTP Server with Package API
+│   ├── collector.py                 # Concurrent Task Orchestrator (Hardware + Drivers + Software + Files)
+│   ├── drivers/                     # Windows PnP Driver Checker
 │   │   └── checker.py
-│   ├── windows/                     # Windows OS & Network Collectors
-│   └── utils/                       # PowerShell Runner & Formatters
+│   ├── packages/                    # Software Package Manager & Installer Runner
+│   │   └── manager.py
+│   ├── software/                    # Software Collectors (Registry, Office, Binary Versioning)
+│   ├── files/                       # File/Folder Presence Checker
+│   ├── hardware/                    # CPU, RAM, GPU, Storage, Motherboard, BIOS
+│   └── windows/                     # OS & Network
 │
 ├── run_demo.bat                     # Windows Batch 1-Click Launcher
 ├── run_demo.ps1                     # Windows PowerShell 1-Click Launcher
@@ -137,21 +149,20 @@ MarkaziSystem/
 ## 🚀 How to Run
 
 ### Option 1: 1-Click Launch (Recommended)
-Double-click or run in terminal:
+Double-click or run:
 ```cmd
 run_demo.bat
 ```
 *(or run `.\run_demo.ps1` in PowerShell)*
 
-### Option 2: Running from Source / Development Mode
+### Option 2: Running from Source
 
 #### Step 1: Start Backend
 ```powershell
 python backend/main.py
 ```
-*(Runs on `http://127.0.0.1:18080`)*
 
-#### Step 2: Run Flutter App
+#### Step 2: Run Flutter Desktop App
 ```powershell
 cd frontend
 flutter run -d windows
@@ -161,7 +172,6 @@ flutter run -d windows
 
 ## 🧪 Testing & Validation
 
-Run the automated test suite:
 ```powershell
 cd frontend
 flutter test
@@ -170,10 +180,10 @@ flutter analyze
 
 ---
 
-## 🔒 Scope Restriction (Phase 2)
+## 🔒 Scope Restriction
 
 This project strictly implements **Phase 1 and Phase 2** specifications. The following features are excluded by design until Phase 3+:
 - Windows / Office activation checking or tools
-- Automated software installation / USB installer
-- Invoice OCR / automated invoice comparison
-- Databases / User accounts / Cloud sync
+- Automated driver installation
+- Automated invoice OCR
+- Cloud sync / Databases / User accounts

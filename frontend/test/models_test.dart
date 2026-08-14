@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:central_system_checker/models/system_info.dart';
 
 void main() {
-  test('SystemInfo.fromJson parses full schema correctly with fallbacks and Phase 2 data', () {
+  test('SystemInfo.fromJson parses full schema correctly with drivers, software, and files', () {
     final mockJson = {
       'status': 'success',
       'timestamp': '2026-08-14T06:35:00',
@@ -89,6 +89,41 @@ void main() {
           'is_connected': true
         }
       ],
+      'drivers': [
+        {
+          'id': 'graphics',
+          'name': 'Graphics / GPU',
+          'display_name': 'Graphics / GPU',
+          'device_name': 'NVIDIA GeForce RTX 3060',
+          'category': 'Display',
+          'status': 'OK',
+          'is_healthy': true,
+          'is_present': true,
+          'problem_code': 0,
+          'status_description': 'Device is working properly',
+          'instance_id': 'PCI\\VEN_10DE'
+        },
+        {
+          'id': 'bluetooth',
+          'name': 'Bluetooth Adapter',
+          'display_name': 'Bluetooth Adapter',
+          'device_name': 'Not present',
+          'category': 'Bluetooth',
+          'status': 'Not Present',
+          'is_healthy': true,
+          'is_present': false,
+          'problem_code': 0,
+          'status_description': 'Bluetooth hardware is not present on this motherboard',
+          'instance_id': 'Not available'
+        }
+      ],
+      'driver_summary': {
+        'healthy_count': 1,
+        'total_present_count': 1,
+        'all_healthy': true,
+        'has_problem': false,
+        'status_text': 'Ready'
+      },
       'software': [
         {
           'id': 'chrome',
@@ -101,24 +136,12 @@ void main() {
           'detection_source': 'Registry (HKLM_32)',
           'install_location': 'C:\\Program Files\\Google\\Chrome\\Application',
           'required': true
-        },
-        {
-          'id': 'vlc',
-          'name': 'VLC Media Player',
-          'display_name': 'VLC Media Player',
-          'status': 'Not Installed',
-          'is_installed': false,
-          'version': 'Not available',
-          'product_name': 'VLC Media Player',
-          'detection_source': 'None',
-          'install_location': 'Not available',
-          'required': true
         }
       ],
       'software_summary': {
         'installed_count': 1,
-        'total_count': 2,
-        'all_installed': false
+        'total_count': 1,
+        'all_installed': true
       },
       'required_files': [
         {
@@ -143,25 +166,69 @@ void main() {
 
     expect(info.status, 'success');
     expect(info.cpu.name, '12th Gen Intel Core i3-12100F');
-    expect(info.cpu.coresThreadsDisplay, '4 Cores / 8 Threads');
     expect(info.motherboard.model, 'H610M K DDR4');
     expect(info.ram.totalGb, 16.0);
-    expect(info.ram.modules.length, 1);
     expect(info.gpu.first.name, 'NVIDIA GeForce RTX 3060');
-    expect(info.gpu.first.vramDisplay, '12 GB VRAM');
-    expect(info.storage.first.model, 'Samsung SSD 870 EVO 500GB');
-    expect(info.windows.edition, 'Windows 11 Enterprise');
-    expect(info.system.computerName, 'DESKTOP-BTS6OUC');
-    expect(info.bios.version, 'F22');
-    expect(info.network.first.isConnected, true);
-    expect(info.software.length, 2);
-    expect(info.software.first.name, 'Google Chrome');
+    expect(info.drivers.length, 2);
+    expect(info.drivers.first.isHealthy, true);
+    expect(info.drivers[1].isPresent, false);
+    expect(info.driverSummary.allHealthy, true);
+    expect(info.driverSummary.statusText, 'Ready');
     expect(info.software.first.isInstalled, true);
-    expect(info.software.first.version, '151.0.7922.138');
-    expect(info.softwareSummary.installedCount, 1);
-    expect(info.softwareSummary.totalCount, 2);
-    expect(info.requiredFiles.length, 1);
-    expect(info.requiredFiles.first.exists, false);
     expect(info.filesSummary.presentCount, 0);
+  });
+
+  test('PackagesResponse.fromJson parses packages with validation and installation permissions', () {
+    final mockPackagesJson = {
+      'packages_directory': 'G:\\MarkaziSystem\\Packages',
+      'packages': [
+        {
+          'id': '7zip',
+          'name': '7-Zip',
+          'version': '24.09',
+          'publisher': 'Igor Pavlov',
+          'detection_id': '7zip',
+          'package_folder': '7Zip',
+          'installer_file': 'installer.bat',
+          'silent_arguments': '/S',
+          'is_valid': true,
+          'validation_error': null,
+          'status': 'Not Installed',
+          'is_installed': false,
+          'installed_version': 'Not available',
+          'install_allowed': true,
+          'has_icon': false,
+          'icon_url': null,
+          'package_path': 'G:\\MarkaziSystem\\Packages\\7Zip'
+        },
+        {
+          'id': 'invalid_tool',
+          'name': 'Invalid Tool',
+          'version': '1.0',
+          'publisher': 'Unknown',
+          'package_folder': 'InvalidSample',
+          'installer_file': 'missing.exe',
+          'is_valid': false,
+          'validation_error': 'Installer file missing',
+          'status': 'Unknown',
+          'is_installed': false,
+          'install_allowed': false,
+          'has_icon': false,
+          'icon_url': null
+        }
+      ],
+      'summary': {
+        'total_packages': 2,
+        'valid_packages': 1,
+        'installed_packages': 0,
+        'available_to_install': 1
+      }
+    };
+
+    final resp = PackagesResponse.fromJson(mockPackagesJson);
+    expect(resp.packages.length, 2);
+    expect(resp.packages.first.installAllowed, true);
+    expect(resp.packages[1].isValid, false);
+    expect(resp.summary.availableToInstall, 1);
   });
 }

@@ -54,10 +54,14 @@ abstract class AppLocalizations {
   String get notAvailable;
   String get switchToLightMode;
   String get switchToDarkMode;
+  String get cancel;
 
   // Summary & Overview
   String get hardware;
   String get ready;
+  String get needsAttention;
+  String get checking;
+  String get systemStatus;
 
   // Simple Mode UI
   String get simpleModeHeaderTitle;
@@ -140,7 +144,17 @@ abstract class AppLocalizations {
   String activeAdaptersCount(int active, int total);
   String get noNetworkDetected;
 
-  // Phase 2: Software Requirements
+  // Drivers Section
+  String get drivers;
+  String get driverStatus;
+  String get driverOk;
+  String get driverProblem;
+  String get notPresent;
+  String get driverDeviceName;
+  String get driverCategory;
+  String driverSummaryCount(int healthy, int total);
+
+  // Software Requirements
   String get software;
   String get installed;
   String get notInstalled;
@@ -153,7 +167,22 @@ abstract class AppLocalizations {
   String get someSoftwareMissing;
   String get noSoftwareConfigured;
 
-  // Phase 2: File Requirements
+  // Packages Section
+  String get packages;
+  String get scanPackages;
+  String get scanningPackages;
+  String get packagesDirectory;
+  String get install;
+  String get installing;
+  String get confirmInstallTitle;
+  String confirmInstallMessage(String name);
+  String get availableToInstall;
+  String get noPackagesFound;
+  String installSuccess(String name);
+  String installFailed(String name);
+  String versionBadge(String ver);
+
+  // File Requirements
   String get requiredFiles;
   String get present;
   String get missing;

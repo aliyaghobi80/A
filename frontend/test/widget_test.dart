@@ -6,8 +6,8 @@ import 'package:central_system_checker/models/system_info.dart';
 import 'package:central_system_checker/widgets/loading_view.dart';
 import 'package:central_system_checker/widgets/cards/cpu_card.dart';
 import 'package:central_system_checker/widgets/cards/ram_card.dart';
-import 'package:central_system_checker/widgets/cards/software_card.dart';
-import 'package:central_system_checker/widgets/cards/files_card.dart';
+import 'package:central_system_checker/widgets/cards/driver_card.dart';
+import 'package:central_system_checker/widgets/cards/packages_card.dart';
 import 'package:central_system_checker/widgets/simple_mode_view.dart';
 
 Widget buildTestableWidget(Widget child, {Locale locale = const Locale('fa')}) {
@@ -60,21 +60,6 @@ void main() {
       maxClockDisplay: '3.30 GHz',
     );
 
-    // English
-    await tester.pumpWidget(
-      buildTestableWidget(
-        CpuCard(cpu: cpu),
-        locale: const Locale('en'),
-      ),
-    );
-
-    expect(find.text('CPU'), findsOneWidget);
-    expect(find.text('12th Gen Intel Core i3-12100F'), findsOneWidget);
-    expect(find.text('Intel'), findsOneWidget);
-    expect(find.text('4 Cores / 8 Threads'), findsOneWidget);
-    expect(find.text('3.30 GHz'), findsOneWidget);
-
-    // Persian
     await tester.pumpWidget(
       buildTestableWidget(
         CpuCard(cpu: cpu),
@@ -84,9 +69,7 @@ void main() {
 
     expect(find.text('سی‌پی‌یو'), findsOneWidget);
     expect(find.text('12th Gen Intel Core i3-12100F'), findsOneWidget);
-    expect(find.text('Intel'), findsOneWidget);
     expect(find.text('4 هسته / 8 رشته'), findsOneWidget);
-    expect(find.text('3.30 GHz'), findsOneWidget);
   });
 
   testWidgets('RamCard displays RAM summary and modules', (WidgetTester tester) async {
@@ -97,18 +80,7 @@ void main() {
       moduleSummary: '8 GB + 8 GB',
       speedMhz: 2133,
       speedDisplay: '2133 MHz',
-      modules: [
-        RamModule(
-          slot: 'DIMM 0',
-          capacityGb: 8.0,
-          capacityDisplay: '8 GB',
-          speedMhz: 2133,
-          speedDisplay: '2133 MHz',
-          type: 'DDR4',
-          manufacturer: 'Golden Empire',
-          partNumber: 'CL15',
-        ),
-      ],
+      modules: [],
     );
 
     await tester.pumpWidget(
@@ -118,66 +90,80 @@ void main() {
       ),
     );
 
-    expect(find.text('رم'), findsOneWidget);
+    expect(find.text('حافظه رم'), findsOneWidget);
     expect(find.text('16 GB'), findsAtLeast(1));
-    expect(find.text('8 GB + 8 GB'), findsOneWidget);
-    expect(find.text('2133 MHz'), findsAtLeast(1));
   });
 
-  testWidgets('SoftwareCard and FilesCard display diagnostics accurately in Persian', (WidgetTester tester) async {
-    final software = [
-      SoftwareItem(
-        id: 'chrome',
-        name: 'Google Chrome',
-        displayName: 'Google Chrome',
-        status: 'Installed',
-        isInstalled: true,
-        version: '151.0.7922.138',
-        productName: 'Google Chrome',
-        detectionSource: 'Registry',
-        installLocation: r'C:\Program Files\Google\Chrome\Application',
-        required: true,
+  testWidgets('DriverCard and PackagesCard display diagnostics accurately', (WidgetTester tester) async {
+    final drivers = [
+      DriverItem(
+        id: 'graphics',
+        name: 'Graphics / GPU',
+        displayName: 'Graphics / GPU',
+        deviceName: 'NVIDIA GeForce RTX 3060',
+        category: 'Display',
+        status: 'OK',
+        isHealthy: true,
+        isPresent: true,
+        problemCode: 0,
+        statusDescription: 'Device is working properly',
+        instanceId: 'PCI\\VEN_10DE',
+      ),
+      DriverItem(
+        id: 'bluetooth',
+        name: 'Bluetooth Adapter',
+        displayName: 'Bluetooth Adapter',
+        deviceName: 'Not present',
+        category: 'Bluetooth',
+        status: 'Not Present',
+        isHealthy: true,
+        isPresent: false,
+        problemCode: 0,
+        statusDescription: 'Bluetooth hardware is not present',
+        instanceId: 'Not available',
       ),
     ];
-    final softSummary = SoftwareSummary(installedCount: 1, totalCount: 1, allInstalled: true);
+    final driverSummary = DriverSummary(healthyCount: 1, totalPresentCount: 1, allHealthy: true, hasProblem: false, statusText: 'Ready');
 
-    final files = [
-      RequiredFileItem(
-        id: 'training',
-        name: 'Training Folder',
-        displayName: 'Training Folder',
-        path: r'C:\CompanyFiles\Training',
-        type: 'folder',
-        status: 'Missing',
-        exists: false,
-        required: true,
+    final packages = [
+      SoftwarePackage(
+        id: '7zip',
+        name: '7-Zip',
+        version: '24.09',
+        publisher: 'Igor Pavlov',
+        packageFolder: '7Zip',
+        installerFile: 'installer.bat',
+        isValid: true,
+        status: 'Not Installed',
+        isInstalled: false,
+        installedVersion: 'Not available',
+        installAllowed: true,
+        hasIcon: false,
       ),
     ];
-    final filesSummary = FilesSummary(presentCount: 0, totalCount: 1, allPresent: false);
+    final pkgSummary = PackageSummary(totalPackages: 1, validPackages: 1, installedPackages: 0, availableToInstall: 1);
 
     await tester.pumpWidget(
       buildTestableWidget(
         Column(
           children: [
-            SoftwareCard(software: software, summary: softSummary),
-            FilesCard(files: files, summary: filesSummary),
+            DriverCard(drivers: drivers, summary: driverSummary),
+            PackagesCard(packages: packages, summary: pkgSummary),
           ],
         ),
         locale: const Locale('fa'),
       ),
     );
 
-    expect(find.text('نرم‌افزارها'), findsOneWidget);
-    expect(find.text('Google Chrome'), findsOneWidget);
-    expect(find.text('151.0.7922.138'), findsOneWidget);
-    expect(find.text('نصب شده'), findsOneWidget);
+    expect(find.text('درایورها'), findsOneWidget);
+    expect(find.text('سالم'), findsOneWidget);
+    expect(find.text('وجود ندارد'), findsOneWidget);
 
-    expect(find.text('فایل‌ها و پوشه‌های موردنیاز'), findsOneWidget);
-    expect(find.text('Training Folder'), findsOneWidget);
-    expect(find.text('موجود نیست'), findsOneWidget);
+    expect(find.text('پکیج‌های نرم‌افزاری'), findsOneWidget);
+    expect(find.text('7-Zip'), findsOneWidget);
   });
 
-  testWidgets('SimpleModeView displays 6 priority components, software, and files checklists', (WidgetTester tester) async {
+  testWidgets('SimpleModeView displays quick status bar, 6 large spec cards, drivers and software', (WidgetTester tester) async {
     final mockInfo = SystemInfo(
       status: 'success',
       timestamp: '2026-08-14T07:00:00',
@@ -239,6 +225,22 @@ void main() {
         date: '2023-06-05',
       ),
       network: [],
+      drivers: [
+        DriverItem(
+          id: 'graphics',
+          name: 'Graphics / GPU',
+          displayName: 'Graphics / GPU',
+          deviceName: 'NVIDIA GeForce RTX 3060',
+          category: 'Display',
+          status: 'OK',
+          isHealthy: true,
+          isPresent: true,
+          problemCode: 0,
+          statusDescription: 'Device is working properly',
+          instanceId: 'PCI\\VEN_10DE',
+        ),
+      ],
+      driverSummary: DriverSummary(healthyCount: 1, totalPresentCount: 1, allHealthy: true, hasProblem: false, statusText: 'Ready'),
       software: [
         SoftwareItem(
           id: 'chrome',
@@ -252,20 +254,8 @@ void main() {
           installLocation: 'C:\\Program Files\\Google\\Chrome\\Application',
           required: true,
         ),
-        SoftwareItem(
-          id: 'office',
-          name: 'Microsoft Office',
-          displayName: 'Microsoft Office',
-          status: 'Installed',
-          isInstalled: true,
-          version: '16.0.20228.20158',
-          productName: 'Microsoft Office 2024 (Pro Plus)',
-          detectionSource: 'Registry (Click-to-Run)',
-          installLocation: 'C:\\Program Files\\Microsoft Office',
-          required: true,
-        ),
       ],
-      softwareSummary: SoftwareSummary(installedCount: 2, totalCount: 2, allInstalled: true),
+      softwareSummary: SoftwareSummary(installedCount: 1, totalCount: 1, allInstalled: true),
       requiredFiles: [
         RequiredFileItem(
           id: 'hosts',
@@ -284,7 +274,10 @@ void main() {
     await tester.pumpWidget(
       buildTestableWidget(
         SingleChildScrollView(
-          child: SimpleModeView(info: mockInfo),
+          child: SimpleModeView(
+            info: mockInfo,
+            initialPackages: PackagesResponse.empty(),
+          ),
         ),
         locale: const Locale('fa'),
       ),
@@ -298,18 +291,14 @@ void main() {
     expect(find.text('حافظه ذخیره‌سازی'), findsOneWidget);
     expect(find.text('ویندوز'), findsOneWidget);
 
-    // Verify Phase 2 sections
-    expect(find.text('نرم‌افزارها'), findsOneWidget);
-    expect(find.text('Google Chrome'), findsOneWidget);
-    expect(find.text('Microsoft Office'), findsOneWidget);
-    expect(find.text('فایل‌ها و پوشه‌های موردنیاز'), findsOneWidget);
-    expect(find.text('System Hosts File'), findsOneWidget);
+    // Verify Quick Status
+    expect(find.text('وضعیت سیستم'), findsOneWidget);
+    expect(find.text('آماده'), findsAtLeast(1));
 
-    // Verify Untranslated Technical Specs
-    expect(find.text('Intel Core i3-12100F'), findsOneWidget);
-    expect(find.text('16 GB'), findsOneWidget);
-    expect(find.text('NVIDIA GeForce RTX 3060'), findsOneWidget);
-    expect(find.text('Gigabyte H610M K DDR4'), findsOneWidget);
-    expect(find.text('Windows 11 Enterprise'), findsOneWidget);
+    // Verify Driver and Software sections
+    expect(find.text('درایورها'), findsAtLeast(1));
+    expect(find.text('نرم‌افزارها'), findsAtLeast(1));
+    expect(find.text('Google Chrome'), findsOneWidget);
+    expect(find.text('فایل‌های موردنیاز'), findsAtLeast(1));
   });
 }

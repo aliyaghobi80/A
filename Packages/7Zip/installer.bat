@@ -1,0 +1,3 @@
+@echo off
+echo Installing 7-Zip Package...
+exit /b 0

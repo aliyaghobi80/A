@@ -86,6 +86,17 @@ class SummaryHeroBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
+    // System Status calculation
+    final isSystemReady = info.driverSummary.allHealthy &&
+        info.softwareSummary.allInstalled &&
+        info.filesSummary.allPresent;
+    final systemStatusText = isSystemReady ? l10n.ready : l10n.needsAttention;
+    final systemStatusColor = isSystemReady ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+
+    final drvHealthy = info.driverSummary.healthyCount;
+    final drvTotal = info.driverSummary.totalPresentCount;
+    final drvColor = info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+
     final softInstalled = info.softwareSummary.installedCount;
     final softTotal = info.softwareSummary.totalCount;
     final softColor = (softTotal > 0 && softInstalled == softTotal)
@@ -110,15 +121,23 @@ class SummaryHeroBar extends StatelessWidget {
           spacing: 10,
           runSpacing: 10,
           children: [
-            // 1. Hardware Status Chip
+            // 1. System Status Chip
             _buildChip(
               context,
-              icon: Icons.check_circle_rounded,
-              title: l10n.hardware,
-              value: '✓ ${l10n.ready}',
-              color: const Color(0xFF10B981),
+              icon: isSystemReady ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+              title: l10n.systemStatus,
+              value: '● $systemStatusText',
+              color: systemStatusColor,
             ),
-            // 2. Software Status Chip
+            // 2. Drivers Chip
+            _buildChip(
+              context,
+              icon: Icons.settings_suggest_rounded,
+              title: l10n.drivers,
+              value: l10n.driverSummaryCount(drvHealthy, drvTotal),
+              color: drvColor,
+            ),
+            // 3. Software Status Chip
             _buildChip(
               context,
               icon: Icons.apps_rounded,
@@ -128,7 +147,7 @@ class SummaryHeroBar extends StatelessWidget {
                   : l10n.notAvailable,
               color: softColor,
             ),
-            // 3. Required Files Status Chip
+            // 4. Required Files Status Chip
             _buildChip(
               context,
               icon: Icons.folder_special_rounded,
@@ -138,7 +157,7 @@ class SummaryHeroBar extends StatelessWidget {
                   : l10n.notAvailable,
               color: filesColor,
             ),
-            // 4. CPU Chip
+            // 5. CPU Chip
             _buildChip(
               context,
               icon: Icons.memory_rounded,
@@ -147,7 +166,7 @@ class SummaryHeroBar extends StatelessWidget {
               color: const Color(0xFF3B82F6),
               forceLtrValue: true,
             ),
-            // 5. RAM Chip
+            // 6. RAM Chip
             _buildChip(
               context,
               icon: Icons.storage_rounded,
@@ -156,7 +175,7 @@ class SummaryHeroBar extends StatelessWidget {
               color: const Color(0xFFF59E0B),
               forceLtrValue: true,
             ),
-            // 6. Windows Chip
+            // 7. Windows Chip
             _buildChip(
               context,
               icon: Icons.laptop_windows_rounded,

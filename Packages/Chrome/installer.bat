@@ -1,0 +1,3 @@
+@echo off
+echo Installing Google Chrome Package...
+exit /b 0

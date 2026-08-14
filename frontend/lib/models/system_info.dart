@@ -11,6 +11,8 @@ class SystemInfo {
   final SystemMetaInfo system;
   final BiosInfo bios;
   final List<NetworkInfo> network;
+  final List<DriverItem> drivers;
+  final DriverSummary driverSummary;
   final List<SoftwareItem> software;
   final SoftwareSummary softwareSummary;
   final List<RequiredFileItem> requiredFiles;
@@ -29,11 +31,14 @@ class SystemInfo {
     required this.system,
     required this.bios,
     required this.network,
+    this.drivers = const [],
+    DriverSummary? driverSummary,
     this.software = const [],
     SoftwareSummary? softwareSummary,
     this.requiredFiles = const [],
     FilesSummary? filesSummary,
-  })  : softwareSummary = softwareSummary ?? SoftwareSummary.empty(),
+  })  : driverSummary = driverSummary ?? DriverSummary.empty(),
+        softwareSummary = softwareSummary ?? SoftwareSummary.empty(),
         filesSummary = filesSummary ?? FilesSummary.empty();
 
   factory SystemInfo.fromJson(Map<String, dynamic> json) {
@@ -56,6 +61,10 @@ class SystemInfo {
       network: (json['network'] as List<dynamic>? ?? [])
           .map((e) => NetworkInfo.fromJson(e as Map<String, dynamic>))
           .toList(),
+      drivers: (json['drivers'] as List<dynamic>? ?? [])
+          .map((e) => DriverItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      driverSummary: DriverSummary.fromJson(json['driver_summary'] as Map<String, dynamic>? ?? {}),
       software: (json['software'] as List<dynamic>? ?? [])
           .map((e) => SoftwareItem.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -64,6 +73,204 @@ class SystemInfo {
           .map((e) => RequiredFileItem.fromJson(e as Map<String, dynamic>))
           .toList(),
       filesSummary: FilesSummary.fromJson(json['files_summary'] as Map<String, dynamic>? ?? {}),
+    );
+  }
+}
+
+class DriverItem {
+  final String id;
+  final String name;
+  final String displayName;
+  final String deviceName;
+  final String category;
+  final String status;
+  final bool isHealthy;
+  final bool isPresent;
+  final int problemCode;
+  final String statusDescription;
+  final String instanceId;
+
+  DriverItem({
+    required this.id,
+    required this.name,
+    required this.displayName,
+    required this.deviceName,
+    required this.category,
+    required this.status,
+    required this.isHealthy,
+    required this.isPresent,
+    required this.problemCode,
+    required this.statusDescription,
+    required this.instanceId,
+  });
+
+  factory DriverItem.fromJson(Map<String, dynamic> json) {
+    return DriverItem(
+      id: json['id'] ?? 'unknown',
+      name: json['name'] ?? 'Unknown Driver',
+      displayName: json['display_name'] ?? json['name'] ?? 'Unknown Driver',
+      deviceName: json['device_name'] ?? 'Device',
+      category: json['category'] ?? 'System',
+      status: json['status'] ?? 'Unknown',
+      isHealthy: json['is_healthy'] as bool? ?? false,
+      isPresent: json['is_present'] as bool? ?? true,
+      problemCode: json['problem_code'] as int? ?? 0,
+      statusDescription: json['status_description'] ?? 'Device is working properly',
+      instanceId: json['instance_id'] ?? 'Not available',
+    );
+  }
+}
+
+class DriverSummary {
+  final int healthyCount;
+  final int totalPresentCount;
+  final bool allHealthy;
+  final bool hasProblem;
+  final String statusText;
+
+  DriverSummary({
+    required this.healthyCount,
+    required this.totalPresentCount,
+    required this.allHealthy,
+    required this.hasProblem,
+    required this.statusText,
+  });
+
+  factory DriverSummary.empty() => DriverSummary(
+        healthyCount: 0,
+        totalPresentCount: 0,
+        allHealthy: false,
+        hasProblem: false,
+        statusText: 'Checking',
+      );
+
+  factory DriverSummary.fromJson(Map<String, dynamic> json) {
+    return DriverSummary(
+      healthyCount: json['healthy_count'] as int? ?? 0,
+      totalPresentCount: json['total_present_count'] as int? ?? 0,
+      allHealthy: json['all_healthy'] as bool? ?? false,
+      hasProblem: json['has_problem'] as bool? ?? false,
+      statusText: json['status_text'] ?? 'Checking',
+    );
+  }
+}
+
+class SoftwarePackage {
+  final String id;
+  final String name;
+  final String version;
+  final String publisher;
+  final String? detectionId;
+  final String packageFolder;
+  final String? installerFile;
+  final String? silentArguments;
+  final bool isValid;
+  final String? validationError;
+  final String status;
+  final bool isInstalled;
+  final String installedVersion;
+  final bool installAllowed;
+  final bool hasIcon;
+  final String? iconUrl;
+  final String? packagePath;
+
+  SoftwarePackage({
+    required this.id,
+    required this.name,
+    required this.version,
+    required this.publisher,
+    this.detectionId,
+    required this.packageFolder,
+    this.installerFile,
+    this.silentArguments,
+    required this.isValid,
+    this.validationError,
+    required this.status,
+    required this.isInstalled,
+    required this.installedVersion,
+    required this.installAllowed,
+    required this.hasIcon,
+    this.iconUrl,
+    this.packagePath,
+  });
+
+  factory SoftwarePackage.fromJson(Map<String, dynamic> json) {
+    return SoftwarePackage(
+      id: json['id'] ?? 'unknown',
+      name: json['name'] ?? 'Unknown Package',
+      version: json['version'] ?? '1.0',
+      publisher: json['publisher'] ?? '',
+      detectionId: json['detection_id'],
+      packageFolder: json['package_folder'] ?? '',
+      installerFile: json['installer_file'],
+      silentArguments: json['silent_arguments'],
+      isValid: json['is_valid'] as bool? ?? false,
+      validationError: json['validation_error'],
+      status: json['status'] ?? 'Unknown',
+      isInstalled: json['is_installed'] as bool? ?? false,
+      installedVersion: json['installed_version'] ?? 'Not available',
+      installAllowed: json['install_allowed'] as bool? ?? false,
+      hasIcon: json['has_icon'] as bool? ?? false,
+      iconUrl: json['icon_url'],
+      packagePath: json['package_path'],
+    );
+  }
+}
+
+class PackageSummary {
+  final int totalPackages;
+  final int validPackages;
+  final int installedPackages;
+  final int availableToInstall;
+
+  PackageSummary({
+    required this.totalPackages,
+    required this.validPackages,
+    required this.installedPackages,
+    required this.availableToInstall,
+  });
+
+  factory PackageSummary.empty() => PackageSummary(
+        totalPackages: 0,
+        validPackages: 0,
+        installedPackages: 0,
+        availableToInstall: 0,
+      );
+
+  factory PackageSummary.fromJson(Map<String, dynamic> json) {
+    return PackageSummary(
+      totalPackages: json['total_packages'] as int? ?? 0,
+      validPackages: json['valid_packages'] as int? ?? 0,
+      installedPackages: json['installed_packages'] as int? ?? 0,
+      availableToInstall: json['available_to_install'] as int? ?? 0,
+    );
+  }
+}
+
+class PackagesResponse {
+  final String packagesDirectory;
+  final List<SoftwarePackage> packages;
+  final PackageSummary summary;
+
+  PackagesResponse({
+    required this.packagesDirectory,
+    required this.packages,
+    required this.summary,
+  });
+
+  factory PackagesResponse.empty() => PackagesResponse(
+        packagesDirectory: '',
+        packages: [],
+        summary: PackageSummary.empty(),
+      );
+
+  factory PackagesResponse.fromJson(Map<String, dynamic> json) {
+    return PackagesResponse(
+      packagesDirectory: json['packages_directory'] ?? '',
+      packages: (json['packages'] as List<dynamic>? ?? [])
+          .map((e) => SoftwarePackage.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      summary: PackageSummary.fromJson(json['summary'] as Map<String, dynamic>? ?? {}),
     );
   }
 }
