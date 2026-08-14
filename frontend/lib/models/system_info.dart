@@ -176,6 +176,7 @@ class SoftwarePackage {
   final String? iconBase64;
   final String? iconUrl;
   final String? installedExePath;
+  final String? installLocation;
 
   SoftwarePackage({
     required this.id,
@@ -198,7 +199,25 @@ class SoftwarePackage {
     this.iconBase64,
     this.iconUrl,
     this.installedExePath,
+    this.installLocation,
   });
+
+  String get installPathTooltip {
+    if (isInstalled) {
+      if (installedExePath != null && installedExePath!.isNotEmpty) {
+        return 'مسیر نصب:\n$installedExePath';
+      }
+      if (installLocation != null && installLocation!.isNotEmpty && installLocation != 'Not available') {
+        return 'مسیر نصب:\n$installLocation';
+      }
+      return 'نرم‌افزار در رجیستری ویندوز ثبت شده است.';
+    } else {
+      if (fullPath.isNotEmpty) {
+        return 'مسیر فایل نصبی:\n$fullPath';
+      }
+      return 'نرم‌افزار هنوز روی سیستم نصب نشده است.';
+    }
+  }
 
   factory SoftwarePackage.fromJson(Map<String, dynamic> json) {
     return SoftwarePackage(
@@ -222,6 +241,7 @@ class SoftwarePackage {
       iconBase64: json['icon_base64'],
       iconUrl: json['icon_url'],
       installedExePath: json['installed_exe_path'],
+      installLocation: json['install_location'],
     );
   }
 }

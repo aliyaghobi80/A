@@ -442,6 +442,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         is_installed = False
         installed_version = ""
         installed_exe_path = None
+        install_location = None
         search_terms = _clean_software_keywords(display_name) + _clean_software_keywords(file) + _clean_software_keywords(product_name)
         if detection_id:
             search_terms.insert(0, detection_id.lower())
@@ -464,15 +465,17 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
                         if clean_ico.lower().endswith(".exe") and os.path.isfile(clean_ico):
                             installed_exe_path = clean_ico
 
-                    if not installed_exe_path:
-                        loc = app.get("location", "").strip('"').strip()
-                        if loc and os.path.isdir(loc):
-                            for f in os.listdir(loc):
-                                if f.lower().endswith(".exe"):
-                                    cand = os.path.join(loc, f)
-                                    if os.path.isfile(cand):
-                                        installed_exe_path = cand
-                                        break
+                    loc = app.get("location", "").strip('"').strip()
+                    if loc:
+                        install_location = loc
+
+                    if not installed_exe_path and loc and os.path.isdir(loc):
+                        for f in os.listdir(loc):
+                            if f.lower().endswith(".exe"):
+                                cand = os.path.join(loc, f)
+                                if os.path.isfile(cand):
+                                    installed_exe_path = cand
+                                    break
                     break
             if is_installed:
                 break
@@ -499,6 +502,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "is_installed": is_installed,
             "installed_version": installed_version if is_installed else "Not available",
             "installed_exe_path": installed_exe_path,
+            "install_location": install_location or (os.path.dirname(installed_exe_path) if installed_exe_path else None),
             "install_allowed": not is_installed,
             "has_icon": icon_data is not None,
             "icon_base64": icon_data,

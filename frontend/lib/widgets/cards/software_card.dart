@@ -96,16 +96,24 @@ class SoftwareCard extends StatelessWidget {
           // Header: Name + Status Badge
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Icon(
-                  isInstalled ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                  size: 16,
-                  color: statusColor,
+              Tooltip(
+                message: isInstalled
+                    ? (item.installLocation.isNotEmpty && item.installLocation != 'Not available'
+                        ? 'مسیر نصب:\n${item.installLocation}'
+                        : 'نرم‌افزار در رجیستری ویندوز ثبت شده است.')
+                    : 'نرم‌افزار هنوز نصب نشده است.',
+                waitDuration: const Duration(milliseconds: 250),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    isInstalled ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                    size: 16,
+                    color: statusColor,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),

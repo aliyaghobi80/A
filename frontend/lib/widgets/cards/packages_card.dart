@@ -236,15 +236,40 @@ class PackagesCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            padding: const EdgeInsets.all(6),
+          Tooltip(
+            message: pkg.installPathTooltip,
+            waitDuration: const Duration(milliseconds: 250),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.1),
+              color: isDark ? const Color(0xFF0B132B) : const Color(0xFF0F172A),
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isDark ? const Color(0xFF38BDF8).withValues(alpha: 0.4) : const Color(0xFF64748B),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
-            child: Center(child: _buildIcon(pkg, isDark)),
+            textStyle: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+            child: Container(
+              width: 36,
+              height: 36,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(child: _buildIcon(pkg, isDark)),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

@@ -938,20 +938,45 @@ class SimpleModeView extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Application Icon Container
-          Container(
-            width: 42,
-            height: 42,
-            padding: const EdgeInsets.all(6),
+          // Application Icon Container with Install Path Tooltip
+          Tooltip(
+            message: pkg.installPathTooltip,
+            waitDuration: const Duration(milliseconds: 250),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+              color: isDark ? const Color(0xFF0B132B) : const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: statusColor.withValues(alpha: 0.25),
+                color: isDark ? const Color(0xFF38BDF8).withValues(alpha: 0.4) : const Color(0xFF64748B),
                 width: 1,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
-            child: Center(child: iconWidget),
+            textStyle: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+            child: Container(
+              width: 42,
+              height: 42,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: statusColor.withValues(alpha: 0.25),
+                  width: 1,
+                ),
+              ),
+              child: Center(child: iconWidget),
+            ),
           ),
           const SizedBox(width: 14),
 
