@@ -352,6 +352,12 @@ class AppLocalizationsEn implements AppLocalizations {
   String get installing => 'Installing...';
 
   @override
+  String get openApp => 'Open';
+
+  @override
+  bool get isRtl => false;
+
+  @override
   String get confirmInstallTitle => 'Confirm Software Installation';
 
   @override

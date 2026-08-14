@@ -115,4 +115,28 @@ class ApiService {
       };
     }
   }
+
+  Future<Map<String, dynamic>> openPackage(String packageId) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {'success': false, 'message': 'Backend service is not running.'};
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/packages/open');
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'package_id': packageId}),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] openPackage error: $e');
+      return {'success': false, 'message': 'Error opening application: $e'};
+    }
+  }
 }

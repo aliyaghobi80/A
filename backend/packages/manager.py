@@ -441,6 +441,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         # Match against installed applications (Registry search)
         is_installed = False
         installed_version = ""
+        installed_exe_path = None
         search_terms = _clean_software_keywords(display_name) + _clean_software_keywords(file) + _clean_software_keywords(product_name)
         if detection_id:
             search_terms.insert(0, detection_id.lower())
@@ -455,6 +456,23 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
                     is_installed = True
                     if app.get("version") and app["version"] != "Not available":
                         installed_version = app["version"]
+
+                    # Extract executable path
+                    icon_val = app.get("icon", "")
+                    if icon_val:
+                        clean_ico = icon_val.split(",")[0].strip('"').strip()
+                        if clean_ico.lower().endswith(".exe") and os.path.isfile(clean_ico):
+                            installed_exe_path = clean_ico
+
+                    if not installed_exe_path:
+                        loc = app.get("location", "").strip('"').strip()
+                        if loc and os.path.isdir(loc):
+                            for f in os.listdir(loc):
+                                if f.lower().endswith(".exe"):
+                                    cand = os.path.join(loc, f)
+                                    if os.path.isfile(cand):
+                                        installed_exe_path = cand
+                                        break
                     break
             if is_installed:
                 break
@@ -480,6 +498,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "status": status,
             "is_installed": is_installed,
             "installed_version": installed_version if is_installed else "Not available",
+            "installed_exe_path": installed_exe_path,
             "install_allowed": not is_installed,
             "has_icon": icon_data is not None,
             "icon_base64": icon_data,
@@ -616,4 +635,44 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
             "message": f"خطا در اجرای برنامه با دسترسی مدیر: {launch_err}",
             "exit_code": -3,
         }
+
+
+def open_package(target_identifier: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Opens/launches the installed application on Windows.
+    """
+    data = scan_packages(custom_dir)
+    target_pkg = None
+    target_id_clean = target_identifier.strip().replace("\\", "/").lower()
+
+    for pkg in data.get("packages", []):
+        p_id = pkg.get("id", "").lower()
+        p_rel = pkg.get("relative_path", "").lower()
+        p_file = pkg.get("filename", "").lower()
+        p_name = pkg.get("name", "").lower()
+        if target_id_clean in [p_id, p_rel, p_file, p_name]:
+            target_pkg = pkg
+            break
+
+    if not target_pkg:
+        return {"success": False, "message": f"برنامه {target_identifier} یافت نشد."}
+
+    exe_path = target_pkg.get("installed_exe_path")
+    if exe_path and os.path.isfile(exe_path):
+        work_dir = os.path.dirname(exe_path)
+        try:
+            ret = ctypes.windll.shell32.ShellExecuteW(None, "open", exe_path, "", work_dir, 1)
+            if ret > 32:
+                return {"success": True, "message": f"برنامه {target_pkg.get('name')} با موفقیت باز شد."}
+        except Exception:
+            pass
+
+        try:
+            os.startfile(exe_path)
+            return {"success": True, "message": f"برنامه {target_pkg.get('name')} با موفقیت باز شد."}
+        except Exception:
+            pass
+
+    return {"success": False, "message": "مسیر فایل اجرایی نرم‌افزار نصب‌شده یافت نشد."}
+
 

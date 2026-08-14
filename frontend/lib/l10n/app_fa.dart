@@ -352,6 +352,12 @@ class AppLocalizationsFa implements AppLocalizations {
   String get installing => 'در حال نصب...';
 
   @override
+  String get openApp => 'باز کردن';
+
+  @override
+  bool get isRtl => true;
+
+  @override
   String get confirmInstallTitle => 'تأیید نصب نرم‌افزار';
 
   @override

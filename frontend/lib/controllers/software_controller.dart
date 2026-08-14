@@ -181,4 +181,57 @@ class SoftwareController extends GetxController {
       }
     });
   }
+
+  Future<void> openInstalledApp(BuildContext context, SoftwarePackage pkg) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final targetId = pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id;
+
+    scaffoldMessenger.showSnackBar(
+      SnackBar(
+        content: Text('در حال باز کردن ${pkg.name}...'),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    try {
+      // 1. If installedExePath is known, open directly from Flutter desktop session
+      if (pkg.installedExePath != null && pkg.installedExePath!.isNotEmpty && Platform.isWindows) {
+        try {
+          await Process.run('cmd.exe', ['/c', 'start', '', pkg.installedExePath!], runInShell: true);
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text('✓ نرم‌افزار ${pkg.name} باز شد.'),
+              backgroundColor: const Color(0xFF10B981),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        } catch (_) {}
+      }
+
+      // 2. Open via backend open endpoint
+      final res = await _apiService.openPackage(targetId);
+      final success = res['success'] == true;
+      final msg = res['message'] as String? ?? (success ? '✓ برنامه باز شد.' : 'خطا در باز کردن برنامه.');
+
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: success ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('خطا در اجرای برنامه: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 }

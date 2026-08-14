@@ -175,6 +175,7 @@ class SoftwarePackage {
   final bool hasIcon;
   final String? iconBase64;
   final String? iconUrl;
+  final String? installedExePath;
 
   SoftwarePackage({
     required this.id,
@@ -196,6 +197,7 @@ class SoftwarePackage {
     required this.hasIcon,
     this.iconBase64,
     this.iconUrl,
+    this.installedExePath,
   });
 
   factory SoftwarePackage.fromJson(Map<String, dynamic> json) {
@@ -219,6 +221,7 @@ class SoftwarePackage {
       hasIcon: (json['has_icon'] as bool? ?? false) || json['icon_base64'] != null,
       iconBase64: json['icon_base64'],
       iconUrl: json['icon_url'],
+      installedExePath: json['installed_exe_path'],
     );
   }
 }

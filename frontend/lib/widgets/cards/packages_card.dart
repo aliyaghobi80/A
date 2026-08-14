@@ -11,6 +11,7 @@ class PackagesCard extends StatelessWidget {
   final VoidCallback? onScan;
   final bool isScanning;
   final Function(String packageId, String name)? onInstall;
+  final Function(SoftwarePackage pkg)? onOpen;
 
   const PackagesCard({
     super.key,
@@ -21,6 +22,7 @@ class PackagesCard extends StatelessWidget {
     this.onScan,
     this.isScanning = false,
     this.onInstall,
+    this.onOpen,
   });
 
   Widget _buildIcon(SoftwarePackage pkg, bool isDark) {
@@ -327,20 +329,51 @@ class PackagesCard extends StatelessWidget {
               ),
             )
           else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                statusText,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: statusColor,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: 0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_rounded, size: 13, color: statusColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: statusColor,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                if (onOpen != null) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => onOpen!(pkg),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 13),
+                    label: Text(l10n.openApp),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0284C7),
+                      side: const BorderSide(color: Color(0xFF38BDF8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                  ),
+                ],
+              ],
             ),
         ],
       ),

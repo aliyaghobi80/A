@@ -13,7 +13,7 @@ if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
 from collector import collect_all_system_info
-from packages.manager import scan_packages, install_package, get_package_icon_path
+from packages.manager import scan_packages, install_package, open_package, get_package_icon_path
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +173,40 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             with _cache_lock:
                 _cached_data = None
 
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/packages/open":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+
+            pkg_id = (
+                payload.get("package_id")
+                or payload.get("id")
+                or payload.get("relative_path")
+                or payload.get("filename")
+                or payload.get("name")
+                or ""
+            )
+            if not pkg_id:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
+                self.end_headers()
+                resp = {"success": False, "message": "Missing 'package_id' in request body."}
+                self.wfile.write(json.dumps(resp).encode("utf-8"))
+                return
+
+            logger.info(f"Opening installed package: {pkg_id}")
+            result = open_package(pkg_id)
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()

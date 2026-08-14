@@ -179,6 +179,8 @@ abstract class AppLocalizations {
   String get noSoftwareConfigured;
   String get install;
   String get installing;
+  String get openApp;
+  bool get isRtl;
   String get confirmInstallTitle;
   String confirmInstallMessage(String name);
   String get availableToInstall;

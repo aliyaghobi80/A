@@ -73,6 +73,7 @@ class AdvancedModeView extends StatelessWidget {
                     softwareCtrl.installPackageInteractive(context, pkg);
                   }
                 },
+                onOpen: (pkg) => softwareCtrl.openInstalledApp(context, pkg),
               );
             });
 

@@ -1084,31 +1084,55 @@ class SimpleModeView extends StatelessWidget {
               ),
             )
           else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: statusColor.withValues(alpha: 0.35),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle_rounded, size: 15, color: statusColor),
-                  const SizedBox(width: 6),
-                  Text(
-                    l10n.installed,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: statusColor,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: 0.35),
+                      width: 1,
                     ),
                   ),
-                ],
-              ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_rounded, size: 15, color: statusColor),
+                      const SizedBox(width: 6),
+                      Text(
+                        l10n.installed,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: statusColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => softwareCtrl.openInstalledApp(context, pkg),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 14),
+                  label: Text(
+                    l10n.openApp,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                    foregroundColor: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    side: BorderSide(
+                      color: isDark ? const Color(0xFF38BDF8).withValues(alpha: 0.35) : const Color(0xFF0284C7).withValues(alpha: 0.35),
+                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
             ),
         ],
       ),
