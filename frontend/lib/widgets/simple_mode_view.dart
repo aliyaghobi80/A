@@ -36,6 +36,10 @@ class SimpleModeView extends StatelessWidget {
         // 1. Full System QC Summary Banner (Top)
         const QcSummaryBanner(),
 
+        // 1.5 Quick System Summary Strip (Compact one-liner)
+        _buildSystemSummaryStrip(context, info, isDark, l10n, systemCtrl),
+        const SizedBox(height: 14),
+
         // 2. Hardware Section Header with 1-click Copy
         _buildSectionHeader(
           context: context,
@@ -820,6 +824,190 @@ class SimpleModeView extends StatelessWidget {
   }
 
 
+
+  Widget _buildSystemSummaryStrip(
+    BuildContext context,
+    SystemInfo info,
+    bool isDark,
+    AppLocalizations l10n,
+    SystemInfoController systemCtrl,
+  ) {
+    // Determine device type: laptop vs desktop
+    final isLaptop = info.driverSummary.recommendations.isLaptop ||
+        info.system.model.toLowerCase().contains('laptop') ||
+        info.system.model.toLowerCase().contains('notebook') ||
+        info.battery.hasBattery;
+
+    // Build compact summary parts
+    final parts = <String>[];
+
+    // 1) Device identifier (brand + model for laptop, motherboard for desktop)
+    if (isLaptop) {
+      final sysModel = info.system.model != 'Not available' ? info.system.model : '';
+      final sysMfg = info.system.manufacturer != 'Not available' ? info.system.manufacturer : '';
+      if (sysModel.isNotEmpty) {
+        // If model already contains manufacturer name, just use model
+        if (sysModel.toLowerCase().contains(sysMfg.toLowerCase()) || sysMfg.isEmpty) {
+          parts.add(sysModel);
+        } else {
+          parts.add('$sysMfg $sysModel');
+        }
+      } else if (sysMfg.isNotEmpty) {
+        parts.add(sysMfg);
+      }
+    } else {
+      // Desktop: motherboard brand + model
+      final mbModel = info.motherboard.model != 'Not available' ? info.motherboard.model : '';
+      final mbMfg = info.motherboard.manufacturer != 'Not available' ? info.motherboard.manufacturer : '';
+      if (mbModel.isNotEmpty) {
+        if (mbModel.toLowerCase().contains(mbMfg.toLowerCase()) || mbMfg.isEmpty) {
+          parts.add(mbModel);
+        } else {
+          parts.add('$mbMfg $mbModel');
+        }
+      } else if (mbMfg.isNotEmpty) {
+        parts.add(mbMfg);
+      }
+    }
+
+    // 2) CPU short name (trim to essentials)
+    if (info.cpu.name != 'Not available') {
+      var cpuShort = info.cpu.name;
+      // Shorten common CPU prefixes for compact display
+      cpuShort = cpuShort.replaceAll(RegExp(r'\(R\)|\(TM\)', caseSensitive: false), '');
+      cpuShort = cpuShort.replaceAll(RegExp(r'\s+'), ' ').trim();
+      // Remove trailing "CPU @ X.XXGHz" if present for brevity
+      cpuShort = cpuShort.replaceAll(RegExp(r'\s*CPU\s*@.*$', caseSensitive: false), '');
+      cpuShort = cpuShort.trim();
+      parts.add(cpuShort);
+    }
+
+    // 3) RAM total
+    if (info.ram.totalDisplay != 'Not available') {
+      parts.add(info.ram.totalDisplay);
+    }
+
+    // 4) Storage summary (total capacity of all drives)
+    if (info.storage.isNotEmpty) {
+      final storageTexts = info.storage.map((d) {
+        final cap = d.capacityDisplay != 'Not available' ? d.capacityDisplay : '';
+        final type = d.type != 'Not available' && d.type != 'Storage' ? d.type : '';
+        return '$cap $type'.trim();
+      }).where((s) => s.isNotEmpty).toList();
+      if (storageTexts.isNotEmpty) {
+        parts.add(storageTexts.join(' + '));
+      }
+    }
+
+    // 5) GPU (dedicated only if available, skip integrated for desktop summary)
+    if (info.gpu.isNotEmpty) {
+      var gpuName = info.gpu.first.name;
+      gpuName = gpuName.replaceAll(RegExp(r'\(R\)|\(TM\)', caseSensitive: false), '');
+      gpuName = gpuName.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final vram = info.gpu.first.vramDisplay != 'Not available' ? ' ${info.gpu.first.vramDisplay}' : '';
+      parts.add('$gpuName$vram');
+    }
+
+    final summaryText = parts.join('  •  ');
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF0F1B32), const Color(0xFF152240), const Color(0xFF1A2A4E)]
+              : [const Color(0xFFF0F4FF), const Color(0xFFE8EDFA), const Color(0xFFE0E8F8)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? const Color(0xFF253B66) : const Color(0xFFBFCFE8),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Device type icon
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFF3B82F6).withValues(alpha: isDark ? 0.2 : 0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
+                width: 0.8,
+              ),
+            ),
+            child: Icon(
+              isLaptop ? Icons.laptop_mac_rounded : Icons.desktop_windows_rounded,
+              size: 20,
+              color: const Color(0xFF3B82F6),
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Summary text
+          Expanded(
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                summaryText,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                  letterSpacing: -0.2,
+                  height: 1.4,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Copy button
+          Tooltip(
+            message: l10n.isPersian ? 'کپی خلاصه مشخصات' : 'Copy Summary',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => systemCtrl.copyToClipboard(
+                context,
+                summaryText,
+                '${l10n.copiedToClipboard}: ${l10n.isPersian ? "خلاصه مشخصات" : "System Summary"}',
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withValues(alpha: isDark ? 0.15 : 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.25),
+                    width: 0.8,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.copy_rounded,
+                  size: 15,
+                  color: Color(0xFF3B82F6),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSectionHeader({
     required BuildContext context,
