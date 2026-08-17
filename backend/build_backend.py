@@ -73,6 +73,10 @@ def build_backend(output_dir: str = None):
         f"--specpath={output_dir}",
     ]
 
+    ico_path = os.path.join(root_dir, "installer", "app_icon.ico")
+    if os.path.exists(ico_path):
+        cmd.append(f"--icon={ico_path}")
+
     for imp in hidden_imports:
         cmd.extend(["--hidden-import", imp])
 
