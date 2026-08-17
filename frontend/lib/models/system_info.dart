@@ -488,6 +488,7 @@ class CpuInfo {
   final dynamic threads;
   final int? maxClockMhz;
   final String maxClockDisplay;
+  final String serial;
 
   CpuInfo({
     required this.name,
@@ -496,6 +497,7 @@ class CpuInfo {
     required this.threads,
     this.maxClockMhz,
     required this.maxClockDisplay,
+    this.serial = 'Not available',
   });
 
   factory CpuInfo.fromJson(Map<String, dynamic> json) {
@@ -506,6 +508,7 @@ class CpuInfo {
       threads: json['threads'] ?? 'Not available',
       maxClockMhz: json['max_clock_mhz'] as int?,
       maxClockDisplay: json['max_clock_display'] ?? 'Not available',
+      serial: json['serial'] ?? 'Not available',
     );
   }
 
@@ -584,6 +587,7 @@ class RamModule {
   final String type;
   final String manufacturer;
   final String partNumber;
+  final String serial;
 
   RamModule({
     required this.slot,
@@ -594,6 +598,7 @@ class RamModule {
     required this.type,
     required this.manufacturer,
     required this.partNumber,
+    this.serial = 'Not available',
   });
 
   factory RamModule.fromJson(Map<String, dynamic> json) {
@@ -606,6 +611,7 @@ class RamModule {
       type: json['type'] ?? 'RAM',
       manufacturer: json['manufacturer'] ?? 'Not available',
       partNumber: json['part_number'] ?? 'Not available',
+      serial: json['serial'] ?? 'Not available',
     );
   }
 }
@@ -701,11 +707,13 @@ class SystemMetaInfo {
   final String computerName;
   final String manufacturer;
   final String model;
+  final String serial;
 
   SystemMetaInfo({
     required this.computerName,
     required this.manufacturer,
     required this.model,
+    this.serial = 'Not available',
   });
 
   factory SystemMetaInfo.fromJson(Map<String, dynamic> json) {
@@ -713,6 +721,7 @@ class SystemMetaInfo {
       computerName: json['computer_name'] ?? 'Not available',
       manufacturer: json['manufacturer'] ?? 'Not available',
       model: json['model'] ?? 'Not available',
+      serial: json['serial'] ?? 'Not available',
     );
   }
 }
@@ -721,11 +730,13 @@ class BiosInfo {
   final String manufacturer;
   final String version;
   final String date;
+  final String serial;
 
   BiosInfo({
     required this.manufacturer,
     required this.version,
     required this.date,
+    this.serial = 'Not available',
   });
 
   factory BiosInfo.fromJson(Map<String, dynamic> json) {
@@ -733,6 +744,7 @@ class BiosInfo {
       manufacturer: json['manufacturer'] ?? 'Not available',
       version: json['version'] ?? 'Not available',
       date: json['date'] ?? 'Not available',
+      serial: json['serial'] ?? 'Not available',
     );
   }
 }

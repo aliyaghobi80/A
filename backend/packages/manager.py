@@ -801,60 +801,36 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
     launched = False
     launch_err = ""
 
-    # Method 1: Win32 ShellExecuteW with verb 'runas' (Triggers Windows UAC & Run as Administrator)
+    # Win32 ShellExecuteW with verb 'runas' (Triggers Windows UAC & Run as Administrator)
     try:
         ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", abs_path, "", working_dir, 1)
         if ret > 32:
             launched = True
             logger.info(f"ShellExecuteW runas successful (code {ret}) for {abs_path}")
         else:
-            launch_err = f"ShellExecute error code: {ret}"
+            last_err = ctypes.GetLastError()
+            logger.info(f"ShellExecuteW returned code {ret}, GetLastError: {last_err}")
+            # If user clicked "No" on UAC, Windows returns SE_ERR_ACCESSDENIED (5) or ERROR_CANCELLED (1223)
+            if ret == 5 or last_err == 1223:
+                logger.info(f"User cancelled UAC elevation prompt for {abs_path}")
+                return {
+                    "success": False,
+                    "cancelled": True,
+                    "launched": False,
+                    "package_id": target_pkg.get("id"),
+                    "name": target_pkg.get("name"),
+                    "message": "عملیات نصب توسط کاربر لغو شد.",
+                    "exit_code": 1223,
+                }
+            launch_err = f"ShellExecute error code: {ret} (GetLastError: {last_err})"
     except Exception as e:
         launch_err = str(e)
         logger.warning(f"ShellExecuteW runas exception: {e}")
 
-    # Method 2: os.startfile with 'runas'
-    if not launched:
-        try:
-            os.startfile(abs_path, "runas")
-            launched = True
-            logger.info(f"os.startfile runas successful for {abs_path}")
-        except Exception as e:
-            launch_err = str(e)
-            logger.warning(f"os.startfile runas exception: {e}")
-
-    # Method 3: PowerShell Start-Process -Verb RunAs
-    if not launched:
-        try:
-            ps_cmd = f'Start-Process -FilePath "{abs_path}" -WorkingDirectory "{working_dir}" -Verb RunAs'
-            proc = subprocess.run(
-                ["powershell.exe", "-NoProfile", "-Command", ps_cmd],
-                capture_output=True,
-                timeout=5,
-                **get_hidden_subprocess_kwargs()
-            )
-            if proc.returncode == 0:
-                launched = True
-                logger.info(f"PowerShell Start-Process -Verb RunAs successful for {abs_path}")
-            else:
-                launch_err = proc.stderr.strip() or f"PowerShell exit code: {proc.returncode}"
-        except Exception as e:
-            launch_err = str(e)
-            logger.warning(f"PowerShell RunAs exception: {e}")
-
-    # Method 4: Fallback standard subprocess.Popen
-    if not launched:
-        try:
-            subprocess.Popen([abs_path], cwd=working_dir, **get_hidden_subprocess_kwargs())
-            launched = True
-            logger.info(f"Standard subprocess.Popen successful for {abs_path}")
-        except Exception as e:
-            launch_err = str(e)
-            logger.warning(f"Standard subprocess.Popen exception: {e}")
-
     if launched:
         return {
             "success": True,
+            "cancelled": False,
             "launched": True,
             "package_id": target_pkg.get("id"),
             "name": target_pkg.get("name"),
@@ -863,6 +839,7 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
     else:
         return {
             "success": False,
+            "cancelled": False,
             "launched": False,
             "message": f"خطا در اجرای برنامه با دسترسی مدیر: {launch_err}",
             "exit_code": -3,

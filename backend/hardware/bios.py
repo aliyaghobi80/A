@@ -38,13 +38,14 @@ def get_bios_info() -> Dict[str, Any]:
     bios_result = {
         "manufacturer": "Not available",
         "version": "Not available",
-        "date": "Not available"
+        "date": "Not available",
+        "serial": "Not available"
     }
 
     try:
         script = (
             "Get-CimInstance Win32_BIOS | "
-            "Select-Object Manufacturer, SMBIOSBIOSVersion, ReleaseDate, Version | "
+            "Select-Object Manufacturer, SMBIOSBIOSVersion, ReleaseDate, Version, SerialNumber | "
             "ConvertTo-Json"
         )
         data = run_powershell_json(script)
@@ -61,6 +62,9 @@ def get_bios_info() -> Dict[str, Any]:
 
             if data.get("ReleaseDate"):
                 bios_result["date"] = parse_wmi_date(data["ReleaseDate"])
+
+            if data.get("SerialNumber"):
+                bios_result["serial"] = clean_string(data["SerialNumber"])
     except Exception as e:
         logger.error(f"Error querying Win32_BIOS: {e}")
 

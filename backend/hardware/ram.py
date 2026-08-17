@@ -66,7 +66,7 @@ def get_ram_info() -> Dict[str, Any]:
     try:
         script = (
             "Get-CimInstance Win32_PhysicalMemory | "
-            "Select-Object Capacity, Speed, ConfiguredClockSpeed, Manufacturer, PartNumber, DeviceLocator, BankLabel, SMBIOSMemoryType | "
+            "Select-Object Capacity, Speed, ConfiguredClockSpeed, Manufacturer, PartNumber, SerialNumber, DeviceLocator, BankLabel, SMBIOSMemoryType | "
             "ConvertTo-Json"
         )
         data = run_powershell_json(script)
@@ -114,6 +114,7 @@ def get_ram_info() -> Dict[str, Any]:
             slot_locator = clean_string(mod.get("DeviceLocator"), default=f"Slot {idx + 1}")
             manufacturer = clean_string(mod.get("Manufacturer"), default="Not available")
             part_number = clean_string(mod.get("PartNumber"), default="Not available")
+            serial_number = clean_string(mod.get("SerialNumber"), default="Not available")
 
             modules_list.append({
                 "slot": slot_locator,
@@ -123,7 +124,8 @@ def get_ram_info() -> Dict[str, Any]:
                 "speed_display": speed_str,
                 "type": type_str,
                 "manufacturer": manufacturer,
-                "part_number": part_number
+                "part_number": part_number,
+                "serial": serial_number,
             })
 
         if total_bytes > 0:

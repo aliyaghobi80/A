@@ -67,6 +67,7 @@ class SimpleModeView extends StatelessWidget {
           builder: (context, constraints) {
             final isWide = constraints.maxWidth > 850;
 
+            final cpuSerial = (info.cpu.serial != 'Not available' && info.cpu.serial != 'None') ? info.cpu.serial : null;
             final cardCpu = _buildProminentSpecCard(
               context: context,
               stepNumber: 1,
@@ -80,10 +81,14 @@ class SimpleModeView extends StatelessWidget {
                 '${info.cpu.threads} ${l10n.isPersian ? 'رشته' : 'Threads'}',
                 if (info.cpu.maxClockDisplay != 'Not available') info.cpu.maxClockDisplay,
               ],
+              serialNumber: cpuSerial,
               copyValue: info.cpu.name,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
             );
 
+            final ramSerial = (info.ram.modules.isNotEmpty && info.ram.modules.first.serial != 'Not available' && info.ram.modules.first.serial != '00000000')
+                ? info.ram.modules.first.serial
+                : (info.ram.modules.isNotEmpty && info.ram.modules.first.partNumber != 'Not available' ? info.ram.modules.first.partNumber : null);
             final cardRam = _buildProminentSpecCard(
               context: context,
               stepNumber: 2,
@@ -99,6 +104,7 @@ class SimpleModeView extends StatelessWidget {
                 if (info.ram.speedDisplay != 'Not available') info.ram.speedDisplay,
                 if (info.ram.modules.isNotEmpty && info.ram.modules.first.type.isNotEmpty) info.ram.modules.first.type,
               ],
+              serialNumber: ramSerial,
               copyValue: info.ram.totalDisplay,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
             );
@@ -124,6 +130,10 @@ class SimpleModeView extends StatelessWidget {
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
             );
 
+            final mbSerial = (info.motherboard.serial != 'Not available' && info.motherboard.serial != 'Default string' && info.motherboard.serial.isNotEmpty)
+                ? info.motherboard.serial
+                : ((info.system.serial != 'Not available' && info.system.serial != 'Default string' && info.system.serial.isNotEmpty) ? info.system.serial : null);
+
             final cardMotherboard = _buildProminentSpecCard(
               context: context,
               stepNumber: 4,
@@ -136,6 +146,7 @@ class SimpleModeView extends StatelessWidget {
                 if (info.bios.manufacturer != 'Not available') 'BIOS: ${info.bios.manufacturer}',
                 if (info.bios.version != 'Not available') info.bios.version,
               ],
+              serialNumber: mbSerial,
               copyValue: info.motherboard.model,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
             );
@@ -147,7 +158,7 @@ class SimpleModeView extends StatelessWidget {
               icon: Icons.album_rounded,
               accentColor: const Color(0xFF06B6D4),
               primaryValue: '',
-              copyValue: info.storage.map((d) => '${d.capacityDisplay} ${d.type}').join(', '),
+              copyValue: info.storage.map((d) => '${d.capacityDisplay} ${d.type} ${d.serial}').join(', '),
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
               customContent: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,40 +173,100 @@ class SimpleModeView extends StatelessWidget {
                     )
                   else
                     ...info.storage.map((d) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6.0),
-                          child: Row(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF06B6D4).withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  d.capacityDisplay,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF06B6D4),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Directionality(
-                                  textDirection: TextDirection.ltr,
-                                  child: Text(
-                                    '${d.type} (${d.model})',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF06B6D4).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                    child: Text(
+                                      d.capacityDisplay,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF06B6D4),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Directionality(
+                                      textDirection: TextDirection.ltr,
+                                      child: Text(
+                                        '${d.type} (${d.model})',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (d.serial.isNotEmpty && d.serial != 'Not available' && d.serial != 'Default string') ...[
+                                const SizedBox(height: 3),
+                                InkWell(
+                                  onTap: () => systemCtrl.copyToClipboard(
+                                    context,
+                                    d.serial.trim(),
+                                    '${l10n.copiedToClipboard}: ${d.serial.trim()}',
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.qr_code_2_rounded, size: 11, color: Color(0xFF06B6D4)),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${l10n.isPersian ? "سریال:" : "S/N:"} ',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                          ),
+                                        ),
+                                        Directionality(
+                                          textDirection: TextDirection.ltr,
+                                          child: Text(
+                                            d.serial.trim(),
+                                            style: TextStyle(
+                                              fontFamily: 'Consolas',
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Icon(
+                                          Icons.copy_rounded,
+                                          size: 10,
+                                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
                         )),
@@ -785,6 +856,7 @@ class SimpleModeView extends StatelessWidget {
     required String primaryValue,
     String? secondaryValue,
     List<String>? specPills,
+    String? serialNumber,
     Widget? customContent,
     Widget? headerTrailing,
     Widget? actionWidget,
@@ -936,6 +1008,69 @@ class SimpleModeView extends StatelessWidget {
                     ),
                   ),
                 )).toList(),
+              ),
+            ],
+            if (serialNumber != null &&
+                serialNumber.isNotEmpty &&
+                serialNumber != 'Not available' &&
+                serialNumber != 'Default string' &&
+                serialNumber != 'None') ...[
+              const SizedBox(height: 10),
+              InkWell(
+                onTap: () => onCopy(serialNumber),
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.qr_code_2_rounded,
+                        size: 13,
+                        color: accentColor,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${l10n.isPersian ? "سریال:" : "S/N:"} ',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        ),
+                      ),
+                      Flexible(
+                        child: Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            serialNumber,
+                            style: TextStyle(
+                              fontFamily: 'Consolas',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.copy_rounded,
+                        size: 11,
+                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ],

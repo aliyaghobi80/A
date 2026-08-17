@@ -52,22 +52,25 @@ def get_windows_and_system_info() -> Dict[str, Any]:
     system_res = {
         "computer_name": clean_string(socket.gethostname(), default="Not available"),
         "manufacturer": "Not available",
-        "model": "Not available"
+        "model": "Not available",
+        "serial": "Not available",
     }
 
     reg_info = _get_registry_windows_version()
 
-    # Query OS & ComputerSystem
+    # Query OS, ComputerSystem & ComputerSystemProduct
     try:
         script = (
             "$os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture, CSName; "
             "$sys = Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model, CSName; "
-            "[PSCustomObject]@{ OS = $os; System = $sys } | ConvertTo-Json"
+            "$csp = Get-CimInstance Win32_ComputerSystemProduct | Select-Object IdentifyingNumber, UUID; "
+            "[PSCustomObject]@{ OS = $os; System = $sys; Product = $csp } | ConvertTo-Json"
         )
         data = run_powershell_json(script)
         if isinstance(data, dict):
             os_data = data.get("OS") or {}
             sys_data = data.get("System") or {}
+            csp_data = data.get("Product") or {}
 
             # OS Edition
             caption = os_data.get("Caption")
@@ -96,6 +99,8 @@ def get_windows_and_system_info() -> Dict[str, Any]:
                 system_res["manufacturer"] = clean_string(sys_data["Manufacturer"])
             if sys_data.get("Model"):
                 system_res["model"] = clean_string(sys_data["Model"])
+            if csp_data.get("IdentifyingNumber"):
+                system_res["serial"] = clean_string(csp_data["IdentifyingNumber"])
 
     except Exception as e:
         logger.error(f"Error querying Windows and System info: {e}")

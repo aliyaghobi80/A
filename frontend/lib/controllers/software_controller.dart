@@ -222,35 +222,40 @@ class SoftwareController extends GetxController {
       installingPackageId.value = targetId;
 
       try {
-        final targetPath = pkg.fullPath.isNotEmpty
-            ? pkg.fullPath
-            : (packagesDirectory.isNotEmpty
-                ? '$packagesDirectory\\${pkg.relativePath.replaceAll('/', '\\')}'
-                : pkg.relativePath);
-
-        // 1. Direct interactive foreground desktop launch via Windows cmd start
-        if (Platform.isWindows && targetPath.isNotEmpty) {
-          try {
-            await Process.run('cmd.exe', ['/c', 'start', '', targetPath], runInShell: true);
-          } catch (pe) {
-            debugPrint('[SoftwareController] Direct desktop start error: $pe');
-          }
-        }
-
-        // 2. Also notify backend API (which invokes ShellExecuteW runas)
         final res = await _apiService.installPackage(targetId);
+        final isCancelled = res['cancelled'] == true;
+        final isSuccess = res['success'] == true;
         final message = res['message'] as String? ?? '';
 
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(message.isNotEmpty ? message : 'پنجره نصب ${pkg.name} با دسترسی مدیر باز شد.'),
-            backgroundColor: const Color(0xFF2563EB),
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-        _startAutoDetectionPoll(pkg, scaffoldMessenger);
+        if (isCancelled) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text(message.isNotEmpty ? message : (l10n.isPersian ? 'عملیات نصب لغو شد.' : 'Installation cancelled.')),
+              backgroundColor: const Color(0xFF64748B),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else if (isSuccess) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text(message.isNotEmpty ? message : 'پنجره نصب ${pkg.name} با دسترسی مدیر باز شد.'),
+              backgroundColor: const Color(0xFF2563EB),
+              duration: const Duration(seconds: 4),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          _startAutoDetectionPoll(pkg, scaffoldMessenger);
+        } else {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text(message.isNotEmpty ? message : 'خطا در اجرای برنامه نصب.'),
+              backgroundColor: const Color(0xFFEF4444),
+              duration: const Duration(seconds: 4),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       } catch (e) {
         scaffoldMessenger.showSnackBar(
           SnackBar(

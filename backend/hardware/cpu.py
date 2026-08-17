@@ -61,12 +61,13 @@ def get_cpu_info() -> Dict[str, Any]:
         "threads": "Not available",
         "max_clock_mhz": None,
         "max_clock_display": "Not available",
+        "serial": "Not available",
     }
 
     try:
         script = (
             "Get-CimInstance Win32_Processor | "
-            "Select-Object Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed | "
+            "Select-Object Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, ProcessorId | "
             "ConvertTo-Json"
         )
         data = run_powershell_json(script)
@@ -91,6 +92,9 @@ def get_cpu_info() -> Dict[str, Any]:
             
         if primary.get("Manufacturer"):
             cpu_result["manufacturer"] = _normalize_manufacturer(primary["Manufacturer"])
+
+        if primary.get("ProcessorId"):
+            cpu_result["serial"] = clean_string(primary["ProcessorId"])
             
         if total_cores:
             cpu_result["cores"] = int(total_cores)
