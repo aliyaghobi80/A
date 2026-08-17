@@ -188,6 +188,12 @@ abstract class AppLocalizations {
   String get noPackagesFound;
   String installSuccess(String name);
   String installFailed(String name);
+  String get uninstall;
+  String get uninstalling;
+  String get confirmUninstallTitle;
+  String confirmUninstallMessage(String name);
+  String uninstallSuccess(String name);
+  String uninstallFailed(String name);
   String versionBadge(String ver);
 
   // File Requirements

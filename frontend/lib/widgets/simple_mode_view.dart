@@ -1874,7 +1874,7 @@ class SimpleModeView extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
@@ -1887,7 +1887,7 @@ class SimpleModeView extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.check_circle_rounded, size: 15, color: statusColor),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Text(
                         l10n.installed,
                         style: TextStyle(
@@ -1911,13 +1911,44 @@ class SimpleModeView extends StatelessWidget {
                     backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
                     foregroundColor: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     side: BorderSide(
                       color: isDark ? const Color(0xFF38BDF8).withValues(alpha: 0.35) : const Color(0xFF0284C7).withValues(alpha: 0.35),
                     ),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
+                const SizedBox(width: 8),
+                Obx(() {
+                  final isCurrentUninstall = softwareCtrl.isCurrentUninstalling(pkg);
+                  return Tooltip(
+                    message: l10n.isPersian ? 'حذف کامل برنامه از سیستم' : 'Completely uninstall from system',
+                    child: OutlinedButton.icon(
+                      onPressed: isCurrentUninstall ? null : () => softwareCtrl.uninstallPackageInteractive(context, pkg),
+                      icon: isCurrentUninstall
+                          ? const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 1.8, color: Color(0xFFEF4444)),
+                            )
+                          : const Icon(Icons.delete_outline_rounded, size: 14),
+                      label: Text(
+                        isCurrentUninstall ? l10n.uninstalling : l10n.uninstall,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFEF4444),
+                        side: BorderSide(
+                          color: const Color(0xFFEF4444).withValues(alpha: isDark ? 0.5 : 0.35),
+                          width: 1,
+                        ),
+                        backgroundColor: const Color(0xFFEF4444).withValues(alpha: isDark ? 0.1 : 0.05),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  );
+                }),
               ],
             ),
         ],

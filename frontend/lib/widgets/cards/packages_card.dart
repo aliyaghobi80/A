@@ -15,6 +15,7 @@ class PackagesCard extends StatelessWidget {
   final bool isScanning;
   final Function(String packageId, String name)? onInstall;
   final Function(SoftwarePackage pkg)? onOpen;
+  final Function(SoftwarePackage pkg)? onUninstall;
 
   const PackagesCard({
     super.key,
@@ -27,6 +28,7 @@ class PackagesCard extends StatelessWidget {
     this.isScanning = false,
     this.onInstall,
     this.onOpen,
+    this.onUninstall,
   });
 
   Widget _buildIcon(SoftwarePackage pkg, bool isDark) {
@@ -402,6 +404,21 @@ class PackagesCard extends StatelessWidget {
                       foregroundColor: const Color(0xFF0284C7),
                       side: const BorderSide(color: Color(0xFF38BDF8)),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                  ),
+                ],
+                if (onUninstall != null) ...[
+                  const SizedBox(width: 6),
+                  OutlinedButton.icon(
+                    onPressed: () => onUninstall!(pkg),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 13),
+                    label: Text(l10n.uninstall),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFEF4444),
+                      side: BorderSide(color: const Color(0xFFEF4444).withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                       textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                     ),

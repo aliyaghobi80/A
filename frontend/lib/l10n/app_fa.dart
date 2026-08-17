@@ -379,6 +379,24 @@ class AppLocalizationsFa implements AppLocalizations {
   String installFailed(String name) => 'خطا در اجرای نصب $name';
 
   @override
+  String get uninstall => 'حذف';
+
+  @override
+  String get uninstalling => 'در حال حذف...';
+
+  @override
+  String get confirmUninstallTitle => 'تأیید حذف نرم‌افزار';
+
+  @override
+  String confirmUninstallMessage(String name) => 'آیا مطمئنید که می‌خواهید $name را به‌طور کامل از سیستم حذف کنید؟';
+
+  @override
+  String uninstallSuccess(String name) => '$name با موفقیت حذف شد';
+
+  @override
+  String uninstallFailed(String name) => 'خطا در حذف $name';
+
+  @override
   String versionBadge(String ver) => 'نسخه $ver';
 
   // File Requirements

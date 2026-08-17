@@ -885,3 +885,140 @@ def open_package(target_identifier: str, custom_dir: Optional[str] = None) -> Di
     return {"success": False, "message": "مسیر فایل اجرایی نرم‌افزار نصب‌شده یافت نشد."}
 
 
+def uninstall_package(target_identifier: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Uninstalls an installed application using its Windows registry UninstallString.
+    Searches HKLM (64/32-bit) and HKCU for matching display name, then runs the
+    uninstaller with admin elevation via ShellExecuteW("runas").
+    """
+    # First, find the package name from our scanned packages
+    data = scan_packages(custom_dir)
+    target_pkg = None
+    target_id_clean = target_identifier.strip().replace("\\", "/").lower()
+
+    for pkg in data.get("packages", []):
+        p_id = pkg.get("id", "").lower()
+        p_rel = pkg.get("relative_path", "").lower()
+        p_file = pkg.get("filename", "").lower()
+        p_name = pkg.get("name", "").lower()
+        if target_id_clean in [p_id, p_rel, p_file, p_name]:
+            target_pkg = pkg
+            break
+
+    if not target_pkg:
+        return {"success": False, "message": f"بسته {target_identifier} یافت نشد."}
+
+    pkg_name = target_pkg.get("name", target_identifier)
+
+    if not target_pkg.get("is_installed", False):
+        return {"success": False, "message": f"{pkg_name} روی سیستم نصب نیست."}
+
+    # Search registry for UninstallString matching this app
+    uninstall_cmd = _find_uninstall_string(pkg_name)
+
+    if not uninstall_cmd:
+        return {
+            "success": False,
+            "message": f"رشته حذف (UninstallString) برای {pkg_name} در رجیستری ویندوز یافت نشد.",
+        }
+
+    logger.info(f"Uninstalling {pkg_name} via: {uninstall_cmd}")
+
+    try:
+        # Parse uninstall command - it may be an exe with args, or msiexec
+        uninstall_cmd_stripped = uninstall_cmd.strip()
+
+        # Handle quoted paths: "C:\path\unins000.exe" /SILENT
+        if uninstall_cmd_stripped.startswith('"'):
+            end_quote = uninstall_cmd_stripped.index('"', 1)
+            exe_path = uninstall_cmd_stripped[1:end_quote]
+            args = uninstall_cmd_stripped[end_quote + 1:].strip()
+        else:
+            parts = uninstall_cmd_stripped.split(" ", 1)
+            exe_path = parts[0]
+            args = parts[1] if len(parts) > 1 else ""
+
+        # For MsiExec.exe, pass the full args
+        if exe_path.lower().endswith("msiexec.exe") or "msiexec" in exe_path.lower():
+            exe_path = "msiexec.exe"
+            # Keep original args (e.g. /X{GUID})
+
+        work_dir = os.path.dirname(exe_path) if os.path.exists(os.path.dirname(exe_path)) else ""
+
+        ret = ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", exe_path, args, work_dir, 1
+        )
+
+        if ret > 32:
+            return {
+                "success": True,
+                "message": f"حذف‌کننده {pkg_name} با موفقیت اجرا شد. لطفاً منتظر اتمام فرآیند حذف بمانید.",
+            }
+        else:
+            err = ctypes.GetLastError()
+            if err == 1223 or ret == 5:
+                return {
+                    "success": False,
+                    "cancelled": True,
+                    "message": f"عملیات حذف {pkg_name} توسط کاربر لغو شد.",
+                }
+            return {
+                "success": False,
+                "message": f"خطا در اجرای حذف‌کننده {pkg_name} (کد: {ret})",
+            }
+
+    except Exception as e:
+        logger.error(f"Uninstall error for {pkg_name}: {e}")
+        return {
+            "success": False,
+            "message": f"خطا در حذف {pkg_name}: {str(e)}",
+        }
+
+
+def _find_uninstall_string(app_display_name: str) -> Optional[str]:
+    """
+    Search Windows registry for UninstallString matching the given display name.
+    Checks QuietUninstallString first, then UninstallString.
+    """
+    roots = [
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", winreg.KEY_WOW64_64KEY),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", winreg.KEY_WOW64_32KEY),
+        (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", 0),
+    ]
+
+    target_lower = app_display_name.lower().strip()
+
+    for root_hive, subkey, flags in roots:
+        try:
+            with winreg.OpenKey(root_hive, subkey, 0, winreg.KEY_READ | flags) as key:
+                num_subkeys, _, _ = winreg.QueryInfoKey(key)
+                for i in range(num_subkeys):
+                    try:
+                        kname = winreg.EnumKey(key, i)
+                        with winreg.OpenKey(key, kname) as app_key:
+                            def get_val(vname):
+                                try:
+                                    v, _ = winreg.QueryValueEx(app_key, vname)
+                                    return str(v).strip()
+                                except Exception:
+                                    return ""
+
+                            dname = get_val("DisplayName")
+                            if not dname:
+                                continue
+
+                            # Match by normalized name
+                            if dname.lower().strip() == target_lower:
+                                # Prefer QuietUninstallString for silent removal
+                                quiet = get_val("QuietUninstallString")
+                                if quiet:
+                                    return quiet
+                                uninstall = get_val("UninstallString")
+                                if uninstall:
+                                    return uninstall
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    return None

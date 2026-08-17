@@ -230,6 +230,7 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
                   }
                 },
                 onOpen: (pkg) => softwareCtrl.openInstalledApp(context, pkg),
+                onUninstall: (pkg) => softwareCtrl.uninstallPackageInteractive(context, pkg),
               );
             });
 

@@ -379,6 +379,24 @@ class AppLocalizationsEn implements AppLocalizations {
   String installFailed(String name) => 'Failed to install $name';
 
   @override
+  String get uninstall => 'Uninstall';
+
+  @override
+  String get uninstalling => 'Uninstalling...';
+
+  @override
+  String get confirmUninstallTitle => 'Confirm Uninstallation';
+
+  @override
+  String confirmUninstallMessage(String name) => 'Are you sure you want to completely uninstall $name from this system?';
+
+  @override
+  String uninstallSuccess(String name) => '$name uninstalled successfully';
+
+  @override
+  String uninstallFailed(String name) => 'Failed to uninstall $name';
+
+  @override
   String versionBadge(String ver) => 'v$ver';
 
   // File Requirements

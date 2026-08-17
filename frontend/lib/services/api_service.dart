@@ -147,6 +147,36 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> uninstallPackage(String packageId) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {
+        'success': false,
+        'message': 'Backend service is not running.',
+      };
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/packages/uninstall');
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'package_id': packageId}),
+          )
+          .timeout(const Duration(minutes: 5));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] uninstallPackage error: $e');
+      return {
+        'success': false,
+        'message': 'Error executing package uninstaller: $e',
+      };
+    }
+  }
+
   Future<ActivationResult> activateWindows() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
