@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../controllers/activation_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
+import '../common/hardware_illustrations.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
 
@@ -33,6 +34,8 @@ class WindowsCard extends StatelessWidget {
     return CardWrapper(
       icon: Icons.window_rounded,
       title: l10n.windowsInformation,
+      summarySubtitle: '${windows.edition} (${windows.architecture}) • $statusLabel',
+      illustration: const WindowsIllustration(),
       iconColor: const Color(0xFF0284C7),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

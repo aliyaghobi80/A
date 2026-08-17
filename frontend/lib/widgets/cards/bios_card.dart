@@ -16,6 +16,7 @@ class BiosCard extends StatelessWidget {
     return CardWrapper(
       icon: Icons.settings_input_component_rounded,
       title: l10n.biosUefi,
+      summarySubtitle: '${bios.manufacturer} • v${bios.version}',
       iconColor: const Color(0xFFEC4899),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

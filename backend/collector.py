@@ -76,6 +76,30 @@ def collect_all_system_info() -> Dict[str, Any]:
         off_act_data = safe_get(future_off_act, {"installed": False, "activated": False, "status_text": "Not available"}, "Office Activation")
         battery_data = safe_get(future_battery, {"has_battery": False, "is_desktop": True}, "Battery")
 
+    # Generate Smart Driver Recommendations for Markazi Techs
+    try:
+        from drivers.recommendations import generate_system_driver_recommendations, generate_driver_recommendation_for_item, _detect_brand_and_model
+        dev_info = _detect_brand_and_model({
+            "system": win_sys.get("system", {}),
+            "motherboard": motherboard,
+            "battery": battery_data,
+            "gpu": gpu,
+        })
+        driver_items = drivers_data.get("drivers", [])
+        for d in driver_items:
+            d["recommendation"] = generate_driver_recommendation_for_item(d.get("name", ""), d.get("category", ""), dev_info)
+
+        recs = generate_system_driver_recommendations({
+            "system": win_sys.get("system", {}),
+            "motherboard": motherboard,
+            "battery": battery_data,
+            "gpu": gpu,
+        }, driver_items)
+        if "driver_summary" in drivers_data and isinstance(drivers_data["driver_summary"], dict):
+            drivers_data["driver_summary"]["recommendations"] = recs
+    except Exception as e:
+        logger.debug(f"Driver recommendations generation failed: {e}")
+
     elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
     return {

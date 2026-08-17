@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../controllers/activation_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
+import '../common/hardware_illustrations.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
 
@@ -32,9 +33,13 @@ class OfficeCard extends StatelessWidget {
         ? l10n.notInstalled
         : (isActivated ? l10n.activated : l10n.notActivated);
 
+    final summarySub = isInstalled ? '${office.product} • $statusLabel' : l10n.notInstalled;
+
     return CardWrapper(
       icon: Icons.business_center_rounded,
       title: l10n.microsoftOffice,
+      summarySubtitle: summarySub,
+      illustration: const OfficeIllustration(),
       iconColor: const Color(0xFFD97706),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

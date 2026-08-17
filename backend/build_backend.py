@@ -53,6 +53,7 @@ def build_backend(output_dir: str = None):
         "software.office",
         "files.checker",
         "drivers.checker",
+        "drivers.recommendations",
         "activation.windows_activation",
         "activation.office_activation",
         "activation.activation_tools",

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 
+import 'card_wrapper.dart';
+
 class PackagesCard extends StatelessWidget {
   final List<SoftwarePackage> packages;
   final PackageSummary summary;
@@ -64,100 +66,61 @@ class PackagesCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF131D33) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0xFF22304E) : const Color(0xFFE2E8F0),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
+    return CardWrapper(
+      icon: Icons.apps_rounded,
+      title: l10n.availableSoftware,
+      summarySubtitle: '${summary.installedPackages} / ${summary.totalPackages} ${l10n.installed}',
+      iconColor: const Color(0xFF6366F1),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (onChangeDirectory != null) ...[
+            OutlinedButton.icon(
+              onPressed: isScanning ? null : onChangeDirectory,
+              icon: const Icon(Icons.folder_open_rounded, size: 14),
+              label: Text(l10n.isPersian ? 'پوشه' : 'Folder'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF6366F1),
+                side: const BorderSide(color: Color(0xFF6366F1)),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          if (onScan != null)
+            ElevatedButton.icon(
+              onPressed: isScanning ? null : onScan,
+              icon: isScanning
+                  ? const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.refresh_rounded, size: 14),
+              label: Text(isScanning ? l10n.scanning : l10n.scan),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+            ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withValues(alpha: isDark ? 0.2 : 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.apps_rounded,
-                    color: Color(0xFF6366F1),
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    l10n.availableSoftware,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                    ),
-                  ),
-                ),
-                if (onChangeDirectory != null) ...[
-                  OutlinedButton.icon(
-                    onPressed: isScanning ? null : onChangeDirectory,
-                    icon: const Icon(Icons.folder_open_rounded, size: 15),
-                    label: Text(l10n.isPersian ? 'تغییر پوشه' : 'Change Folder'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF6366F1),
-                      side: const BorderSide(color: Color(0xFF6366F1)),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                if (onScan != null)
-                  ElevatedButton.icon(
-                    onPressed: isScanning ? null : onScan,
-                    icon: isScanning
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.refresh_rounded, size: 16),
-                    label: Text(isScanning ? l10n.scanning : l10n.scan),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-              ],
-            ),
-
-            if (packagesDirectory.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              InkWell(
-                onTap: onChangeDirectory,
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (packagesDirectory.isNotEmpty) ...[
+            InkWell(
+              onTap: onChangeDirectory,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
@@ -258,8 +221,7 @@ class PackagesCard extends StatelessWidget {
               ...packages.map((pkg) => _buildPackageRow(context, pkg, isDark, l10n)),
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildPackageRow(BuildContext context, SoftwarePackage pkg, bool isDark, AppLocalizations l10n) {

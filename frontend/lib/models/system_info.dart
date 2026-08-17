@@ -105,6 +105,7 @@ class DriverItem {
   final String instanceId;
   final String manufacturer;
   final String pnpClass;
+  final DriverRecommendation? recommendation;
 
   DriverItem({
     required this.id,
@@ -122,6 +123,7 @@ class DriverItem {
     required this.instanceId,
     this.manufacturer = 'Unknown',
     this.pnpClass = '',
+    this.recommendation,
   });
 
   factory DriverItem.fromJson(Map<String, dynamic> json) {
@@ -141,8 +143,110 @@ class DriverItem {
       instanceId: json['instance_id'] ?? 'Not available',
       manufacturer: json['manufacturer'] ?? 'Unknown',
       pnpClass: json['pnp_class'] ?? '',
+      recommendation: json['recommendation'] is Map<String, dynamic>
+          ? DriverRecommendation.fromJson(json['recommendation'] as Map<String, dynamic>)
+          : null,
     );
   }
+}
+
+class DriverRecommendation {
+  final String portalName;
+  final String portalNameFa;
+  final String portalUrl;
+  final String searchQuery;
+  final String guideFa;
+  final String guideEn;
+
+  DriverRecommendation({
+    required this.portalName,
+    required this.portalNameFa,
+    required this.portalUrl,
+    required this.searchQuery,
+    required this.guideFa,
+    required this.guideEn,
+  });
+
+  factory DriverRecommendation.fromJson(Map<String, dynamic> json) {
+    return DriverRecommendation(
+      portalName: json['portal_name'] ?? '',
+      portalNameFa: json['portal_name_fa'] ?? '',
+      portalUrl: json['portal_url'] ?? '',
+      searchQuery: json['search_query'] ?? '',
+      guideFa: json['guide_fa'] ?? '',
+      guideEn: json['guide_en'] ?? '',
+    );
+  }
+}
+
+class SystemDriverRecommendations {
+  final String brand;
+  final String brandFa;
+  final String model;
+  final String deviceTypeFa;
+  final bool isLaptop;
+  final String portalName;
+  final String portalNameFa;
+  final String portalUrl;
+  final String mainSearchQuery;
+  final int missingCount;
+  final bool hasMissing;
+  final List<String> installationOrderFa;
+  final List<String> installationOrderEn;
+  final String techTipsFa;
+
+  SystemDriverRecommendations({
+    required this.brand,
+    required this.brandFa,
+    required this.model,
+    required this.deviceTypeFa,
+    required this.isLaptop,
+    required this.portalName,
+    required this.portalNameFa,
+    required this.portalUrl,
+    required this.mainSearchQuery,
+    required this.missingCount,
+    required this.hasMissing,
+    required this.installationOrderFa,
+    required this.installationOrderEn,
+    required this.techTipsFa,
+  });
+
+  factory SystemDriverRecommendations.fromJson(Map<String, dynamic> json) {
+    return SystemDriverRecommendations(
+      brand: json['brand'] ?? '',
+      brandFa: json['brand_fa'] ?? '',
+      model: json['model'] ?? '',
+      deviceTypeFa: json['device_type_fa'] ?? '',
+      isLaptop: json['is_laptop'] ?? false,
+      portalName: json['portal_name'] ?? '',
+      portalNameFa: json['portal_name_fa'] ?? '',
+      portalUrl: json['portal_url'] ?? '',
+      mainSearchQuery: json['main_search_query'] ?? '',
+      missingCount: json['missing_count'] as int? ?? 0,
+      hasMissing: json['has_missing'] ?? false,
+      installationOrderFa: (json['installation_order_fa'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      installationOrderEn: (json['installation_order_en'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      techTipsFa: json['tech_tips_fa'] ?? '',
+    );
+  }
+
+  factory SystemDriverRecommendations.empty() => SystemDriverRecommendations(
+        brand: '',
+        brandFa: '',
+        model: '',
+        deviceTypeFa: '',
+        isLaptop: false,
+        portalName: '',
+        portalNameFa: '',
+        portalUrl: '',
+        mainSearchQuery: '',
+        missingCount: 0,
+        hasMissing: false,
+        installationOrderFa: [],
+        installationOrderEn: [],
+        techTipsFa: '',
+      );
 }
 
 class DriverSummary {
@@ -156,6 +260,7 @@ class DriverSummary {
   final bool hasProblem;
   final String statusText;
   final List<DriverItem> missingDevices;
+  final SystemDriverRecommendations recommendations;
 
   DriverSummary({
     required this.healthyCount,
@@ -168,7 +273,8 @@ class DriverSummary {
     required this.hasProblem,
     required this.statusText,
     this.missingDevices = const [],
-  });
+    SystemDriverRecommendations? recommendations,
+  }) : recommendations = recommendations ?? SystemDriverRecommendations.empty();
 
   factory DriverSummary.empty() => DriverSummary(
         healthyCount: 0,
@@ -181,6 +287,7 @@ class DriverSummary {
         hasProblem: false,
         statusText: 'Checking',
         missingDevices: [],
+        recommendations: SystemDriverRecommendations.empty(),
       );
 
   factory DriverSummary.fromJson(Map<String, dynamic> json) {
@@ -197,6 +304,9 @@ class DriverSummary {
       missingDevices: (json['missing_devices'] as List<dynamic>? ?? [])
           .map((e) => DriverItem.fromJson(e as Map<String, dynamic>))
           .toList(),
+      recommendations: json['recommendations'] is Map<String, dynamic>
+          ? SystemDriverRecommendations.fromJson(json['recommendations'] as Map<String, dynamic>)
+          : SystemDriverRecommendations.empty(),
     );
   }
 }

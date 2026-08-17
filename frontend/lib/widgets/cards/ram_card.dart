@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
+import '../common/hardware_illustrations.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
 
@@ -18,6 +19,8 @@ class RamCard extends StatelessWidget {
     return CardWrapper(
       icon: Icons.storage_rounded,
       title: l10n.ramMemory,
+      summarySubtitle: '${ram.totalDisplay} (${ram.moduleSummary})',
+      illustration: const RamIllustration(),
       iconColor: const Color(0xFFF59E0B),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),

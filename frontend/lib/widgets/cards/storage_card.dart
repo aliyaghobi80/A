@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
+import '../common/hardware_illustrations.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
 
@@ -15,9 +16,15 @@ class StorageCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
 
+    final summarySub = storage.isNotEmpty
+        ? storage.map((s) => '${s.capacityDisplay} ${s.type}').join(' • ')
+        : l10n.noStorageDetected;
+
     return CardWrapper(
       icon: Icons.album_rounded,
       title: l10n.physicalStorageDevices,
+      summarySubtitle: summarySub,
+      illustration: const StorageIllustration(),
       iconColor: const Color(0xFF06B6D4),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

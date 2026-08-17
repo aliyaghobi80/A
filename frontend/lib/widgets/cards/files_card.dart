@@ -28,6 +28,7 @@ class FilesCard extends StatelessWidget {
     return CardWrapper(
       icon: Icons.folder_special_rounded,
       title: l10n.requiredFiles,
+      summarySubtitle: l10n.filesSummaryCount(summary.presentCount, summary.totalCount),
       iconColor: const Color(0xFF0EA5E9),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
+import '../common/hardware_illustrations.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
 
@@ -18,6 +19,8 @@ class CpuCard extends StatelessWidget {
     return CardWrapper(
       icon: Icons.memory_rounded,
       title: l10n.cpu,
+      summarySubtitle: cpu.name,
+      illustration: const CpuIllustration(),
       iconColor: const Color(0xFF3B82F6),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),

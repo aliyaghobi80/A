@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
+import '../common/hardware_illustrations.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
 
@@ -15,9 +16,15 @@ class GpuCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
 
+    final summarySub = gpus.isNotEmpty
+        ? (gpus.first.vramDisplay != 'Not available' ? '${gpus.first.name} (${gpus.first.vramDisplay})' : gpus.first.name)
+        : l10n.noGpuDetected;
+
     return CardWrapper(
       icon: Icons.videogame_asset_rounded,
       title: l10n.gpuGraphics,
+      summarySubtitle: summarySub,
+      illustration: const GpuIllustration(),
       iconColor: const Color(0xFF8B5CF6),
       trailing: gpus.length > 1
           ? Container(

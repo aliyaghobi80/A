@@ -26,6 +26,7 @@ class SoftwareCard extends StatelessWidget {
     return CardWrapper(
       icon: Icons.apps_rounded,
       title: l10n.software,
+      summarySubtitle: l10n.softwareSummaryCount(summary.installedCount, summary.totalCount),
       iconColor: const Color(0xFF6366F1),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

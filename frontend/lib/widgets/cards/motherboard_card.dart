@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
+import '../common/hardware_illustrations.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
 
@@ -18,6 +19,8 @@ class MotherboardCard extends StatelessWidget {
     return CardWrapper(
       icon: Icons.developer_board_rounded,
       title: l10n.motherboard,
+      summarySubtitle: '${motherboard.model} (${motherboard.manufacturer})',
+      illustration: const MotherboardIllustration(),
       iconColor: const Color(0xFF10B981),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

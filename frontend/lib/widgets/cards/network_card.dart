@@ -16,10 +16,16 @@ class NetworkCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     final activeAdapters = network.where((a) => a.isConnected).toList();
+    final summarySub = activeAdapters.isNotEmpty
+        ? '${activeAdapters.first.name} (${activeAdapters.first.ipv4Address})'
+        : (network.isNotEmpty
+            ? (l10n.isPersian ? '${network.length} کارت شبکه (قطع)' : '${network.length} Adapters (Disconnected)')
+            : (l10n.isPersian ? 'شبکه‌ای متصل نیست' : 'No network connected'));
 
     return CardWrapper(
       icon: Icons.lan_rounded,
       title: l10n.networkAdapters,
+      summarySubtitle: summarySub,
       iconColor: const Color(0xFF14B8A6),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
