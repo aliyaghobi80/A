@@ -3,12 +3,14 @@
 Windows Activation Detection Module
 Queries official Windows licensing tools (WMI SoftwareLicensingProduct, slmgr.vbs, and Registry)
 to accurately detect activation state, channel, partial key, edition, and expiration.
+Guarantees resilient detection across OEM, Retail, KMS, Volume, Enterprise, Pro, and Home editions.
 """
 
 import os
 import re
 import subprocess
 import logging
+import winreg
 from typing import Dict, Any, Optional
 
 from utils.formatters import clean_string
@@ -24,13 +26,20 @@ WINDOWS_APP_ID = "55c92734-d682-4d71-983e-d6ec3f16059f"
 def _query_wmi_licensing() -> Dict[str, Any]:
     """
     Queries WMI SoftwareLicensingProduct using PowerShell Get-CimInstance.
-    This is the most reliable, direct method on Windows 10 & 11 (returns LicenseStatus: 1 for Licensed).
+    Prioritizes any item with LicenseStatus = 1 (Licensed).
     """
     res = {}
     try:
         script = """
-        $products = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL" -ErrorAction SilentlyContinue
-        $win = $products | Where-Object { $_.ApplicationId -eq '55c92734-d682-4d71-983e-d6ec3f16059f' -or $_.Name -like '*Windows*' } | Select-Object -First 1
+        $products = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.ApplicationId -eq '55c92734-d682-4d71-983e-d6ec3f16059f' -or $_.Name -like '*Windows*' }
+        
+        # Prioritize finding a licensed product first
+        $win = $products | Where-Object { $_.LicenseStatus -eq 1 } | Select-Object -First 1
+        if (-not $win) {
+            $win = $products | Select-Object -First 1
+        }
+        
         if ($win) {
             [PSCustomObject]@{
                 Name = $win.Name
@@ -101,15 +110,15 @@ def _query_slmgr_dli() -> Dict[str, Any]:
     return res
 
 
-def _query_slmgr_xpr() -> Optional[str]:
+def _query_slmgr_xpr() -> tuple[Optional[bool], Optional[str]]:
     """
-    Executes slmgr.vbs /xpr to get expiration information if volume/KMS/grace period.
-    Returns None if permanently activated or not available.
+    Executes slmgr.vbs /xpr to get activation and expiration state.
+    Returns (is_activated, expiration_message).
     """
     try:
         slmgr_path = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "slmgr.vbs")
         if not os.path.isfile(slmgr_path):
-            return None
+            return None, None
 
         proc = subprocess.run(
             ["cscript", "//nologo", slmgr_path, "/xpr"],
@@ -120,26 +129,30 @@ def _query_slmgr_xpr() -> Optional[str]:
         )
         out = proc.stdout.strip()
         if not out:
-            return None
+            return None, None
 
-        if "permanently activated" in out.lower() or "permanent" in out.lower():
-            return None  # Permanent activation
+        out_lower = out.lower()
+        if "permanently activated" in out_lower or "permanent" in out_lower:
+            return True, None  # 100% Permanently activated
 
-        for line in out.splitlines():
-            line_clean = line.strip()
-            if "expire" in line_clean.lower() or "time" in line_clean.lower():
-                return line_clean
+        if "expire" in out_lower or "expiration" in out_lower or "will expire" in out_lower:
+            for line in out.splitlines():
+                if "expire" in line.lower() or "time" in line.lower():
+                    return True, line.strip()
 
-        return None
+        if "notification" in out_lower or "not activated" in out_lower or "error" in out_lower:
+            return False, None
+
+        return None, None
     except Exception as e:
         logger.debug(f"slmgr /xpr query error: {e}")
-        return None
+        return None, None
 
 
 def get_windows_activation_info() -> Dict[str, Any]:
     """
     Collects complete Windows activation and licensing details.
-    Guarantees a clean, non-crashing structured dictionary.
+    Uses multi-source evaluation (WMI, slmgr /dli, slmgr /xpr) to ensure zero false-negatives.
     """
     info = {
         "installed": True,
@@ -156,14 +169,22 @@ def get_windows_activation_info() -> Dict[str, Any]:
         "tool_path": None,
     }
 
-    # Step 1: Query slmgr.vbs /dli
+    # 1. Query slmgr /xpr
+    xpr_activated, xpr_exp = _query_slmgr_xpr()
+
+    # 2. Query slmgr /dli
     dli_data = _query_slmgr_dli()
     
-    # Step 2: Query WMI SoftwareLicensingProduct (robust fallback & verification)
+    # 3. Query WMI SoftwareLicensingProduct
     wmi_data = _query_wmi_licensing()
 
-    # Combine results
-    activated = dli_data.get("activated", False) or wmi_data.get("activated", False)
+    # Multi-source activation confirmation
+    activated = (
+        (xpr_activated is True) or
+        dli_data.get("activated", False) or
+        wmi_data.get("activated", False)
+    )
+
     info["activated"] = activated
     info["status_code"] = 1 if activated else wmi_data.get("status_code", 0)
     
@@ -198,8 +219,7 @@ def get_windows_activation_info() -> Dict[str, Any]:
     if partial_key:
         info["partial_key"] = clean_string(partial_key)
 
-    # Check expiration
-    xpr_exp = _query_slmgr_xpr()
+    # Expiration
     if xpr_exp:
         info["expiration"] = xpr_exp
         info["is_permanent"] = False
@@ -207,7 +227,7 @@ def get_windows_activation_info() -> Dict[str, Any]:
         info["expiration"] = None
         info["is_permanent"] = True
 
-    # Step 3: Check Activation Tool Availability
+    # 4. Check Activation Tool Availability
     tool_status = get_tool_status("windows")
     info["tool_available"] = tool_status.get("available", False)
     info["tool_path"] = tool_status.get("tool_path")

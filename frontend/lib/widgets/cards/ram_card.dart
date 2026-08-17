@@ -79,13 +79,19 @@ class RamCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            ...ram.modules.map((mod) {
+            ...ram.modules.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final mod = entry.value;
+              final serialText = (mod.serial != 'Not available' && mod.serial != '00000000' && mod.serial.isNotEmpty)
+                  ? mod.serial
+                  : (mod.partNumber != 'Not available' ? mod.partNumber : null);
+
               return Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
                   ),
@@ -93,43 +99,76 @@ class RamCard extends StatelessWidget {
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(5),
+                      width: 32,
+                      height: 32,
+                      padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: (isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706)).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(4),
+                        color: (isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706)).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                          width: 0.8,
+                        ),
                       ),
-                      child: Icon(
-                        Icons.memory_rounded,
-                        size: 14,
-                        color: isDark ? const Color(0xFFFCD34D) : const Color(0xFFD97706),
-                      ),
+                      child: const RamIllustration(color: Color(0xFFF59E0B)),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: Text(
-                              '${mod.capacityDisplay} ${mod.type} • ${mod.speedDisplay}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '${l10n.isPersian ? "رم" : "RAM"} ${idx + 1} (${mod.slot})',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                                ),
                               ),
-                            ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  mod.capacityDisplay,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFFF59E0B),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 4),
                           Directionality(
                             textDirection: TextDirection.ltr,
                             child: Text(
-                              '${mod.manufacturer != 'Not available' ? mod.manufacturer : 'Module'} (${mod.slot})',
+                              '${mod.type} • ${mod.speedDisplay}${mod.manufacturer != "Not available" ? " • ${mod.manufacturer}" : ""}',
                               style: TextStyle(
                                 fontSize: 11,
+                                fontWeight: FontWeight.w500,
                                 color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                               ),
                             ),
                           ),
+                          if (serialText != null && serialText.isNotEmpty && serialText != 'Default string') ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              '${l10n.isPersian ? "سریال: " : "S/N: "}$serialText',
+                              style: TextStyle(
+                                fontFamily: 'Consolas',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

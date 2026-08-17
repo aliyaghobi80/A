@@ -89,9 +89,6 @@ class SimpleModeView extends StatelessWidget {
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
             );
 
-            final ramSerial = (info.ram.modules.isNotEmpty && info.ram.modules.first.serial != 'Not available' && info.ram.modules.first.serial != '00000000')
-                ? info.ram.modules.first.serial
-                : (info.ram.modules.isNotEmpty && info.ram.modules.first.partNumber != 'Not available' ? info.ram.modules.first.partNumber : null);
             final cardRam = _buildProminentSpecCard(
               context: context,
               stepNumber: 2,
@@ -100,17 +97,15 @@ class SimpleModeView extends StatelessWidget {
               accentColor: const Color(0xFFF59E0B),
               illustration: const RamIllustration(),
               primaryValue: info.ram.totalDisplay,
-              secondaryValue: info.ram.moduleSummary != 'Not available'
-                  ? '${info.ram.moduleSummary}${info.ram.speedDisplay != 'Not available' ? ' • ${info.ram.speedDisplay}' : ''}'
-                  : info.ram.speedDisplay,
-              specPills: [
-                if (info.ram.moduleSummary != 'Not available') info.ram.moduleSummary,
-                if (info.ram.speedDisplay != 'Not available') info.ram.speedDisplay,
-                if (info.ram.modules.isNotEmpty && info.ram.modules.first.type.isNotEmpty) info.ram.modules.first.type,
-              ],
-              serialNumber: ramSerial,
               copyValue: info.ram.totalDisplay,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
+              customContent: _buildRamModulesVisualRack(
+                context,
+                info.ram,
+                isDark,
+                l10n,
+                systemCtrl,
+              ),
             );
 
             final gpuPrimary = info.gpu.isNotEmpty ? info.gpu.first.name : l10n.noGpuDetected;
@@ -1117,6 +1112,329 @@ class SimpleModeView extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildRamModulesVisualRack(
+    BuildContext context,
+    RamInfo ram,
+    bool isDark,
+    AppLocalizations l10n,
+    SystemInfoController systemCtrl,
+  ) {
+    if (ram.modules.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(
+              ram.totalDisplay,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+              ),
+            ),
+          ),
+          if (ram.speedDisplay != 'Not available') ...[
+            const SizedBox(height: 4),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                ram.speedDisplay,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFF59E0B)),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Total summary row
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                ram.totalDisplay,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.2 : 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                  width: 0.8,
+                ),
+              ),
+              child: Text(
+                ram.modules.length > 1
+                    ? '${ram.modules.length} ${l10n.isPersian ? "ماژول" : "Sticks"}'
+                    : (l10n.isPersian ? "۱ ماژول" : "1 Stick"),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFF59E0B),
+                ),
+              ),
+            ),
+            if (ram.speedDisplay != 'Not available') ...[
+              const SizedBox(width: 8),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: Text(
+                  ram.speedDisplay,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Visual RAM Sticks Rack (Side by side or vertical if narrow)
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isMultiCol = constraints.maxWidth > 280 && ram.modules.length >= 2;
+
+            final stickWidgets = ram.modules.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final mod = entry.value;
+              final serialText = (mod.serial != 'Not available' && mod.serial != '00000000' && mod.serial.isNotEmpty)
+                  ? mod.serial
+                  : (mod.partNumber != 'Not available' ? mod.partNumber : null);
+
+              return Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [const Color(0xFF0F172A), const Color(0xFF162036)]
+                        : [const Color(0xFFF8FAFC), const Color(0xFFF1F5F9)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF243352) : const Color(0xFFE2E8F0),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Stick Header: Mini RAM illustration + Slot Name
+                    Row(
+                      children: [
+                        Container(
+                          width: 26,
+                          height: 26,
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: const RamIllustration(color: Color(0xFFF59E0B)),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${l10n.isPersian ? "رم" : "RAM"} ${idx + 1}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                                ),
+                              ),
+                              if (mod.slot.isNotEmpty && mod.slot != 'Slot')
+                                Text(
+                                  mod.slot,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Capacity & Speed Pill
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.15 : 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text(
+                              mod.capacityDisplay,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFFF59E0B),
+                              ),
+                            ),
+                          ),
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text(
+                              '${mod.type}${mod.speedDisplay != 'Not available' ? " • ${mod.speedDisplay}" : ""}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? const Color(0xFFFDE68A) : const Color(0xFFB45309),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Manufacturer / Model details
+                    if (mod.manufacturer != 'Not available' || mod.partNumber != 'Not available') ...[
+                      const SizedBox(height: 6),
+                      Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          mod.manufacturer != 'Not available' ? '${mod.manufacturer} (${mod.partNumber})' : mod.partNumber,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+
+                    // Serial Number Row with copy
+                    if (serialText != null && serialText.isNotEmpty && serialText != 'Default string') ...[
+                      const SizedBox(height: 6),
+                      InkWell(
+                        onTap: () => systemCtrl.copyToClipboard(
+                          context,
+                          serialText.trim(),
+                          '${l10n.copiedToClipboard}: ${serialText.trim()}',
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (isDark ? const Color(0xFF0B1120) : Colors.white),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFCBD5E1)),
+                              width: 0.7,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.qr_code_2_rounded, size: 10, color: Color(0xFFF59E0B)),
+                              const SizedBox(width: 3),
+                              Text(
+                                '${l10n.isPersian ? "سریال:" : "S/N:"} ',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                ),
+                              ),
+                              Flexible(
+                                child: Directionality(
+                                  textDirection: TextDirection.ltr,
+                                  child: Text(
+                                    serialText.trim(),
+                                    style: TextStyle(
+                                      fontFamily: 'Consolas',
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              Icon(
+                                Icons.copy_rounded,
+                                size: 9,
+                                color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }).toList();
+
+            if (isMultiCol) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: stickWidgets.map((w) => Expanded(child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: w,
+                ))).toList(),
+              );
+            } else {
+              return Column(
+                children: stickWidgets.map((w) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: w,
+                )).toList(),
+              );
+            }
+          },
+        ),
+      ],
     );
   }
 

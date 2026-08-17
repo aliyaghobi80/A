@@ -42,6 +42,37 @@ OFFICE_PRODUCT_NAMES = {
 }
 
 
+def _check_ohook_installed(install_path: Optional[str] = None) -> bool:
+    """
+    Checks if Ohook activation hook DLLs are present in Office runtime directories.
+    Ohook places sppc.dll / version.dll / sppcs.dll inside root\\vfs\\System or Office16 directory.
+    """
+    candidates = [
+        r"C:\Program Files\Microsoft Office\root\vfs\System",
+        r"C:\Program Files\Microsoft Office\root\vfs\SystemX86",
+        r"C:\Program Files\Microsoft Office\root\Office16",
+        r"C:\Program Files\Microsoft Office\Office16",
+        r"C:\Program Files (x86)\Microsoft Office\root\vfs\System",
+        r"C:\Program Files (x86)\Microsoft Office\root\vfs\SystemX86",
+        r"C:\Program Files (x86)\Microsoft Office\Office16",
+    ]
+    if install_path:
+        candidates.extend([
+            install_path,
+            os.path.join(install_path, "root", "vfs", "System"),
+            os.path.join(install_path, "root", "vfs", "SystemX86"),
+            os.path.join(install_path, "root", "Office16"),
+            os.path.join(install_path, "Office16"),
+        ])
+
+    for d in candidates:
+        if os.path.isdir(d):
+            for dll in ["sppc.dll", "sppcs.dll", "version.dll", "slc.dll"]:
+                if os.path.isfile(os.path.join(d, dll)):
+                    return True
+    return False
+
+
 def _detect_office_registry_installation() -> Dict[str, Any]:
     """
     Checks Click-to-Run and MSI registry keys for installed Microsoft Office.
@@ -160,6 +191,8 @@ def _get_ospp_vbs_licensing(install_path: Optional[str] = None) -> Optional[Dict
             seen.add(c_norm)
             unique_candidates.append(c_norm)
 
+    is_ohook = _check_ohook_installed(install_path)
+
     for ospp_path in unique_candidates:
         if os.path.isfile(ospp_path):
             try:
@@ -174,13 +207,6 @@ def _get_ospp_vbs_licensing(install_path: Optional[str] = None) -> Optional[Dict
                 if not out:
                     continue
 
-                office_dir = os.path.dirname(ospp_path)
-                ohook_installed = any(
-                    os.path.isfile(os.path.join(office_dir, h))
-                    for h in ["sppc.dll", "version.dll", "sppcs.dll"]
-                )
-
-                # Split output into license product blocks
                 blocks = out.split("---------------------------------------")
                 products = []
                 for block in blocks:
@@ -220,9 +246,9 @@ def _get_ospp_vbs_licensing(install_path: Optional[str] = None) -> Optional[Dict
                             p_data["partial_key"] = clean_l.split(":", 1)[1].strip()
 
                     if has_license_info:
-                        if ohook_installed:
+                        if is_ohook:
                             p_data["activated"] = True
-                            p_data["status_text"] = "Licensed (Ohook)"
+                            p_data["status_text"] = "Licensed"
                         products.append(p_data)
 
                 if products:
@@ -230,7 +256,6 @@ def _get_ospp_vbs_licensing(install_path: Optional[str] = None) -> Optional[Dict
                     for p in products:
                         if p.get("activated", False):
                             return p
-                    # Otherwise return the first product
                     return products[0]
             except Exception as e:
                 logger.debug(f"ospp.vbs query error: {e}")
@@ -241,22 +266,36 @@ def _get_ospp_vbs_licensing(install_path: Optional[str] = None) -> Optional[Dict
 def _get_wmi_office_licensing() -> Optional[Dict[str, Any]]:
     """
     Fallback WMI query to SoftwareLicensingProduct / OfficeSoftwareProtectionProduct.
+    Prioritizes any product where LicenseStatus = 1 (Licensed).
     """
     try:
-        ps_cmd = (
-            "$wmi = Get-CimInstance SoftwareLicensingProduct -Filter \"Name like 'Office%' and PartialProductKey is not null and LicenseStatus = 1\" -ErrorAction SilentlyContinue | "
-            "Select-Object Name, Description, LicenseStatus, GracePeriodRemaining, PartialProductKey; "
-            "if ($wmi) { $wmi | ConvertTo-Json -Depth 2 -Compress }"
-        )
+        ps_cmd = """
+        $prods = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL" -ErrorAction SilentlyContinue |
+                 Where-Object { $_.ApplicationId -eq '0ff1ce15-a989-479d-af46-f275c6370663' -or $_.ApplicationId -eq '0ff1ce15-a989-479d-af46-f275c6370523' -or $_.Name -like '*Office*' }
+
+        $licensed = $prods | Where-Object { $_.LicenseStatus -eq 1 } | Select-Object -First 1
+        if (-not $licensed) {
+            $licensed = $prods | Select-Object -First 1
+        }
+        if ($licensed) {
+            [PSCustomObject]@{
+                Name = $licensed.Name
+                Description = $licensed.Description
+                LicenseStatus = $licensed.LicenseStatus
+                PartialProductKey = $licensed.PartialProductKey
+            } | ConvertTo-Json
+        }
+        """
         raw = run_powershell_json(ps_cmd, timeout=10)
-        if raw:
-            item = raw[0] if isinstance(raw, list) else raw
+        if isinstance(raw, dict):
+            status_code = raw.get("LicenseStatus", 0)
+            is_licensed = (status_code == 1)
             return {
-                "activated": True,
-                "status_text": "Licensed",
-                "license_name": item.get("Name"),
-                "channel": item.get("Description") or "VOLUME_KMSCLIENT",
-                "partial_key": item.get("PartialProductKey"),
+                "activated": is_licensed,
+                "status_text": "Licensed" if is_licensed else "Not Activated",
+                "license_name": raw.get("Name"),
+                "channel": raw.get("Description") or "VOLUME_KMSCLIENT",
+                "partial_key": raw.get("PartialProductKey"),
             }
     except Exception as e:
         logger.debug(f"WMI Office check error: {e}")
@@ -294,11 +333,13 @@ def get_office_activation_info() -> Dict[str, Any]:
         info["tool_path"] = tool_status.get("tool_path")
         return info
 
+    is_ohook = _check_ohook_installed(reg_install.get("install_path"))
+
     # Step 2: Query licensing via ospp.vbs
     ospp_data = _get_ospp_vbs_licensing(reg_install.get("install_path"))
     if ospp_data:
-        info["activated"] = ospp_data.get("activated", False)
-        info["status_text"] = ospp_data.get("status_text", "Licensed" if info["activated"] else "Not Activated")
+        info["activated"] = ospp_data.get("activated", False) or is_ohook
+        info["status_text"] = "Licensed" if info["activated"] else ospp_data.get("status_text", "Not Activated")
         info["status_code"] = 1 if info["activated"] else 0
 
         if ospp_data.get("channel"):
@@ -312,19 +353,28 @@ def get_office_activation_info() -> Dict[str, Any]:
         if ospp_data.get("license_name") and (info["product"] == "Not installed" or "unknown" in info["product"].lower()):
             info["product"] = ospp_data["license_name"].split(",")[0].strip()
 
-    # Step 3: If ospp.vbs did not confirm activation, fallback to WMI
+    # Step 3: If not confirmed yet, fallback to WMI
     if not info["activated"]:
         wmi_data = _get_wmi_office_licensing()
-        if wmi_data and wmi_data.get("activated"):
-            info["activated"] = True
-            info["status_text"] = "Licensed"
-            info["status_code"] = 1
+        if wmi_data:
+            if wmi_data.get("activated") or is_ohook:
+                info["activated"] = True
+                info["status_text"] = "Licensed"
+                info["status_code"] = 1
             if wmi_data.get("channel"):
                 info["channel"] = wmi_data["channel"]
             if wmi_data.get("partial_key"):
                 info["partial_key"] = wmi_data["partial_key"]
 
-    # Step 4: Check Activation Tool Availability
+    # Step 4: If Ohook is installed anywhere, it is guaranteed Licensed
+    if is_ohook and not info["activated"]:
+        info["activated"] = True
+        info["status_text"] = "Licensed"
+        info["status_code"] = 1
+        if info["channel"] == "Not available":
+            info["channel"] = "Permanent (Ohook)"
+
+    # Step 5: Check Activation Tool Availability
     tool_status = get_tool_status("office")
     info["tool_available"] = tool_status.get("available", False)
     info["tool_path"] = tool_status.get("tool_path")
