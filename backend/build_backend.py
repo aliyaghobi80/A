@@ -48,6 +48,7 @@ def build_backend(output_dir: str = None):
         "hardware.battery",
         "windows.system",
         "windows.network",
+        "windows.proxy",
         "software.detector",
         "software.registry",
         "software.office",

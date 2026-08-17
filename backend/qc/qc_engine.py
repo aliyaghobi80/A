@@ -216,6 +216,40 @@ def evaluate_system_qc(system_info: Dict[str, Any], packages_data: Optional[Dict
         "is_required": True,
     })
 
+    proxy = system_info.get("proxy", {})
+    if proxy.get("has_manual_proxy"):
+        server_str = proxy.get("server", "")
+        win_items.append({
+            "id": "win_proxy",
+            "name": "Manual Proxy Setting",
+            "detail": f"پروکسی دستی روشن است ({server_str})",
+            "state": STATE_WARNING,
+            "is_required": False,
+        })
+        problems.append({
+            "id": "proxy_manual_enabled",
+            "category": "windows",
+            "category_name": "سیستم‌عامل ویندوز",
+            "name": f"پروکسی دستی روشن است ({server_str})",
+            "status": STATE_WARNING,
+            "severity": STATE_WARNING,
+            "description": f"پروکسی دستی روی آدرس {server_str} فعال است. حتماً قبل از تحویل به مشتری آن را خاموش کنید.",
+            "is_required": False,
+            "action_type": "disable_proxy",
+            "action_label": "خاموش کردن پروکسی",
+            "action_target": "proxy",
+            "package_filename": None,
+            "can_auto_prepare": True,
+        })
+    else:
+        win_items.append({
+            "id": "win_proxy",
+            "name": "Manual Proxy Setting",
+            "detail": "پروکسی دستی خاموش است (اتصال مستقیم)",
+            "state": STATE_PASS,
+            "is_required": False,
+        })
+
     categories.append({
         "id": "windows",
         "name": "Windows",

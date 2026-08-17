@@ -335,6 +335,12 @@ class QcController extends GetxController {
         await Future.delayed(const Duration(seconds: 2));
         await fetchInitialQcStatus();
       }
+    } else if (issue.actionType == 'disable_proxy') {
+      if (Get.isRegistered<SystemInfoController>()) {
+        await Get.find<SystemInfoController>().disableProxy(context);
+        await Future.delayed(const Duration(seconds: 1));
+        await fetchInitialQcStatus();
+      }
     } else if (issue.actionType == 'open_folder') {
       final target = issue.actionTarget;
       final folderPath = FileSystemEntity.isDirectorySync(target) ? target : File(target).parent.path;
@@ -378,6 +384,8 @@ class QcController extends GetxController {
           await _apiService.activateWindows();
         } else if (issue.actionType == 'activate_office') {
           await _apiService.activateOffice();
+        } else if (issue.actionType == 'disable_proxy') {
+          await _apiService.disableProxy();
         }
 
         // Small breathing delay between batch tasks

@@ -177,6 +177,32 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> disableProxy() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {
+        'success': false,
+        'message': 'Backend service is not running.',
+      };
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/proxy/disable');
+      final response = await http
+          .post(uri, headers: {'Content-Type': 'application/json; charset=utf-8'})
+          .timeout(const Duration(seconds: 10));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] disableProxy error: $e');
+      return {
+        'success': false,
+        'message': 'Error disabling proxy: $e',
+      };
+    }
+  }
+
   Future<ActivationResult> activateWindows() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {

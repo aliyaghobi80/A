@@ -234,7 +234,11 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
               );
             });
 
-            final cardNetwork = NetworkCard(network: info.network);
+            final cardNetwork = NetworkCard(
+              network: info.network,
+              proxy: info.proxy,
+              onDisableProxy: () => systemCtrl.disableProxy(context),
+            );
 
             if (isWide) {
               // 2-Column Desktop Grid

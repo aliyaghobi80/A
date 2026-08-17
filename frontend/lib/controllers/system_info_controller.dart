@@ -12,6 +12,7 @@ class SystemInfoController extends GetxController {
   final Rx<SystemInfo?> systemInfo = Rx<SystemInfo?>(null);
   final RxBool isLoading = true.obs;
   final RxBool isRefreshing = false.obs;
+  final RxBool isDisablingProxy = false.obs;
   final RxString errorMessage = ''.obs;
 
   @override
@@ -157,6 +158,47 @@ class SystemInfoController extends GetxController {
       }
     }
 
+    if (info.proxy.hasManualProxy) {
+      buffer.writeln('\n[پروکسی دستی ویندوز]');
+      buffer.writeln('وضعیت: روشن (${info.proxy.server})');
+    }
+
     return buffer.toString();
+  }
+
+  Future<void> disableProxy(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    isDisablingProxy.value = true;
+    try {
+      final res = await _apiService.disableProxy();
+      final success = res['success'] == true;
+      final msg = res['message'] as String? ?? (success ? (l10n.isPersian ? '✓ پروکسی دستی با موفقیت خاموش شد.' : '✓ Manual proxy disabled successfully.') : 'خطا در خاموش کردن پروکسی');
+
+      if (context.mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: success ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      await fetchSystemInfo(forceRefresh: true);
+    } catch (e) {
+      if (context.mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('خطا در خاموش کردن پروکسی: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      isDisablingProxy.value = false;
+    }
   }
 }

@@ -36,6 +36,9 @@ class SimpleModeView extends StatelessWidget {
         // 1. Full System QC Summary Banner (Top)
         const QcSummaryBanner(),
 
+        // 1.2 Manual Proxy Warning Banner (If active)
+        _buildManualProxyWarningBanner(context, info.proxy, isDark, l10n, systemCtrl),
+
         // 1.5 Quick System Summary Strip (Compact one-liner)
         _buildSystemSummaryStrip(context, info, isDark, l10n, systemCtrl),
         const SizedBox(height: 14),
@@ -824,6 +827,134 @@ class SimpleModeView extends StatelessWidget {
   }
 
 
+
+  Widget _buildManualProxyWarningBanner(
+    BuildContext context,
+    ProxyInfo proxy,
+    bool isDark,
+    AppLocalizations l10n,
+    SystemInfoController systemCtrl,
+  ) {
+    if (!proxy.hasManualProxy) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEF4444).withValues(alpha: isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFEF4444).withValues(alpha: isDark ? 0.6 : 0.4),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEF4444).withValues(alpha: isDark ? 0.15 : 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEF4444).withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+              ),
+            ),
+            child: const Icon(
+              Icons.vpn_lock_rounded,
+              color: Color(0xFFEF4444),
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      l10n.isPersian ? 'هشدار: پروکسی دستی ویندوز روشن است!' : 'Warning: Windows Manual Proxy is ON!',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFEF4444),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Text(
+                        proxy.server,
+                        style: const TextStyle(
+                          fontFamily: 'Consolas',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFEF4444),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.isPersian
+                      ? 'پروکسی دستی روی سیستم روشن مانده است و مانع اتصال عادی مشتری به اینترنت خواهد شد. لطفاً قبل از تحویل آن را خاموش کنید.'
+                      : 'A manual proxy is left enabled on this machine which will block normal internet access. Please turn it off before delivery.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Obx(() {
+            final isDisabling = systemCtrl.isDisablingProxy.value;
+            return ElevatedButton.icon(
+              onPressed: isDisabling ? null : () => systemCtrl.disableProxy(context),
+              icon: isDisabling
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.power_settings_new_rounded, size: 16),
+              label: Text(
+                isDisabling
+                    ? (l10n.isPersian ? 'در حال خاموش کردن...' : 'Disabling...')
+                    : (l10n.isPersian ? 'خاموش کردن پروکسی' : 'Turn Off Proxy'),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 2,
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSystemSummaryStrip(
     BuildContext context,

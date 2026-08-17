@@ -6,8 +6,15 @@ import 'info_row.dart';
 
 class NetworkCard extends StatelessWidget {
   final List<NetworkInfo> network;
+  final ProxyInfo? proxy;
+  final VoidCallback? onDisableProxy;
 
-  const NetworkCard({super.key, required this.network});
+  const NetworkCard({
+    super.key,
+    required this.network,
+    this.proxy,
+    this.onDisableProxy,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +73,53 @@ class NetworkCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (proxy != null && proxy!.hasManualProxy) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withValues(alpha: isDark ? 0.15 : 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.vpn_lock_rounded, color: Color(0xFFEF4444), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.isPersian ? 'پروکسی دستی فعال است' : 'Manual Proxy Enabled',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFEF4444)),
+                        ),
+                        Text(
+                          proxy!.server,
+                          style: const TextStyle(fontSize: 11, fontFamily: 'Consolas', fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (onDisableProxy != null)
+                    ElevatedButton.icon(
+                      onPressed: onDisableProxy,
+                      icon: const Icon(Icons.power_settings_new_rounded, size: 14),
+                      label: Text(l10n.isPersian ? 'خاموش کردن' : 'Turn Off'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEF4444),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
           if (network.isEmpty)
             Text(l10n.noNetworkDetected)
           else

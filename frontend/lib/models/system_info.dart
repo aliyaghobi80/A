@@ -20,6 +20,7 @@ class SystemInfo {
   final WindowsActivationInfo windowsActivation;
   final OfficeActivationInfo officeActivation;
   final BatteryInfo battery;
+  final ProxyInfo proxy;
 
   SystemInfo({
     required this.status,
@@ -43,12 +44,14 @@ class SystemInfo {
     WindowsActivationInfo? windowsActivation,
     OfficeActivationInfo? officeActivation,
     BatteryInfo? battery,
+    ProxyInfo? proxy,
   })  : driverSummary = driverSummary ?? DriverSummary.empty(),
         softwareSummary = softwareSummary ?? SoftwareSummary.empty(),
         filesSummary = filesSummary ?? FilesSummary.empty(),
         windowsActivation = windowsActivation ?? WindowsActivationInfo.empty(),
         officeActivation = officeActivation ?? OfficeActivationInfo.empty(),
-        battery = battery ?? BatteryInfo.empty();
+        battery = battery ?? BatteryInfo.empty(),
+        proxy = proxy ?? ProxyInfo.empty();
 
   factory SystemInfo.fromJson(Map<String, dynamic> json) {
     return SystemInfo(
@@ -85,6 +88,7 @@ class SystemInfo {
       windowsActivation: WindowsActivationInfo.fromJson(json['windows_activation'] as Map<String, dynamic>? ?? {}),
       officeActivation: OfficeActivationInfo.fromJson(json['office_activation'] as Map<String, dynamic>? ?? {}),
       battery: BatteryInfo.fromJson(json['battery'] as Map<String, dynamic>? ?? {}),
+      proxy: ProxyInfo.fromJson(json['proxy'] as Map<String, dynamic>? ?? {}),
     );
   }
 }
@@ -1134,5 +1138,49 @@ class BatteryInfo {
   }
 
   factory BatteryInfo.empty() => BatteryInfo(hasBattery: false, isDesktop: true);
+}
+
+class ProxyInfo {
+  final bool enabled;
+  final String server;
+  final String ip;
+  final String port;
+  final String override;
+  final bool hasManualProxy;
+  final bool isWarning;
+  final String statusText;
+  final String statusTextEn;
+
+  ProxyInfo({
+    required this.enabled,
+    required this.server,
+    this.ip = '',
+    this.port = '',
+    this.override = '',
+    required this.hasManualProxy,
+    this.isWarning = false,
+    this.statusText = 'خاموش',
+    this.statusTextEn = 'Disabled',
+  });
+
+  factory ProxyInfo.empty() => ProxyInfo(
+    enabled: false,
+    server: '',
+    hasManualProxy: false,
+  );
+
+  factory ProxyInfo.fromJson(Map<String, dynamic> json) {
+    return ProxyInfo(
+      enabled: json['enabled'] as bool? ?? false,
+      server: json['server'] ?? '',
+      ip: json['ip'] ?? '',
+      port: json['port'] ?? '',
+      override: json['override'] ?? '',
+      hasManualProxy: json['has_manual_proxy'] as bool? ?? false,
+      isWarning: json['is_warning'] as bool? ?? false,
+      statusText: json['status_text'] ?? 'خاموش',
+      statusTextEn: json['status_text_en'] ?? 'Disabled',
+    );
+  }
 }
 

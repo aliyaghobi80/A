@@ -143,6 +143,17 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
             return
 
+        elif path == "/api/proxy":
+            logger.info("Querying manual proxy status...")
+            from windows.proxy import get_proxy_info
+            proxy_info = get_proxy_info()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(proxy_info, indent=2).encode("utf-8"))
+            return
+
         elif path == "/api/battery" or path == "/api/battery/test":
             logger.info("Querying battery health & power status...")
             bat_info = get_battery_info()
@@ -364,6 +375,25 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(status_http)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/proxy/disable":
+            logger.info("Disabling Windows manual proxy...")
+            from windows.proxy import disable_proxy
+            result = disable_proxy()
+
+            # Invalidate cached system info so next fetch gets updated proxy status
+            with _cache_lock:
+                _cached_data = None
+
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
         elif path == "/api/packages/directory":
             content_len = int(self.headers.get("Content-Length", 0))
             body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
