@@ -109,9 +109,20 @@ def step_compile_installer():
     if res.returncode != 0:
         raise RuntimeError(f"Inno Setup compilation failed with code {res.returncode}")
 
-    installer_path = os.path.join(DIST_DIR, "MarkaziSystemChecker-Setup-1.0.0.exe")
+    installer_path = os.path.join(DIST_DIR, "MarkaziSystemChecker-Setup.exe")
     if not os.path.isfile(installer_path):
-        raise FileNotFoundError(f"Expected installer at {installer_path}, but not found.")
+        # Fallback check
+        installer_path = os.path.join(DIST_DIR, "MarkaziSystemChecker-Setup-1.0.0.exe")
+        if not os.path.isfile(installer_path):
+            raise FileNotFoundError(f"Expected installer at {installer_path}, but not found.")
+
+    # Also keep a copy as MarkaziSystemChecker-Setup-1.0.0.exe if possible
+    versioned_path = os.path.join(DIST_DIR, "MarkaziSystemChecker-Setup-1.0.0.exe")
+    try:
+        if installer_path != versioned_path:
+            shutil.copy2(installer_path, versioned_path)
+    except Exception:
+        pass
 
     size_mb = os.path.getsize(installer_path) / (1024 * 1024)
     print(f"[OK] Windows Installer generated: {installer_path} ({size_mb:.2f} MB)")
@@ -126,7 +137,7 @@ def main():
 
     print("\n==================================================")
     print("  PRODUCTION BUILD COMPLETED SUCCESSFULLY!")
-    print(f"  Installer: dist/MarkaziSystemChecker-Setup-1.0.0.exe")
+    print(f"  Installer: dist/MarkaziSystemChecker-Setup.exe")
     print(f"  Portable:  dist/MarkaziSystemChecker-Portable-1.0.0.zip")
     print("==================================================\n")
 

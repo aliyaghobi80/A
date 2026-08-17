@@ -15,8 +15,10 @@ DefaultDirName={autopf}\MarkaziSystemChecker
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\dist
-OutputBaseFilename=MarkaziSystemChecker-Setup-{#MyAppVersion}
-SetupIconFile=..\frontend\windows\runner\resources\app_icon.ico
+OutputBaseFilename=MarkaziSystemChecker-Setup
+SetupIconFile=app_icon.ico
+WizardSmallImageFile=wizard_small.bmp
+WizardImageFile=wizard_large.bmp
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/max
 SolidCompression=yes
@@ -25,7 +27,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 DisableProgramGroupPage=auto
-CloseApplications=force
+CloseApplications=no
 RestartApplications=no
 
 [Languages]
@@ -59,29 +61,40 @@ Name: "{app}\Tools"; Permissions: users-full
 Name: "{app}\Packages"; Permissions: users-full
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-procedure InitializeWizard;
+function KillAppProcesses(): Boolean;
 var
   ResultCode: Integer;
 begin
-  // Silently terminate any running instances of Markazi System Checker or backend before installation
+  // Force terminate any running instances of Markazi System Checker or backend silently
   Exec('taskkill.exe', '/F /IM MarkaziSystemChecker.exe /IM backend_server.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(200);
+  Result := True;
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  KillAppProcesses();
+  Result := True;
+end;
+
+procedure InitializeWizard();
+begin
+  KillAppProcesses();
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var
-  ResultCode: Integer;
 begin
   if CurStep = ssInstall then
   begin
-    Exec('taskkill.exe', '/F /IM MarkaziSystemChecker.exe /IM backend_server.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    KillAppProcesses();
     Sleep(250);
   end;
 end;
