@@ -18,6 +18,7 @@ from activation.windows_activation import get_windows_activation_info
 from activation.office_activation import get_office_activation_info
 from activation.activation_tools import execute_activation_tool, set_tools_directory, get_tool_status
 from files.checker import set_file_requirement_path, check_required_files
+from hardware.battery import get_battery_info
 from qc.qc_engine import evaluate_system_qc
 
 logger = logging.getLogger(__name__)
@@ -142,6 +143,20 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
             return
 
+        elif path == "/api/battery" or path == "/api/battery/test":
+            logger.info("Querying battery health & power status...")
+            bat_info = get_battery_info()
+            resp = {
+                "status": "success",
+                "battery": bat_info
+            }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
+            return
+
         else:
             self.send_response(404)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -181,6 +196,20 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps(qc_report, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/battery/test" or path == "/api/battery":
+            logger.info("Battery health test requested via POST...")
+            bat_info = get_battery_info()
+            resp = {
+                "status": "success",
+                "battery": bat_info
+            }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
             return
 
         elif path == "/api/packages/scan":

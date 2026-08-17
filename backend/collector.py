@@ -24,6 +24,7 @@ from files.checker import check_required_files
 from drivers.checker import check_important_drivers
 from activation.windows_activation import get_windows_activation_info
 from activation.office_activation import get_office_activation_info
+from hardware.battery import get_battery_info
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +32,13 @@ def collect_all_system_info() -> Dict[str, Any]:
     """
     Collects complete hardware, Windows specifications, important device drivers,
     installed required software, required file/folder presence checks,
-    and Windows & Microsoft Office activation status.
+    battery health, and Windows & Microsoft Office activation status.
     Uses concurrent workers to inspect components in parallel.
     Guarantees a clean, non-crashing structured dictionary.
     """
     start_time = time.perf_counter()
     
-    with ThreadPoolExecutor(max_workers=12) as executor:
+    with ThreadPoolExecutor(max_workers=14) as executor:
         future_cpu = executor.submit(get_cpu_info)
         future_mb = executor.submit(get_motherboard_info)
         future_ram = executor.submit(get_ram_info)
@@ -51,6 +52,7 @@ def collect_all_system_info() -> Dict[str, Any]:
         future_drivers = executor.submit(check_important_drivers)
         future_win_act = executor.submit(get_windows_activation_info)
         future_off_act = executor.submit(get_office_activation_info)
+        future_battery = executor.submit(get_battery_info)
 
         def safe_get(future, default_val, name):
             try:
@@ -72,6 +74,7 @@ def collect_all_system_info() -> Dict[str, Any]:
         drivers_data = safe_get(future_drivers, {"drivers": [], "driver_summary": {}}, "Drivers")
         win_act_data = safe_get(future_win_act, {"installed": True, "activated": False, "status_text": "Not available"}, "Windows Activation")
         off_act_data = safe_get(future_off_act, {"installed": False, "activated": False, "status_text": "Not available"}, "Office Activation")
+        battery_data = safe_get(future_battery, {"has_battery": False, "is_desktop": True}, "Battery")
 
     elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
@@ -96,5 +99,6 @@ def collect_all_system_info() -> Dict[str, Any]:
         "files_summary": files_data.get("summary", {}),
         "windows_activation": win_act_data,
         "office_activation": off_act_data,
+        "battery": battery_data,
     }
 

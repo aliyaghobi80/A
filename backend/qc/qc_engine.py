@@ -129,6 +129,51 @@ def evaluate_system_qc(system_info: Dict[str, Any], packages_data: Optional[Dict
         "is_required": False,
     })
 
+    bat = system_info.get("battery", {})
+    if bat.get("has_battery"):
+        hp = bat.get("health_percent", 100.0)
+        grade_fa = bat.get("health_grade_fa", "سالم")
+        if hp >= 70.0:
+            bat_state = STATE_PASS
+        elif hp >= 50.0:
+            bat_state = STATE_WARNING
+            problems.append({
+                "id": "qc_prob_battery_warn",
+                "title": f"افت ظرفیت باتری لپ‌تاپ ({hp}٪)",
+                "category": "hardware",
+                "severity": "WARNING",
+                "description": f"سلامت باتری {hp}٪ است ({grade_fa}).",
+                "action_type": "CHECK_BATTERY",
+                "action_label": "بررسی باتری",
+            })
+        else:
+            bat_state = STATE_FAIL
+            problems.append({
+                "id": "qc_prob_battery_fail",
+                "title": f"فرسودگی شدید باتری لپ‌تاپ ({hp}٪)",
+                "category": "hardware",
+                "severity": "FAIL",
+                "description": f"سلامت باتری {hp}٪ و در وضعیت ضعیف است. نیاز به تعویض دارد.",
+                "action_type": "CHECK_BATTERY",
+                "action_label": "بررسی باتری",
+            })
+
+        hw_items.append({
+            "id": "hw_battery",
+            "name": "Laptop Battery Health",
+            "detail": f"{hp}% ({grade_fa}) - {bat.get('power_source_fa', '')}",
+            "state": bat_state,
+            "is_required": True,
+        })
+    else:
+        hw_items.append({
+            "id": "hw_battery",
+            "name": "Power Source",
+            "detail": "Desktop AC Power (No Battery)",
+            "state": STATE_PASS,
+            "is_required": False,
+        })
+
     hw_state = STATE_PASS
     if any(i["state"] == STATE_FAIL for i in hw_items):
         hw_state = STATE_FAIL

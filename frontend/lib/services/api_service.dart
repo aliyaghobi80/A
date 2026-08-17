@@ -291,5 +291,47 @@ class ApiService {
       return false;
     }
   }
+
+  Future<BatteryInfo> fetchBatteryInfo() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return BatteryInfo.empty();
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/battery');
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        if (data['battery'] is Map<String, dynamic>) {
+          return BatteryInfo.fromJson(data['battery'] as Map<String, dynamic>);
+        }
+      }
+      return BatteryInfo.empty();
+    } catch (e) {
+      debugPrint('[ApiService] fetchBatteryInfo error: $e');
+      return BatteryInfo.empty();
+    }
+  }
+
+  Future<BatteryInfo> testBatteryHealth() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return BatteryInfo.empty();
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/battery/test');
+      final response = await http.post(uri).timeout(const Duration(seconds: 20));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        if (data['battery'] is Map<String, dynamic>) {
+          return BatteryInfo.fromJson(data['battery'] as Map<String, dynamic>);
+        }
+      }
+      return BatteryInfo.empty();
+    } catch (e) {
+      debugPrint('[ApiService] testBatteryHealth error: $e');
+      return BatteryInfo.empty();
+    }
+  }
 }
 

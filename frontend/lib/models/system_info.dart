@@ -19,6 +19,7 @@ class SystemInfo {
   final FilesSummary filesSummary;
   final WindowsActivationInfo windowsActivation;
   final OfficeActivationInfo officeActivation;
+  final BatteryInfo battery;
 
   SystemInfo({
     required this.status,
@@ -41,11 +42,13 @@ class SystemInfo {
     FilesSummary? filesSummary,
     WindowsActivationInfo? windowsActivation,
     OfficeActivationInfo? officeActivation,
+    BatteryInfo? battery,
   })  : driverSummary = driverSummary ?? DriverSummary.empty(),
         softwareSummary = softwareSummary ?? SoftwareSummary.empty(),
         filesSummary = filesSummary ?? FilesSummary.empty(),
         windowsActivation = windowsActivation ?? WindowsActivationInfo.empty(),
-        officeActivation = officeActivation ?? OfficeActivationInfo.empty();
+        officeActivation = officeActivation ?? OfficeActivationInfo.empty(),
+        battery = battery ?? BatteryInfo.empty();
 
   factory SystemInfo.fromJson(Map<String, dynamic> json) {
     return SystemInfo(
@@ -81,6 +84,7 @@ class SystemInfo {
       filesSummary: FilesSummary.fromJson(json['files_summary'] as Map<String, dynamic>? ?? {}),
       windowsActivation: WindowsActivationInfo.fromJson(json['windows_activation'] as Map<String, dynamic>? ?? {}),
       officeActivation: OfficeActivationInfo.fromJson(json['office_activation'] as Map<String, dynamic>? ?? {}),
+      battery: BatteryInfo.fromJson(json['battery'] as Map<String, dynamic>? ?? {}),
     );
   }
 }
@@ -947,5 +951,78 @@ class ActivationResult {
         error: msg,
         message: msg,
       );
+}
+
+class BatteryInfo {
+  final bool hasBattery;
+  final bool isDesktop;
+  final double? healthPercent;
+  final String healthGrade;
+  final String healthGradeFa;
+  final int designCapacityMwh;
+  final int fullChargeCapacityMwh;
+  final int? currentChargePercent;
+  final bool isCharging;
+  final bool acConnected;
+  final String powerSource;
+  final String powerSourceFa;
+  final int? cycleCount;
+  final String name;
+  final String manufacturer;
+  final String serial;
+  final String chemistry;
+  final bool isHealthy;
+  final String summaryMessage;
+  final String summaryMessageFa;
+
+  BatteryInfo({
+    required this.hasBattery,
+    this.isDesktop = false,
+    this.healthPercent,
+    this.healthGrade = 'Not Applicable',
+    this.healthGradeFa = 'بدون باتری (سیستم رومیزی)',
+    this.designCapacityMwh = 0,
+    this.fullChargeCapacityMwh = 0,
+    this.currentChargePercent,
+    this.isCharging = false,
+    this.acConnected = true,
+    this.powerSource = 'AC Power',
+    this.powerSourceFa = 'برق مستقیم',
+    this.cycleCount,
+    this.name = 'Desktop (No Battery)',
+    this.manufacturer = 'Not available',
+    this.serial = 'Not available',
+    this.chemistry = 'N/A',
+    this.isHealthy = true,
+    this.summaryMessage = '',
+    this.summaryMessageFa = '',
+  });
+
+  factory BatteryInfo.fromJson(Map<String, dynamic> json) {
+    return BatteryInfo(
+      hasBattery: json['has_battery'] ?? false,
+      isDesktop: json['is_desktop'] ?? true,
+      healthPercent: (json['health_percent'] as num?)?.toDouble(),
+      healthGrade: json['health_grade'] ?? 'Not Applicable',
+      healthGradeFa: json['health_grade_fa'] ?? 'بدون باتری (سیستم رومیزی)',
+      designCapacityMwh: json['design_capacity_mwh'] as int? ?? 0,
+      fullChargeCapacityMwh: json['full_charge_capacity_mwh'] as int? ?? 0,
+      currentChargePercent: json['current_charge_percent'] as int?,
+      isCharging: json['is_charging'] ?? false,
+      acConnected: json['ac_connected'] ?? true,
+      powerSource: json['power_source'] ?? 'AC Power',
+      powerSourceFa: json['power_source_fa'] ?? 'برق مستقیم',
+      cycleCount: json['cycle_count'] as int?,
+      name: json['name'] ?? 'Not available',
+      manufacturer: json['manufacturer'] ?? 'Not available',
+      serial: json['serial'] ?? 'Not available',
+      chemistry: json['chemistry'] ?? 'N/A',
+      isHealthy: json['is_healthy'] ?? true,
+      summaryMessage: json['summary_message'] ?? '',
+      summaryMessageFa: json['summary_message_fa'] ?? '',
+    );
+  }
+
+  factory BatteryInfo.empty() => BatteryInfo(hasBattery: false, isDesktop: true);
 }
 

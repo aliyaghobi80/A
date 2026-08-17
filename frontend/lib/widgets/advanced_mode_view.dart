@@ -12,6 +12,7 @@ import 'cards/gpu_card.dart';
 import 'cards/storage_card.dart';
 import 'cards/windows_card.dart';
 import 'cards/office_card.dart';
+import 'cards/battery_card.dart';
 import 'cards/bios_card.dart';
 import 'cards/network_card.dart';
 import 'cards/software_card.dart';
@@ -94,6 +95,7 @@ class AdvancedModeView extends StatelessWidget {
               );
             });
 
+            final cardBattery = BatteryCard(battery: info.battery);
             final cardNetwork = NetworkCard(network: info.network);
 
             if (isWide) {
@@ -132,6 +134,8 @@ class AdvancedModeView extends StatelessWidget {
                         const SizedBox(height: 16),
                         cardOffice,
                         const SizedBox(height: 16),
+                        cardBattery,
+                        const SizedBox(height: 16),
                         cardFiles,
                         const SizedBox(height: 16),
                         cardPackages,
@@ -159,6 +163,8 @@ class AdvancedModeView extends StatelessWidget {
                   cardWindows,
                   const SizedBox(height: 16),
                   cardOffice,
+                  const SizedBox(height: 16),
+                  cardBattery,
                   const SizedBox(height: 16),
                   cardDrivers,
                   const SizedBox(height: 16),

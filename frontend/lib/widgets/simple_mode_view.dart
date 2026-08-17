@@ -6,6 +6,8 @@ import '../controllers/software_controller.dart';
 import '../controllers/system_info_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
+import 'cards/battery_card.dart';
+import 'common/hardware_illustrations.dart';
 import 'qc/qc_summary_banner.dart';
 
 class SimpleModeView extends StatelessWidget {
@@ -74,6 +76,7 @@ class SimpleModeView extends StatelessWidget {
               categoryTitle: l10n.cpu,
               icon: Icons.memory_rounded,
               accentColor: const Color(0xFF3B82F6),
+              illustration: const CpuIllustration(),
               primaryValue: info.cpu.name,
               secondaryValue: l10n.coresThreads(info.cpu.cores, info.cpu.threads),
               specPills: [
@@ -95,6 +98,7 @@ class SimpleModeView extends StatelessWidget {
               categoryTitle: l10n.ram,
               icon: Icons.storage_rounded,
               accentColor: const Color(0xFFF59E0B),
+              illustration: const RamIllustration(),
               primaryValue: info.ram.totalDisplay,
               secondaryValue: info.ram.moduleSummary != 'Not available'
                   ? '${info.ram.moduleSummary}${info.ram.speedDisplay != 'Not available' ? ' • ${info.ram.speedDisplay}' : ''}'
@@ -120,6 +124,7 @@ class SimpleModeView extends StatelessWidget {
               categoryTitle: l10n.gpu,
               icon: Icons.videogame_asset_rounded,
               accentColor: const Color(0xFF8B5CF6),
+              illustration: const GpuIllustration(),
               primaryValue: gpuPrimary,
               secondaryValue: gpuSecondary,
               specPills: [
@@ -140,6 +145,7 @@ class SimpleModeView extends StatelessWidget {
               categoryTitle: l10n.motherboard,
               icon: Icons.developer_board_rounded,
               accentColor: const Color(0xFF10B981),
+              illustration: const MotherboardIllustration(),
               primaryValue: info.motherboard.model != 'Not available' ? info.motherboard.model : info.motherboard.manufacturer,
               secondaryValue: info.motherboard.manufacturer != 'Not available' ? info.motherboard.manufacturer : null,
               specPills: [
@@ -157,6 +163,7 @@ class SimpleModeView extends StatelessWidget {
               categoryTitle: l10n.storage,
               icon: Icons.album_rounded,
               accentColor: const Color(0xFF06B6D4),
+              illustration: const StorageIllustration(),
               primaryValue: '',
               copyValue: info.storage.map((d) => '${d.capacityDisplay} ${d.type} ${d.serial}').join(', '),
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
@@ -281,6 +288,7 @@ class SimpleModeView extends StatelessWidget {
               categoryTitle: l10n.windows,
               icon: Icons.window_rounded,
               accentColor: const Color(0xFF0284C7),
+              illustration: const WindowsIllustration(),
               primaryValue: info.windows.edition != 'Not available' ? info.windows.edition : 'Windows 11',
               secondaryValue: '${info.windows.architecture}${info.windows.version != 'Not available' ? ' • ${info.windows.version}' : ''}',
               specPills: [
@@ -353,6 +361,7 @@ class SimpleModeView extends StatelessWidget {
               categoryTitle: l10n.microsoftOffice,
               icon: Icons.business_center_rounded,
               accentColor: const Color(0xFFD97706),
+              illustration: const OfficeIllustration(),
               primaryValue: officeInstalled ? info.officeActivation.product : l10n.notInstalled,
               secondaryValue: officeInstalled && info.officeActivation.version != 'Not available'
                   ? '${info.officeActivation.architecture} • ${info.officeActivation.version}'
@@ -412,6 +421,8 @@ class SimpleModeView extends StatelessWidget {
                   : null,
             );
 
+            final cardBattery = BatteryCard(battery: info.battery);
+
             if (isWide) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,6 +449,8 @@ class SimpleModeView extends StatelessWidget {
                         cardMotherboard,
                         const SizedBox(height: 14),
                         cardWindows,
+                        const SizedBox(height: 14),
+                        cardBattery,
                       ],
                     ),
                   ),
@@ -459,6 +472,8 @@ class SimpleModeView extends StatelessWidget {
                   cardWindows,
                   const SizedBox(height: 14),
                   cardOffice,
+                  const SizedBox(height: 14),
+                  cardBattery,
                 ],
               );
             }
@@ -854,6 +869,7 @@ class SimpleModeView extends StatelessWidget {
     required IconData icon,
     required Color accentColor,
     required String primaryValue,
+    Widget? illustration,
     String? secondaryValue,
     List<String>? specPills,
     String? serialNumber,
@@ -953,127 +969,147 @@ class SimpleModeView extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Main Prominent Value
-          if (customContent != null)
-            customContent
-          else ...[
-            Directionality(
-              textDirection: TextDirection.ltr,
-              child: Text(
-                primaryValue,
-                style: TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                  letterSpacing: -0.4,
-                  height: 1.2,
+          // Main Spec Body: Illustration on side + Specs Column
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (illustration != null) ...[
+                HardwareIllustrationBadge(
+                  illustration: illustration,
+                  accentColor: accentColor,
+                  size: 68,
                 ),
-              ),
-            ),
-            if (secondaryValue != null && secondaryValue.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Directionality(
-                textDirection: TextDirection.ltr,
-                child: Text(
-                  secondaryValue,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: accentColor,
-                  ),
-                ),
-              ),
-            ],
-            if (specPills != null && specPills.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: specPills.map((pill) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: isDark ? 0.15 : 0.08),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: accentColor.withValues(alpha: isDark ? 0.35 : 0.2),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Text(
-                    pill,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: accentColor,
-                    ),
-                  ),
-                )).toList(),
-              ),
-            ],
-            if (serialNumber != null &&
-                serialNumber.isNotEmpty &&
-                serialNumber != 'Not available' &&
-                serialNumber != 'Default string' &&
-                serialNumber != 'None') ...[
-              const SizedBox(height: 10),
-              InkWell(
-                onTap: () => onCopy(serialNumber),
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.qr_code_2_rounded,
-                        size: 13,
-                        color: accentColor,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${l10n.isPersian ? "سریال:" : "S/N:"} ',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        ),
-                      ),
-                      Flexible(
-                        child: Directionality(
-                          textDirection: TextDirection.ltr,
-                          child: Text(
-                            serialNumber,
-                            style: TextStyle(
-                              fontFamily: 'Consolas',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                const SizedBox(width: 14),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (customContent != null)
+                      customContent
+                    else ...[
+                      Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          primaryValue,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                            letterSpacing: -0.4,
+                            height: 1.2,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.copy_rounded,
-                        size: 11,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-                      ),
+                      if (secondaryValue != null && secondaryValue.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            secondaryValue,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: accentColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (specPills != null && specPills.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: specPills.map((pill) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: accentColor.withValues(alpha: isDark ? 0.15 : 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: accentColor.withValues(alpha: isDark ? 0.35 : 0.2),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              pill,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: accentColor,
+                              ),
+                            ),
+                          )).toList(),
+                        ),
+                      ],
+                      if (serialNumber != null &&
+                          serialNumber.isNotEmpty &&
+                          serialNumber != 'Not available' &&
+                          serialNumber != 'Default string' &&
+                          serialNumber != 'None') ...[
+                        const SizedBox(height: 10),
+                        InkWell(
+                          onTap: () => onCopy(serialNumber),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.qr_code_2_rounded,
+                                  size: 13,
+                                  color: accentColor,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '${l10n.isPersian ? "سریال:" : "S/N:"} ',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                                Flexible(
+                                  child: Directionality(
+                                    textDirection: TextDirection.ltr,
+                                    child: Text(
+                                      serialNumber,
+                                      style: TextStyle(
+                                        fontFamily: 'Consolas',
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.copy_rounded,
+                                  size: 11,
+                                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ),
+                  ],
                 ),
               ),
             ],
-          ],
+          ),
 
           if (actionWidget != null) ...[
             const SizedBox(height: 14),

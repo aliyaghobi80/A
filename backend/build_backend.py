@@ -45,6 +45,7 @@ def build_backend(output_dir: str = None):
         "hardware.motherboard",
         "hardware.storage",
         "hardware.bios",
+        "hardware.battery",
         "windows.system",
         "windows.network",
         "software.detector",

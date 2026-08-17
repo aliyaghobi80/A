@@ -194,6 +194,20 @@ class SummaryHeroBar extends StatelessWidget {
                 color: info.officeActivation.activated ? const Color(0xFFD97706) : const Color(0xFFEF4444),
                 forceLtrValue: true,
               ),
+            // 9. Battery Chip
+            if (info.battery.hasBattery)
+              _buildChip(
+                context,
+                icon: Icons.battery_charging_full_rounded,
+                title: l10n.isPersian ? 'سلامت باتری' : 'Battery Health',
+                value: '${info.battery.healthPercent}% (${l10n.isPersian ? info.battery.healthGradeFa : info.battery.healthGrade})',
+                color: (info.battery.healthPercent ?? 100.0) >= 80.0
+                    ? const Color(0xFF10B981)
+                    : ((info.battery.healthPercent ?? 100.0) >= 60.0
+                        ? const Color(0xFFF59E0B)
+                        : const Color(0xFFEF4444)),
+                forceLtrValue: true,
+              ),
           ],
         );
       },
