@@ -1,26 +1,26 @@
 {
   "items": [
     {
-      "id": "training_folder",
-      "name": "Training Folder",
-      "displayName": "Training Folder",
-      "path": "C:\\CompanyFiles\\Training",
+      "id": "packages_folder",
+      "name": "Software Packages",
+      "displayName": "Software Packages (پوشه نرم‌افزارها)",
+      "path": "{APP_DIR}\\Packages",
       "type": "folder",
-      "required": false
+      "required": true
     },
     {
-      "id": "desktop_tools",
-      "name": "Desktop Tools",
-      "displayName": "Desktop Tools",
-      "path": "C:\\Users\\Public\\Desktop\\CompanyTools",
+      "id": "tools_folder",
+      "name": "Activation Tools",
+      "displayName": "Activation Tools (ابزارهای فعالسازی)",
+      "path": "{APP_DIR}\\Tools",
       "type": "folder",
-      "required": false
+      "required": true
     },
     {
       "id": "system_hosts",
       "name": "System Hosts File",
-      "displayName": "System Hosts File",
-      "path": "C:\\Windows\\System32\\drivers\\etc\\hosts",
+      "displayName": "System Hosts File (فایل سیستم ویندوز)",
+      "path": "%SYSTEMDRIVE%\\Windows\\System32\\drivers\\etc\\hosts",
       "type": "file",
       "required": true
     }

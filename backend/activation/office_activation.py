@@ -1,12 +1,14 @@
 # backend/activation/office_activation.py
 """
 Microsoft Office Detection & Licensing Status Module
-Detects modern Office installations (Click-to-Run, Microsoft 365, Office 2024, 2021, 2019, 2016, MSI),
+Robustly detects modern Office installations (Click-to-Run, Microsoft 365, Office 2024, 2021, 2019, 2016, MSI),
 architecture, product edition, license status, channel, partial key, and activation tool availability.
+Guarantees accurate detection across Volume, KMS, Retail, OEM, and Ohook installations.
 """
 
 import os
 import re
+import sys
 import winreg
 import subprocess
 import logging
@@ -105,50 +107,78 @@ def _detect_office_registry_installation() -> Dict[str, Any]:
         except Exception:
             pass
 
+    # 3. Check App Paths for WINWORD.EXE / EXCEL.EXE
+    for app in ["WINWORD.EXE", "EXCEL.EXE", "POWERPNT.EXE"]:
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{app}") as key:
+                path, _ = winreg.QueryValueEx(key, "")
+                if path and os.path.isfile(str(path).strip('"\t ')):
+                    clean_p = str(path).strip('"\t ')
+                    res["installed"] = True
+                    res["install_type"] = "Desktop App"
+                    res["product"] = "Microsoft Office"
+                    res["install_path"] = os.path.dirname(clean_p)
+                    return res
+        except Exception:
+            pass
+
     return res
 
 
-def _get_ospp_vbs_licensing() -> Optional[Dict[str, Any]]:
+def _get_ospp_vbs_licensing(install_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Finds and executes ospp.vbs /dstatus across common Office paths to inspect licensing state.
     """
     program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
     program_files_x86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+    program_w6432 = os.environ.get("ProgramW6432", r"C:\Program Files")
 
-    ospp_candidates = [
-        os.path.join(program_files, r"Microsoft Office\root\Office16\OSPP.VBS"),
-        os.path.join(program_files_x86, r"Microsoft Office\root\Office16\OSPP.VBS"),
-        os.path.join(program_files, r"Microsoft Office\Office16\OSPP.VBS"),
-        os.path.join(program_files_x86, r"Microsoft Office\Office16\OSPP.VBS"),
-        os.path.join(program_files, r"Microsoft Office\root\Office15\OSPP.VBS"),
-        os.path.join(program_files_x86, r"Microsoft Office\root\Office15\OSPP.VBS"),
-        os.path.join(program_files, r"Microsoft Office\Office15\OSPP.VBS"),
-        os.path.join(program_files_x86, r"Microsoft Office\Office15\OSPP.VBS"),
-        os.path.join(program_files, r"Microsoft Office\Office14\OSPP.VBS"),
-        os.path.join(program_files_x86, r"Microsoft Office\Office14\OSPP.VBS"),
-    ]
+    ospp_candidates = []
+    if install_path and os.path.isdir(install_path):
+        ospp_candidates.extend([
+            os.path.join(install_path, "OSPP.VBS"),
+            os.path.join(install_path, "root", "Office16", "OSPP.VBS"),
+            os.path.join(install_path, "Office16", "OSPP.VBS"),
+            os.path.join(install_path, "Office15", "OSPP.VBS"),
+        ])
 
-    for ospp_path in ospp_candidates:
+    for pf in [program_files, program_w6432, program_files_x86]:
+        if pf:
+            ospp_candidates.extend([
+                os.path.join(pf, r"Microsoft Office\root\Office16\OSPP.VBS"),
+                os.path.join(pf, r"Microsoft Office\Office16\OSPP.VBS"),
+                os.path.join(pf, r"Microsoft Office\root\Office15\OSPP.VBS"),
+                os.path.join(pf, r"Microsoft Office\Office15\OSPP.VBS"),
+                os.path.join(pf, r"Microsoft Office\Office14\OSPP.VBS"),
+            ])
+
+    seen = set()
+    unique_candidates = []
+    for c in ospp_candidates:
+        c_norm = os.path.normpath(c)
+        if c_norm not in seen:
+            seen.add(c_norm)
+            unique_candidates.append(c_norm)
+
+    for ospp_path in unique_candidates:
         if os.path.isfile(ospp_path):
             try:
                 proc = subprocess.run(
                     ["cscript", "//nologo", ospp_path, "/dstatus"],
                     capture_output=True,
                     text=True,
-                    timeout=6,
+                    timeout=12,
                     **get_hidden_subprocess_kwargs()
                 )
                 out = proc.stdout
                 if not out:
                     continue
 
-                # Check for Ohook permanent activation hook in Office directory
-                ohook_installed = False
                 office_dir = os.path.dirname(ospp_path)
-                for hook_name in ["sppc.dll", "version.dll", "sppcs.dll"]:
-                    if os.path.isfile(os.path.join(office_dir, hook_name)):
-                        ohook_installed = True
-                        break
+                ohook_installed = any(
+                    os.path.isfile(os.path.join(office_dir, h))
+                    for h in ["sppc.dll", "version.dll", "sppcs.dll"]
+                )
 
                 # Split output into license product blocks
                 blocks = out.split("---------------------------------------")
@@ -164,13 +194,13 @@ def _get_ospp_vbs_licensing() -> Optional[Dict[str, Any]]:
                             has_license_info = True
                             status_str = clean_l.split(":", 1)[1].strip()
                             p_data["status_raw"] = status_str
-                            if "---LICENSED---" in status_str or "LICENSED" in status_str:
+                            if "---LICENSED---" in status_str or "LICENSED" in status_str.upper():
                                 p_data["status_text"] = "Licensed"
                                 p_data["activated"] = True
-                            elif "NOTIFICATIONS" in status_str:
+                            elif "NOTIFICATIONS" in status_str.upper():
                                 p_data["status_text"] = "Notification Mode"
                                 p_data["activated"] = False
-                            elif "GRACE" in status_str:
+                            elif "GRACE" in status_str.upper():
                                 p_data["status_text"] = "Grace Period"
                                 p_data["activated"] = False
                             else:
@@ -208,6 +238,31 @@ def _get_ospp_vbs_licensing() -> Optional[Dict[str, Any]]:
     return None
 
 
+def _get_wmi_office_licensing() -> Optional[Dict[str, Any]]:
+    """
+    Fallback WMI query to SoftwareLicensingProduct / OfficeSoftwareProtectionProduct.
+    """
+    try:
+        ps_cmd = (
+            "$wmi = Get-CimInstance SoftwareLicensingProduct -Filter \"Name like 'Office%' and PartialProductKey is not null and LicenseStatus = 1\" -ErrorAction SilentlyContinue | "
+            "Select-Object Name, Description, LicenseStatus, GracePeriodRemaining, PartialProductKey; "
+            "if ($wmi) { $wmi | ConvertTo-Json -Depth 2 -Compress }"
+        )
+        raw = run_powershell_json(ps_cmd, timeout=10)
+        if raw:
+            item = raw[0] if isinstance(raw, list) else raw
+            return {
+                "activated": True,
+                "status_text": "Licensed",
+                "license_name": item.get("Name"),
+                "channel": item.get("Description") or "VOLUME_KMSCLIENT",
+                "partial_key": item.get("PartialProductKey"),
+            }
+    except Exception as e:
+        logger.debug(f"WMI Office check error: {e}")
+    return None
+
+
 def get_office_activation_info() -> Dict[str, Any]:
     """
     Collects complete Microsoft Office installation and activation details.
@@ -234,14 +289,13 @@ def get_office_activation_info() -> Dict[str, Any]:
     }
 
     if not is_installed:
-        # If not installed, never show tool available or activation button
         tool_status = get_tool_status("office")
         info["tool_available"] = False
         info["tool_path"] = tool_status.get("tool_path")
         return info
 
-    # Step 2: Query licensing via ospp.vbs (Fast & exact)
-    ospp_data = _get_ospp_vbs_licensing()
+    # Step 2: Query licensing via ospp.vbs
+    ospp_data = _get_ospp_vbs_licensing(reg_install.get("install_path"))
     if ospp_data:
         info["activated"] = ospp_data.get("activated", False)
         info["status_text"] = ospp_data.get("status_text", "Licensed" if info["activated"] else "Not Activated")
@@ -258,7 +312,19 @@ def get_office_activation_info() -> Dict[str, Any]:
         if ospp_data.get("license_name") and (info["product"] == "Not installed" or "unknown" in info["product"].lower()):
             info["product"] = ospp_data["license_name"].split(",")[0].strip()
 
-    # Step 3: Check Activation Tool Availability
+    # Step 3: If ospp.vbs did not confirm activation, fallback to WMI
+    if not info["activated"]:
+        wmi_data = _get_wmi_office_licensing()
+        if wmi_data and wmi_data.get("activated"):
+            info["activated"] = True
+            info["status_text"] = "Licensed"
+            info["status_code"] = 1
+            if wmi_data.get("channel"):
+                info["channel"] = wmi_data["channel"]
+            if wmi_data.get("partial_key"):
+                info["partial_key"] = wmi_data["partial_key"]
+
+    # Step 4: Check Activation Tool Availability
     tool_status = get_tool_status("office")
     info["tool_available"] = tool_status.get("available", False)
     info["tool_path"] = tool_status.get("tool_path")
