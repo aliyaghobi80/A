@@ -1177,31 +1177,38 @@ class SimpleModeView extends StatelessWidget {
     String statusText;
     IconData statusIcon;
 
+    final isProblem = !isHealthy && isPresent;
+
     if (!isPresent) {
       statusColor = isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
-      statusText = l10n.notPresent;
+      statusText = l10n.isPersian ? 'موجود نیست' : 'Not Present';
       statusIcon = Icons.remove_rounded;
     } else if (isHealthy) {
       statusColor = const Color(0xFF10B981);
-      statusText = l10n.driverOk;
+      statusText = l10n.isPersian ? 'سالم (نصب شده)' : 'Installed (OK)';
       statusIcon = Icons.check_rounded;
     } else {
       statusColor = const Color(0xFFEF4444);
-      statusText = l10n.driverProblem;
+      statusText = drv.problemCode == 28
+          ? (l10n.isPersian ? 'نیاز به نصب درایور (کد ۲۸)' : 'Driver Missing (Code 28)')
+          : (l10n.isPersian ? 'خطای درایور (کد ${drv.problemCode})' : 'Driver Error (Code ${drv.problemCode})');
       statusIcon = Icons.close_rounded;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        color: isDark
+            ? (isProblem ? const Color(0xFF1F1318) : const Color(0xFF0F172A))
+            : (isProblem ? const Color(0xFFFFF1F2) : const Color(0xFFF8FAFC)),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: (!isPresent)
               ? (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0))
               : isHealthy
                   ? statusColor.withValues(alpha: isDark ? 0.3 : 0.2)
-                  : statusColor.withValues(alpha: 0.4),
+                  : const Color(0xFFEF4444).withValues(alpha: 0.5),
+          width: isProblem ? 1.4 : 1.0,
         ),
       ),
       child: Row(
@@ -1220,35 +1227,87 @@ class SimpleModeView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  drv.displayName,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
-                  ),
-                ),
-                Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Text(
-                    drv.deviceName,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        drv.displayName,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    if (drv.manufacturer.isNotEmpty && drv.manufacturer != 'Unknown' && drv.manufacturer != 'N/A') ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          drv.manufacturer,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D9488).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        l10n.isPersian ? drv.categoryFa : drv.category,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0D9488),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        l10n.isPersian ? drv.statusDescription : drv.statusDescriptionEn,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: isProblem
+                              ? const Color(0xFFEF4444)
+                              : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: statusColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: statusColor.withValues(alpha: 0.3),
+              ),
             ),
             child: Text(
               statusText,

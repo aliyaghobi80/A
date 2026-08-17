@@ -91,12 +91,16 @@ class DriverItem {
   final String displayName;
   final String deviceName;
   final String category;
+  final String categoryFa;
   final String status;
   final bool isHealthy;
   final bool isPresent;
   final int problemCode;
   final String statusDescription;
+  final String statusDescriptionEn;
   final String instanceId;
+  final String manufacturer;
+  final String pnpClass;
 
   DriverItem({
     required this.id,
@@ -104,12 +108,16 @@ class DriverItem {
     required this.displayName,
     required this.deviceName,
     required this.category,
+    this.categoryFa = 'سیستم',
     required this.status,
     required this.isHealthy,
     required this.isPresent,
     required this.problemCode,
     required this.statusDescription,
+    this.statusDescriptionEn = 'Device is working properly',
     required this.instanceId,
+    this.manufacturer = 'Unknown',
+    this.pnpClass = '',
   });
 
   factory DriverItem.fromJson(Map<String, dynamic> json) {
@@ -119,12 +127,16 @@ class DriverItem {
       displayName: json['display_name'] ?? json['name'] ?? 'Unknown Driver',
       deviceName: json['device_name'] ?? 'Device',
       category: json['category'] ?? 'System',
+      categoryFa: json['category_fa'] ?? 'سیستم',
       status: json['status'] ?? 'Unknown',
       isHealthy: json['is_healthy'] as bool? ?? false,
       isPresent: json['is_present'] as bool? ?? true,
       problemCode: json['problem_code'] as int? ?? 0,
-      statusDescription: json['status_description'] ?? 'Device is working properly',
+      statusDescription: json['status_description'] ?? 'دستگاه به درستی کار می‌کند',
+      statusDescriptionEn: json['status_description_en'] ?? 'Device is working properly',
       instanceId: json['instance_id'] ?? 'Not available',
+      manufacturer: json['manufacturer'] ?? 'Unknown',
+      pnpClass: json['pnp_class'] ?? '',
     );
   }
 }
@@ -132,33 +144,55 @@ class DriverItem {
 class DriverSummary {
   final int healthyCount;
   final int totalPresentCount;
+  final int totalScannedCount;
+  final int problemCount;
+  final int missingCount;
   final bool allHealthy;
+  final bool hasMissingDrivers;
   final bool hasProblem;
   final String statusText;
+  final List<DriverItem> missingDevices;
 
   DriverSummary({
     required this.healthyCount,
     required this.totalPresentCount,
+    this.totalScannedCount = 0,
+    this.problemCount = 0,
+    this.missingCount = 0,
     required this.allHealthy,
+    this.hasMissingDrivers = false,
     required this.hasProblem,
     required this.statusText,
+    this.missingDevices = const [],
   });
 
   factory DriverSummary.empty() => DriverSummary(
         healthyCount: 0,
         totalPresentCount: 0,
+        totalScannedCount: 0,
+        problemCount: 0,
+        missingCount: 0,
         allHealthy: false,
+        hasMissingDrivers: false,
         hasProblem: false,
         statusText: 'Checking',
+        missingDevices: [],
       );
 
   factory DriverSummary.fromJson(Map<String, dynamic> json) {
     return DriverSummary(
       healthyCount: json['healthy_count'] as int? ?? 0,
       totalPresentCount: json['total_present_count'] as int? ?? 0,
+      totalScannedCount: json['total_scanned_count'] as int? ?? 0,
+      problemCount: json['problem_count'] as int? ?? 0,
+      missingCount: json['missing_count'] as int? ?? 0,
       allHealthy: json['all_healthy'] as bool? ?? false,
+      hasMissingDrivers: json['has_missing_drivers'] as bool? ?? false,
       hasProblem: json['has_problem'] as bool? ?? false,
       statusText: json['status_text'] ?? 'Checking',
+      missingDevices: (json['missing_devices'] as List<dynamic>? ?? [])
+          .map((e) => DriverItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

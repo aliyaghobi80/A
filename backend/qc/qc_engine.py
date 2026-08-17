@@ -190,36 +190,57 @@ def evaluate_system_qc(system_info: Dict[str, Any], packages_data: Optional[Dict
         d_id = d.get("id", "driver")
         d_name = d.get("name", "Device Driver")
         d_device = d.get("device_name", "")
+        d_cat = d.get("category", "Hardware")
+        d_cat_fa = d.get("category_fa", "سخت‌افزار")
         is_healthy = d.get("is_healthy", False)
         is_present = d.get("is_present", True)
-        status_text = d.get("status", "")
+        prob_code = int(d.get("problem_code", 0) or 0)
+        status_desc = d.get("status_description") or "دستگاه به درستی کار می‌کند"
 
         if not is_present:
             state = STATE_NOT_PRESENT
         elif is_healthy:
             state = STATE_PASS
         else:
-            state = STATE_WARNING if d_id in ["bluetooth", "wifi"] else STATE_FAIL
+            state = STATE_FAIL if (prob_code == 28 or d_cat in ["Display", "Audio", "Ethernet", "Wi-Fi", "Unknown / Missing"]) else STATE_WARNING
 
         driver_items.append({
             "id": f"driver_{d_id}",
-            "name": d_name,
-            "detail": d_device if is_present else "سخت‌افزار بر روی این سیستم موجود نیست",
+            "name": f"{d_name} ({d_cat_fa})" if d_cat_fa else d_name,
+            "detail": f"{d_device} — {status_desc}" if is_present else "سخت‌افزار بر روی این سیستم موجود نیست",
             "state": state,
-            "is_required": d_id in ["graphics", "audio", "ethernet"],
-            "problem_code": d.get("problem_code", 0),
+            "is_required": d_cat in ["Display", "Audio", "Ethernet", "Wi-Fi", "Unknown / Missing"],
+            "problem_code": prob_code,
+            "category": d_cat,
         })
 
+        if is_present and not is_healthy:
+            problems.append({
+                "id": f"driver_issue_{d_id}",
+                "category": "drivers",
+                "category_name": "درایورهای سیستم",
+                "name": f"{d_name}",
+                "status": state,
+                "severity": state,
+                "description": f"دستگاه «{d_device}»: {status_desc}",
+                "is_required": True,
+                "action_type": "view_details",
+                "action_label": "بررسی درایور",
+                "action_target": "drivers",
+                "package_filename": None,
+                "can_auto_prepare": False,
+            })
+
     drv_state = STATE_PASS
-    if any(i["state"] == STATE_FAIL and i["is_required"] for i in driver_items):
+    if any(i["state"] == STATE_FAIL for i in driver_items):
         drv_state = STATE_FAIL
-    elif any(i["state"] in [STATE_WARNING, STATE_FAIL] for i in driver_items):
+    elif any(i["state"] == STATE_WARNING for i in driver_items):
         drv_state = STATE_WARNING
 
     categories.append({
         "id": "drivers",
         "name": "Drivers",
-        "displayName": "درایورهای سیستم",
+        "displayName": "درایورهای سخت‌افزاری",
         "state": drv_state,
         "items": driver_items,
         "passed_count": sum(1 for i in driver_items if i["state"] in [STATE_PASS, STATE_NOT_PRESENT]),
