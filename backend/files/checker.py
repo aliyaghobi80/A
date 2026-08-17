@@ -165,3 +165,42 @@ def check_required_files() -> Dict[str, Any]:
             "all_present": all_present,
         }
     }
+
+
+def set_file_requirement_path(req_id: str, new_path: str) -> Dict[str, Any]:
+    """Updates a file/folder requirement path and persists to config/file_requirements.json."""
+    app_root = get_app_root()
+    cfg_file = os.path.join(app_root, "config", "file_requirements.json")
+    reqs = load_file_requirements()
+
+    found = False
+    for item in reqs:
+        if item.get("id") == req_id or item.get("name") == req_id:
+            item["path"] = new_path
+            found = True
+            break
+
+    if not found:
+        # Add new requirement
+        reqs.append({
+            "id": req_id,
+            "name": req_id.replace("_", " ").title(),
+            "displayName": req_id.replace("_", " ").title(),
+            "path": new_path,
+            "type": "folder" if os.path.isdir(new_path) else "file",
+            "required": True,
+        })
+
+    try:
+        os.makedirs(os.path.dirname(cfg_file), exist_ok=True)
+        with open(cfg_file, "w", encoding="utf-8") as f:
+            json.dump({"items": reqs}, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to save file_requirements.json: {e}")
+
+    return {
+        "success": True,
+        "id": req_id,
+        "path": new_path,
+    }
+

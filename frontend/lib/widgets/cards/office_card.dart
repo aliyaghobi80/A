@@ -180,6 +180,25 @@ class OfficeCard extends StatelessWidget {
               value: office.toolAvailable ? l10n.toolAvailable : l10n.toolNotFound,
               icon: Icons.build_circle_rounded,
             ),
+            if (!office.toolAvailable) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => activationCtrl.changeToolsDirectory(context),
+                  icon: const Icon(Icons.folder_open_rounded, size: 14),
+                  label: Text(
+                    l10n.isPersian ? 'انتخاب پوشه فعال‌سازها (KMS)' : 'Select KMS Tools Folder',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFD97706),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
+            ],
 
             // Activation Action Section (Only if not activated & tool is available)
             if (!isActivated && office.toolAvailable) ...[

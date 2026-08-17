@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
 import '../services/api_service.dart';
+import '../services/folder_picker_service.dart';
 
 class SoftwareController extends GetxController {
   final ApiService _apiService = ApiService();
@@ -38,6 +39,50 @@ class SoftwareController extends GetxController {
     _periodicSyncTimer?.cancel();
     _dirWatcherSub?.cancel();
     super.onClose();
+  }
+
+  Future<void> changePackagesDirectory(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    final selectedPath = await FolderPickerService.pickFolder(
+      title: l10n.isPersian ? 'انتخاب پوشه نرم‌افزارها' : 'Select Software Packages Folder',
+    );
+
+    if (selectedPath != null && selectedPath.isNotEmpty) {
+      isScanning.value = true;
+      try {
+        final res = await _apiService.setPackagesDirectory(selectedPath);
+        packagesResponse.value = res;
+        _updateWatcher(res.packagesDirectory);
+
+        if (context.mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                l10n.isPersian
+                    ? '✓ پوشه نرم‌افزارها با موفقیت تغییر یافت: $selectedPath'
+                    : '✓ Packages folder updated: $selectedPath',
+              ),
+              backgroundColor: const Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text('Error updating packages folder: $e'),
+              backgroundColor: const Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } finally {
+        isScanning.value = false;
+      }
+    }
   }
 
   Future<void> fetchPackages({String? customDir}) async {

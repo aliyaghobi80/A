@@ -228,5 +228,68 @@ class ApiService {
       return QcReport.empty();
     }
   }
+
+  Future<PackagesResponse> setPackagesDirectory(String dir) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return PackagesResponse.empty();
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/packages/directory');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: json.encode({'directory': dir}),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        if (data.containsKey('packages_data')) {
+          return PackagesResponse.fromJson(data['packages_data']);
+        }
+      }
+      return await fetchPackages();
+    } catch (e) {
+      debugPrint('[ApiService] setPackagesDirectory error: $e');
+      return PackagesResponse.empty();
+    }
+  }
+
+  Future<bool> setToolsDirectory(String dir) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return false;
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/tools/directory');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: json.encode({'directory': dir}),
+      ).timeout(const Duration(seconds: 15));
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService] setToolsDirectory error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> setFilesDirectory(String id, String path) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return false;
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/files/directory');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: json.encode({'id': id, 'path': path}),
+      ).timeout(const Duration(seconds: 15));
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService] setFilesDirectory error: $e');
+      return false;
+    }
+  }
 }
 

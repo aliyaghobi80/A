@@ -461,7 +461,7 @@ class SimpleModeView extends StatelessWidget {
         ),
         const SizedBox(height: 28),
 
-        // 4. Software Section (Header + Reactive Scan button)
+        // 4. Software Section (Header + Reactive Scan & Folder Change buttons)
         Obx(() {
           final isScanning = softwareCtrl.isScanning.value;
           return _buildSectionHeader(
@@ -469,25 +469,45 @@ class SimpleModeView extends StatelessWidget {
             icon: Icons.apps_rounded,
             title: l10n.software,
             color: const Color(0xFF6366F1),
-            trailing: ElevatedButton.icon(
-              onPressed: isScanning ? null : () => softwareCtrl.scanPackages(),
-              icon: isScanning
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.refresh_rounded, size: 15),
-              label: Text(
-                isScanning ? l10n.scanning : l10n.scan,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: isScanning ? null : () => softwareCtrl.changePackagesDirectory(context),
+                  icon: const Icon(Icons.folder_open_rounded, size: 15),
+                  label: Text(
+                    l10n.isPersian ? 'تغییر پوشه' : 'Change Folder',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF6366F1),
+                    side: const BorderSide(color: Color(0xFF6366F1)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: isScanning ? null : () => softwareCtrl.scanPackages(),
+                  icon: isScanning
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.refresh_rounded, size: 15),
+                  label: Text(
+                    isScanning ? l10n.scanning : l10n.scan,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
             ),
           );
         }),
@@ -498,6 +518,7 @@ class SimpleModeView extends StatelessWidget {
           final pkgRes = softwareCtrl.packagesResponse.value;
           final packages = pkgRes.packages;
           final directoryExists = pkgRes.directoryExists;
+          final currentDir = pkgRes.packagesDirectory;
 
           return Container(
             decoration: BoxDecoration(
@@ -512,6 +533,64 @@ class SimpleModeView extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Active Packages Directory Banner
+                if (currentDir.isNotEmpty) ...[
+                  InkWell(
+                    onTap: () => softwareCtrl.changePackagesDirectory(context),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.folder_rounded,
+                            size: 14,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${l10n.scanningDirectory} ',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            ),
+                          ),
+                          Expanded(
+                            child: Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Text(
+                                currentDir,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 14,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+
                 // If software directory is missing, display alert
                 if (!directoryExists) ...[
                   Container(
@@ -1557,6 +1636,24 @@ class SimpleModeView extends StatelessWidget {
                     color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
                   ),
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => systemCtrl.changeFileRequirementPath(context, item.id, item.displayName),
+              icon: const Icon(Icons.folder_open_rounded, size: 14),
+              label: Text(
+                l10n.isPersian ? 'تغییر مسیر' : 'Change Path',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF0EA5E9),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
           ),

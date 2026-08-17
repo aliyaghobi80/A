@@ -121,6 +121,46 @@ def is_safe_tool_path(raw_path: str) -> bool:
     return True
 
 
+def set_tools_directory(custom_dir: str) -> Dict[str, Any]:
+    """Updates and persists the active Tools / KMS activation directory."""
+    if not custom_dir or not os.path.isdir(custom_dir):
+        return {"success": False, "message": f"Directory does not exist: {custom_dir}"}
+
+    abs_dir = os.path.abspath(custom_dir)
+    cfg = get_activation_config()
+
+    # Search for Windows and Office tools in custom directory
+    win_tool = os.path.join(abs_dir, "WINDOWS.cmd")
+    if not os.path.isfile(win_tool):
+        win_tool = os.path.join(abs_dir, "WindowsActivation", "activate.cmd")
+    if not os.path.isfile(win_tool):
+        win_tool = os.path.join(abs_dir, "WINDOWS.bat")
+
+    off_tool = os.path.join(abs_dir, "OFFICE.cmd")
+    if not os.path.isfile(off_tool):
+        off_tool = os.path.join(abs_dir, "OfficeActivation", "activate.cmd")
+    if not os.path.isfile(off_tool):
+        off_tool = os.path.join(abs_dir, "OFFICE.bat")
+
+    cfg["windows"]["toolPath"] = win_tool if os.path.isfile(win_tool) else os.path.join(abs_dir, "WINDOWS.cmd")
+    cfg["office"]["toolPath"] = off_tool if os.path.isfile(off_tool) else os.path.join(abs_dir, "OFFICE.cmd")
+    cfg["customToolsDir"] = abs_dir
+
+    try:
+        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to write activation.json: {e}")
+
+    return {
+        "success": True,
+        "tools_directory": abs_dir,
+        "windows_tool": cfg["windows"]["toolPath"],
+        "office_tool": cfg["office"]["toolPath"],
+    }
+
+
 def get_tool_status(target: str) -> Dict[str, Any]:
     """
     Checks if the configured activation tool for target ('windows' or 'office')
@@ -132,12 +172,19 @@ def get_tool_status(target: str) -> Dict[str, Any]:
     args = config.get("arguments", ["1"])
 
     candidates = [
-        os.path.abspath(os.path.join(REPO_ROOT, tool_rel)),
-        os.path.abspath(os.path.join(r"G:\MarkaziSystem", tool_rel)),
+        tool_rel if os.path.isabs(tool_rel) else os.path.abspath(os.path.join(REPO_ROOT, tool_rel)),
         os.path.abspath(os.path.join(REPO_ROOT, "Tools", f"{target.upper()}.cmd")),
         os.path.abspath(os.path.join(REPO_ROOT, "Tools", f"{target.capitalize()}Activation", "activate.cmd")),
-        os.path.abspath(os.path.join(r"G:\MarkaziSystem", "Tools", f"{target.upper()}.cmd")),
+        os.path.abspath(os.path.join(REPO_ROOT, f"{target.upper()}.cmd")),
+        os.path.abspath(os.path.join(os.getcwd(), "Tools", f"{target.upper()}.cmd")),
     ]
+
+    # Also check if customToolsDir is configured
+    full_cfg = get_activation_config()
+    custom_dir = full_cfg.get("customToolsDir")
+    if custom_dir and os.path.isdir(custom_dir):
+        candidates.insert(0, os.path.abspath(os.path.join(custom_dir, f"{target.upper()}.cmd")))
+        candidates.insert(1, os.path.abspath(os.path.join(custom_dir, f"{target.capitalize()}Activation", "activate.cmd")))
 
     found_path = None
     for cand in candidates:

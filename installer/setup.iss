@@ -25,7 +25,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 DisableProgramGroupPage=auto
-CloseApplications=yes
+CloseApplications=force
 RestartApplications=no
 
 [Languages]
@@ -65,3 +65,23 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+procedure InitializeWizard;
+var
+  ResultCode: Integer;
+begin
+  // Silently terminate any running instances of Markazi System Checker or backend before installation
+  Exec('taskkill.exe', '/F /IM MarkaziSystemChecker.exe /IM backend_server.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if CurStep = ssInstall then
+  begin
+    Exec('taskkill.exe', '/F /IM MarkaziSystemChecker.exe /IM backend_server.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(250);
+  end;
+end;

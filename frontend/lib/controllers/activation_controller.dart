@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
 import '../services/api_service.dart';
+import '../services/folder_picker_service.dart';
 import 'system_info_controller.dart';
 
 class ActivationController extends GetxController {
@@ -13,6 +14,49 @@ class ActivationController extends GetxController {
 
   final Rx<ActivationResult?> lastWindowsResult = Rx<ActivationResult?>(null);
   final Rx<ActivationResult?> lastOfficeResult = Rx<ActivationResult?>(null);
+
+  Future<void> changeToolsDirectory(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    final selectedPath = await FolderPickerService.pickFolder(
+      title: l10n.isPersian ? 'انتخاب پوشه ابزارهای فعالسازی (KMS Tools)' : 'Select KMS Activation Tools Folder',
+    );
+
+    if (selectedPath != null && selectedPath.isNotEmpty) {
+      try {
+        final success = await _apiService.setToolsDirectory(selectedPath);
+        if (success) {
+          if (Get.isRegistered<SystemInfoController>()) {
+            Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
+          }
+          if (context.mounted) {
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  l10n.isPersian
+                      ? '✓ پوشه فعالسازها به $selectedPath تغییر یافت.'
+                      : '✓ Activation tools folder updated: $selectedPath',
+                ),
+                backgroundColor: const Color(0xFF10B981),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (context.mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text('Error setting tools directory: $e'),
+              backgroundColor: const Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
 
   /// Auto-polling to detect newly applied activation status in real-time
   void _triggerAutoDetectPolling() {

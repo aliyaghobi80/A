@@ -7,11 +7,13 @@ import 'info_row.dart';
 class FilesCard extends StatelessWidget {
   final List<RequiredFileItem> files;
   final FilesSummary summary;
+  final Function(String reqId, String reqName)? onChangePath;
 
   const FilesCard({
     super.key,
     required this.files,
     required this.summary,
+    this.onChangePath,
   });
 
   @override
@@ -154,6 +156,26 @@ class FilesCard extends StatelessWidget {
             value: isFolder ? l10n.folder : l10n.file,
             icon: isFolder ? Icons.folder_open_rounded : Icons.description_outlined,
           ),
+          if (onChangePath != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => onChangePath!(item.id, item.displayName),
+                icon: const Icon(Icons.folder_open_rounded, size: 14),
+                label: Text(
+                  l10n.isPersian ? 'تغییر مسیر' : 'Change Path',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF0EA5E9),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

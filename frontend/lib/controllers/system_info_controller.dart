@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
 import '../services/api_service.dart';
+import '../services/folder_picker_service.dart';
 
 class SystemInfoController extends GetxController {
   final ApiService _apiService = ApiService();
@@ -17,6 +18,47 @@ class SystemInfoController extends GetxController {
   void onInit() {
     super.onInit();
     fetchSystemInfo();
+  }
+
+  Future<void> changeFileRequirementPath(BuildContext context, String reqId, String reqName) async {
+    final l10n = AppLocalizations.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    final selectedPath = await FolderPickerService.pickFolder(
+      title: '${l10n.isPersian ? "انتخاب مسیر برای" : "Select Path for"} $reqName',
+    );
+
+    if (selectedPath != null && selectedPath.isNotEmpty) {
+      try {
+        final success = await _apiService.setFilesDirectory(reqId, selectedPath);
+        if (success) {
+          await fetchSystemInfo(forceRefresh: true);
+          if (context.mounted) {
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  l10n.isPersian
+                      ? '✓ مسیر $reqName به $selectedPath تغییر یافت.'
+                      : '✓ Path for $reqName updated: $selectedPath',
+                ),
+                backgroundColor: const Color(0xFF10B981),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (context.mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text('Error updating path: $e'),
+              backgroundColor: const Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Future<void> fetchSystemInfo({bool forceRefresh = false}) async {

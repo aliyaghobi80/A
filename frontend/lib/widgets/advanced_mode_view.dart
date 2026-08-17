@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/software_controller.dart';
+import '../controllers/system_info_controller.dart';
 import '../models/system_info.dart';
 import 'summary_hero_bar.dart';
 import 'qc/qc_summary_banner.dart';
@@ -31,6 +32,7 @@ class AdvancedModeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final softwareCtrl = Get.find<SoftwareController>();
+    final systemCtrl = Get.find<SystemInfoController>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,7 +64,11 @@ class AdvancedModeView extends StatelessWidget {
               activation: info.windowsActivation,
             );
             final cardOffice = OfficeCard(office: info.officeActivation);
-            final cardFiles = FilesCard(files: info.requiredFiles, summary: info.filesSummary);
+            final cardFiles = FilesCard(
+              files: info.requiredFiles,
+              summary: info.filesSummary,
+              onChangePath: (id, name) => systemCtrl.changeFileRequirementPath(context, id, name),
+            );
 
             final cardPackages = Obx(() {
               final pkgRes = softwareCtrl.packagesResponse.value;
@@ -74,6 +80,7 @@ class AdvancedModeView extends StatelessWidget {
                 packagesDirectory: pkgRes.packagesDirectory,
                 directoryExists: pkgRes.directoryExists,
                 onScan: () => softwareCtrl.scanPackages(),
+                onChangeDirectory: () => softwareCtrl.changePackagesDirectory(context),
                 isScanning: isScanning,
                 onInstall: (packageId, name) {
                   final pkg = pkgRes.packages.firstWhereOrNull(

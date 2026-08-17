@@ -103,13 +103,30 @@ def get_packages_directory(custom_path: Optional[str] = None) -> str:
         if os.path.isdir(c):
             return c
 
-    # Check all drive roots
-    for drive in ["C", "D", "E", "F", "G", "H", "I", "U", "V", "W"]:
-        usb_dir = f"{drive}:\\Packages"
-        if os.path.isdir(usb_dir):
-            return usb_dir
+def set_packages_directory(custom_dir: str) -> Dict[str, Any]:
+    """Updates and persists the active Packages directory in config/software_directory.json."""
+    if not custom_dir or not os.path.isdir(custom_dir):
+        return {"success": False, "message": f"Directory does not exist: {custom_dir}"}
 
-    return os.path.abspath(os.path.join(REPO_ROOT, "Packages"))
+    abs_dir = os.path.abspath(custom_dir)
+    cfg = {"packageRoot": abs_dir}
+
+    try:
+        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to write software_directory.json: {e}")
+
+    return {
+        "success": True,
+        "packages_directory": abs_dir,
+    }
+
+
+def get_current_packages_directory() -> str:
+    """Returns the currently active packages directory."""
+    return get_packages_directory()
 
 def get_package_icon_path(package_id: str, custom_dir: Optional[str] = None) -> Optional[str]:
     """Returns local icon path if present for given package id."""

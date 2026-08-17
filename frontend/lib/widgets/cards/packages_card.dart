@@ -9,6 +9,7 @@ class PackagesCard extends StatelessWidget {
   final String packagesDirectory;
   final bool directoryExists;
   final VoidCallback? onScan;
+  final VoidCallback? onChangeDirectory;
   final bool isScanning;
   final Function(String packageId, String name)? onInstall;
   final Function(SoftwarePackage pkg)? onOpen;
@@ -20,6 +21,7 @@ class PackagesCard extends StatelessWidget {
     this.packagesDirectory = '',
     this.directoryExists = true,
     this.onScan,
+    this.onChangeDirectory,
     this.isScanning = false,
     this.onInstall,
     this.onOpen,
@@ -110,6 +112,21 @@ class PackagesCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onChangeDirectory != null) ...[
+                  OutlinedButton.icon(
+                    onPressed: isScanning ? null : onChangeDirectory,
+                    icon: const Icon(Icons.folder_open_rounded, size: 15),
+                    label: Text(l10n.isPersian ? 'تغییر پوشه' : 'Change Folder'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF6366F1),
+                      side: const BorderSide(color: Color(0xFF6366F1)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 if (onScan != null)
                   ElevatedButton.icon(
                     onPressed: isScanning ? null : onScan,
@@ -134,32 +151,60 @@ class PackagesCard extends StatelessWidget {
 
             if (packagesDirectory.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Text(
-                    '${l10n.scanningDirectory} ',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              InkWell(
+                onTap: onChangeDirectory,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
                     ),
                   ),
-                  Expanded(
-                    child: Directionality(
-                      textDirection: TextDirection.ltr,
-                      child: Text(
-                        packagesDirectory,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.folder_rounded,
+                        size: 13,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${l10n.scanningDirectory} ',
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
+                      Expanded(
+                        child: Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            packagesDirectory,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      if (onChangeDirectory != null) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 13,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
+                ),
               ),
             ],
 

@@ -13,10 +13,11 @@ if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
 from collector import collect_all_system_info
-from packages.manager import scan_packages, install_package, open_package, get_package_icon_path
+from packages.manager import scan_packages, install_package, open_package, get_package_icon_path, set_packages_directory, get_current_packages_directory
 from activation.windows_activation import get_windows_activation_info
 from activation.office_activation import get_office_activation_info
-from activation.activation_tools import execute_activation_tool
+from activation.activation_tools import execute_activation_tool, set_tools_directory, get_tool_status
+from files.checker import set_file_requirement_path, check_required_files
 from qc.qc_engine import evaluate_system_qc
 
 logger = logging.getLogger(__name__)
@@ -293,8 +294,98 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(status_http)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
+        elif path == "/api/packages/directory":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+
+            custom_dir = payload.get("directory", "").strip()
+            if not custom_dir:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
+                self.end_headers()
+                resp = {"success": False, "message": "Missing 'directory' in request body."}
+                self.wfile.write(json.dumps(resp).encode("utf-8"))
+                return
+
+            res = set_packages_directory(custom_dir)
+            if res.get("success"):
+                pkgs_data = scan_packages(custom_dir)
+                res["packages_data"] = pkgs_data
+                self.send_response(200)
+            else:
+                self.send_response(400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
             self.end_headers()
-            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            self.wfile.write(json.dumps(res, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/tools/directory":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+
+            custom_dir = payload.get("directory", "").strip()
+            if not custom_dir:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
+                self.end_headers()
+                resp = {"success": False, "message": "Missing 'directory' in request body."}
+                self.wfile.write(json.dumps(resp).encode("utf-8"))
+                return
+
+            res = set_tools_directory(custom_dir)
+            if res.get("success"):
+                with _cache_lock:
+                    _cached_data = None
+                res["windows_tool_status"] = get_tool_status("windows")
+                res["office_tool_status"] = get_tool_status("office")
+                self.send_response(200)
+            else:
+                self.send_response(400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(res, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/files/directory":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+
+            req_id = payload.get("id", "training_folder").strip()
+            new_path = payload.get("path", "").strip()
+            if not new_path:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
+                self.end_headers()
+                resp = {"success": False, "message": "Missing 'path' in request body."}
+                self.wfile.write(json.dumps(resp).encode("utf-8"))
+                return
+
+            res = set_file_requirement_path(req_id, new_path)
+            with _cache_lock:
+                _cached_data = None
+            res["files_status"] = check_required_files()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(res, indent=2).encode("utf-8"))
             return
 
         else:
