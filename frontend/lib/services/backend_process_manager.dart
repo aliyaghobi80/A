@@ -94,18 +94,21 @@ class BackendProcessManager {
     final workDir = scriptFile.parent.parent.path;
     debugPrint('[BackendProcessManager] Spawning backend script: $scriptPath with workingDir: $workDir');
 
-    // List of python executable commands to try
+    // List of python executable commands to try (prioritizing pythonw for silent, windowless background execution)
     final pythonCommands = [
-      'python',
       'pythonw',
+      r'G:\python\pythonw.exe',
+      r'C:\Python314\pythonw.exe',
+      r'C:\Python312\pythonw.exe',
+      r'C:\Python311\pythonw.exe',
+      r'C:\Program Files\Python312\pythonw.exe',
+      'python',
       'py',
       r'G:\python\python.exe',
+      r'C:\Python314\python.exe',
       r'C:\Python312\python.exe',
       r'C:\Python311\python.exe',
-      r'C:\Python310\python.exe',
-      r'C:\Python314\python.exe',
       r'C:\Program Files\Python312\python.exe',
-      r'C:\Program Files\Python311\python.exe',
     ];
 
     final targetPort = activePort;

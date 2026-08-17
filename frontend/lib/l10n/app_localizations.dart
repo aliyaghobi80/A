@@ -31,6 +31,7 @@ abstract class AppLocalizations {
   }
 
   // App Branding
+  bool get isPersian;
   String get appName;
   String get appSubtitle;
   String get liveInspector;

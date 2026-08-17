@@ -1,12 +1,12 @@
 {
   "windows": {
     "enabled": true,
-    "toolPath": "Tools/WindowsActivation/activate.cmd",
-    "arguments": []
+    "toolPath": "Tools/WINDOWS.cmd",
+    "arguments": ["1"]
   },
   "office": {
     "enabled": true,
-    "toolPath": "Tools/OfficeActivation/activate.cmd",
-    "arguments": []
+    "toolPath": "Tools/OFFICE.cmd",
+    "arguments": ["1"]
   }
 }

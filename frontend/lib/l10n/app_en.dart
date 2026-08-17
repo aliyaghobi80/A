@@ -2,6 +2,9 @@ import 'app_localizations.dart';
 
 class AppLocalizationsEn implements AppLocalizations {
   @override
+  bool get isPersian => false;
+
+  @override
   String get appName => 'Central System Checker';
 
   @override

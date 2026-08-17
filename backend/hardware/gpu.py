@@ -3,7 +3,7 @@ import subprocess
 import winreg
 from typing import List, Dict, Any
 
-from utils.powershell import run_powershell_json
+from utils.powershell import run_powershell_json, get_hidden_subprocess_kwargs
 from utils.formatters import clean_string, format_bytes_to_gb
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,8 @@ def _get_nvidia_smi_memory() -> Dict[str, int]:
             ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
-            timeout=3
+            timeout=3,
+            **get_hidden_subprocess_kwargs()
         )
         if proc.returncode == 0 and proc.stdout.strip():
             for line in proc.stdout.strip().splitlines():

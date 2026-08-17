@@ -12,15 +12,27 @@ if BASE_DIR not in sys.path:
 from collector import collect_all_system_info
 from server import run_server
 
-DEFAULT_PORT = 18080
+DEFAULT_PORT = 18088
+
 
 def setup_logging(verbose: bool = False):
     level = logging.DEBUG if verbose else logging.INFO
+    log_file = os.path.join(BASE_DIR, "service.log")
+    handlers = []
+    try:
+        handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+    except Exception:
+        pass
+    if sys.stdout is not None:
+        handlers.append(logging.StreamHandler(sys.stdout))
+
     logging.basicConfig(
         level=level,
         format="[%(asctime)s] [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S"
+        datefmt="%H:%M:%S",
+        handlers=handlers if handlers else None
     )
+
 
 def main():
     parser = argparse.ArgumentParser(description="Central System Checker - Windows Hardware Detection Backend")
@@ -34,25 +46,32 @@ def main():
     setup_logging(args.verbose)
 
     if args.test:
-        print("[*] Inspecting Windows Hardware & System...")
-        data = collect_all_system_info()
-        print(json.dumps(data, indent=2))
+        try:
+            print("[*] Inspecting Windows Hardware & System...")
+            data = collect_all_system_info()
+            print(json.dumps(data, indent=2))
+        except Exception:
+            pass
         return 0
 
     if args.save:
         data = collect_all_system_info()
         with open(args.save, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-        print(f"[+] Saved system information to {args.save}")
+        try:
+            print(f"[+] Saved system information to {args.save}")
+        except Exception:
+            pass
         return 0
 
-    print(f"==================================================")
-    print(f" Central System Checker - Local Backend Service   ")
-    print(f" Running at: http://{args.host}:{args.port}/        ")
-    print(f"==================================================")
-    
+    try:
+        logging.info(f"Central System Checker Local Backend Service starting at http://{args.host}:{args.port}/")
+    except Exception:
+        pass
+
     run_server(host=args.host, port=args.port)
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

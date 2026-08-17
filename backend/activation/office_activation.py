@@ -13,6 +13,7 @@ import logging
 from typing import Dict, Any, Optional, List
 
 from utils.formatters import clean_string
+from utils.powershell import run_powershell_json, get_hidden_subprocess_kwargs
 from activation.activation_tools import get_tool_status
 
 logger = logging.getLogger(__name__)
@@ -134,43 +135,73 @@ def _get_ospp_vbs_licensing() -> Optional[Dict[str, Any]]:
                     ["cscript", "//nologo", ospp_path, "/dstatus"],
                     capture_output=True,
                     text=True,
-                    timeout=6
+                    timeout=6,
+                    **get_hidden_subprocess_kwargs()
                 )
                 out = proc.stdout
                 if not out:
                     continue
 
-                res = {}
-                for line in out.splitlines():
-                    clean_l = line.strip()
-                    if clean_l.startswith("LICENSE STATUS:"):
-                        status_str = clean_l.split(":", 1)[1].strip()
-                        res["status_raw"] = status_str
-                        if "---LICENSED---" in status_str or "LICENSED" in status_str:
-                            res["status_text"] = "Licensed"
-                            res["activated"] = True
-                        elif "NOTIFICATIONS" in status_str:
-                            res["status_text"] = "Notification Mode"
-                            res["activated"] = False
-                        elif "GRACE" in status_str:
-                            res["status_text"] = "Grace Period"
-                            res["activated"] = False
-                        else:
-                            res["status_text"] = status_str
-                            res["activated"] = False
-                    elif clean_l.startswith("LICENSE NAME:"):
-                        res["license_name"] = clean_l.split(":", 1)[1].strip()
-                    elif clean_l.startswith("LICENSE DESCRIPTION:"):
-                        desc = clean_l.split(":", 1)[1].strip()
-                        res["description"] = desc
-                        ch_match = re.search(r'([A-Za-z0-9_:]+)\s+channel', desc, re.IGNORECASE)
-                        if ch_match:
-                            res["channel"] = ch_match.group(1).strip()
-                    elif clean_l.startswith("Last 5 characters of installed product key:"):
-                        res["partial_key"] = clean_l.split(":", 1)[1].strip()
+                # Check for Ohook permanent activation hook in Office directory
+                ohook_installed = False
+                office_dir = os.path.dirname(ospp_path)
+                for hook_name in ["sppc.dll", "version.dll", "sppcs.dll"]:
+                    if os.path.isfile(os.path.join(office_dir, hook_name)):
+                        ohook_installed = True
+                        break
 
-                if res:
-                    return res
+                # Split output into license product blocks
+                blocks = out.split("---------------------------------------")
+                products = []
+                for block in blocks:
+                    if not block.strip():
+                        continue
+                    p_data = {"activated": False, "status_text": "Not Activated"}
+                    has_license_info = False
+                    for line in block.splitlines():
+                        clean_l = line.strip()
+                        if clean_l.startswith("LICENSE STATUS:"):
+                            has_license_info = True
+                            status_str = clean_l.split(":", 1)[1].strip()
+                            p_data["status_raw"] = status_str
+                            if "---LICENSED---" in status_str or "LICENSED" in status_str:
+                                p_data["status_text"] = "Licensed"
+                                p_data["activated"] = True
+                            elif "NOTIFICATIONS" in status_str:
+                                p_data["status_text"] = "Notification Mode"
+                                p_data["activated"] = False
+                            elif "GRACE" in status_str:
+                                p_data["status_text"] = "Grace Period"
+                                p_data["activated"] = False
+                            else:
+                                p_data["status_text"] = status_str
+                                p_data["activated"] = False
+                        elif clean_l.startswith("LICENSE NAME:"):
+                            has_license_info = True
+                            p_data["license_name"] = clean_l.split(":", 1)[1].strip()
+                        elif clean_l.startswith("LICENSE DESCRIPTION:"):
+                            has_license_info = True
+                            desc = clean_l.split(":", 1)[1].strip()
+                            p_data["description"] = desc
+                            ch_match = re.search(r'([A-Za-z0-9_:]+)\s+channel', desc, re.IGNORECASE)
+                            if ch_match:
+                                p_data["channel"] = ch_match.group(1).strip()
+                        elif clean_l.startswith("Last 5 characters of installed product key:"):
+                            p_data["partial_key"] = clean_l.split(":", 1)[1].strip()
+
+                    if has_license_info:
+                        if ohook_installed:
+                            p_data["activated"] = True
+                            p_data["status_text"] = "Licensed (Ohook)"
+                        products.append(p_data)
+
+                if products:
+                    # Prioritize any product that is LICENSED
+                    for p in products:
+                        if p.get("activated", False):
+                            return p
+                    # Otherwise return the first product
+                    return products[0]
             except Exception as e:
                 logger.debug(f"ospp.vbs query error: {e}")
 

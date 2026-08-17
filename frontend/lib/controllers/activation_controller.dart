@@ -14,6 +14,23 @@ class ActivationController extends GetxController {
   final Rx<ActivationResult?> lastWindowsResult = Rx<ActivationResult?>(null);
   final Rx<ActivationResult?> lastOfficeResult = Rx<ActivationResult?>(null);
 
+  /// Auto-polling to detect newly applied activation status in real-time
+  void _triggerAutoDetectPolling() {
+    if (!Get.isRegistered<SystemInfoController>()) return;
+    final sysCtrl = Get.find<SystemInfoController>();
+
+    // Step 1: Immediate re-scan
+    sysCtrl.fetchSystemInfo(forceRefresh: true);
+
+    // Step 2: Progressive follow-up polls (1.5s, 4s, 8s, 12s)
+    const intervals = [1500, 4000, 8000, 12000];
+    for (final ms in intervals) {
+      Future.delayed(Duration(milliseconds: ms), () {
+        sysCtrl.fetchSystemInfo(forceRefresh: true);
+      });
+    }
+  }
+
   Future<void> activateWindows(BuildContext context) async {
     if (isActivatingWindows.value) return;
 
@@ -93,10 +110,7 @@ class ActivationController extends GetxController {
               behavior: SnackBarBehavior.floating,
             ),
           );
-          // Re-scan system licensing status
-          if (Get.isRegistered<SystemInfoController>()) {
-            Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
-          }
+          _triggerAutoDetectPolling();
         } else {
           final errorText = result.output.isNotEmpty ? result.output : result.message;
           scaffoldMessenger.showSnackBar(
@@ -112,6 +126,7 @@ class ActivationController extends GetxController {
               ),
             ),
           );
+          _triggerAutoDetectPolling();
         }
       } catch (e) {
         scaffoldMessenger.showSnackBar(
@@ -207,10 +222,7 @@ class ActivationController extends GetxController {
               behavior: SnackBarBehavior.floating,
             ),
           );
-          // Re-scan system licensing status
-          if (Get.isRegistered<SystemInfoController>()) {
-            Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
-          }
+          _triggerAutoDetectPolling();
         } else {
           final errorText = result.output.isNotEmpty ? result.output : result.message;
           scaffoldMessenger.showSnackBar(
@@ -226,6 +238,7 @@ class ActivationController extends GetxController {
               ),
             ),
           );
+          _triggerAutoDetectPolling();
         }
       } catch (e) {
         scaffoldMessenger.showSnackBar(

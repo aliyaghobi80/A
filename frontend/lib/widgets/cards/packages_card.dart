@@ -28,15 +28,17 @@ class PackagesCard extends StatelessWidget {
   Widget _buildIcon(SoftwarePackage pkg, bool isDark) {
     if (pkg.iconBase64 != null && pkg.iconBase64!.isNotEmpty) {
       try {
-        final b64 = pkg.iconBase64!.contains(',')
-            ? pkg.iconBase64!.split(',').last
-            : pkg.iconBase64!;
+        final raw = pkg.iconBase64!;
+        final b64 = (raw.contains(',') ? raw.split(',').last : raw)
+            .trim()
+            .replaceAll('\n', '')
+            .replaceAll('\r', '');
         final bytes = base64Decode(b64);
         return Image.memory(
           bytes,
           width: 24,
           height: 24,
-          filterQuality: FilterQuality.medium,
+          filterQuality: FilterQuality.high,
           errorBuilder: (context, error, stackTrace) => _fallbackIcon(pkg, isDark),
         );
       } catch (_) {
@@ -48,7 +50,7 @@ class PackagesCard extends StatelessWidget {
 
   Widget _fallbackIcon(SoftwarePackage pkg, bool isDark) {
     return Icon(
-      pkg.isInstalled ? Icons.check_circle_rounded : Icons.download_rounded,
+      Icons.apps_rounded,
       size: 20,
       color: pkg.isInstalled ? const Color(0xFF10B981) : const Color(0xFF6366F1),
     );

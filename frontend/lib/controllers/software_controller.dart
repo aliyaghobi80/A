@@ -12,7 +12,12 @@ class SoftwareController extends GetxController {
   final Rx<PackagesResponse> packagesResponse = PackagesResponse.empty().obs;
   final RxBool isScanning = false.obs;
   final RxString installingPackageId = ''.obs;
+  
   Timer? _pollTimer;
+  Timer? _debounceTimer;
+  Timer? _periodicSyncTimer;
+  StreamSubscription<FileSystemEvent>? _dirWatcherSub;
+  String? _currentlyWatchedDir;
 
   List<SoftwarePackage> get packages => packagesResponse.value.packages;
   PackageSummary get summary => packagesResponse.value.summary;
@@ -23,27 +28,92 @@ class SoftwareController extends GetxController {
   void onInit() {
     super.onInit();
     fetchPackages();
+    _startPeriodicSync();
   }
 
   @override
   void onClose() {
     _pollTimer?.cancel();
+    _debounceTimer?.cancel();
+    _periodicSyncTimer?.cancel();
+    _dirWatcherSub?.cancel();
     super.onClose();
   }
 
   Future<void> fetchPackages({String? customDir}) async {
-    final res = await _apiService.fetchPackages(customDir: customDir);
-    packagesResponse.value = res;
+    try {
+      final res = await _apiService.fetchPackages(customDir: customDir);
+      packagesResponse.value = res;
+      _updateWatcher(res.packagesDirectory);
+    } catch (e) {
+      debugPrint('[SoftwareController] fetchPackages error: $e');
+    }
   }
 
-  Future<void> scanPackages() async {
-    isScanning.value = true;
+  Future<void> scanPackages({bool silent = false}) async {
+    if (!silent) {
+      isScanning.value = true;
+    }
     try {
       final res = await _apiService.scanPackages();
       packagesResponse.value = res;
+      _updateWatcher(res.packagesDirectory);
+    } catch (e) {
+      debugPrint('[SoftwareController] scanPackages error: $e');
     } finally {
-      isScanning.value = false;
+      if (!silent) {
+        isScanning.value = false;
+      }
     }
+  }
+
+  void _updateWatcher(String dirPath) {
+    if (dirPath.isEmpty || dirPath == _currentlyWatchedDir) return;
+
+    try {
+      final dir = Directory(dirPath);
+      if (dir.existsSync()) {
+        _dirWatcherSub?.cancel();
+        _currentlyWatchedDir = dirPath;
+        debugPrint('[SoftwareController] Watching Packages directory in real-time: $dirPath');
+
+        _dirWatcherSub = dir.watch(recursive: true).listen(
+          (event) {
+            debugPrint('[SoftwareController] File change detected in Packages: ${event.path} (${event.type})');
+            // Debounce by 600ms so multi-file copies or large installers finish writing
+            _debounceTimer?.cancel();
+            _debounceTimer = Timer(const Duration(milliseconds: 600), () {
+              scanPackages(silent: true);
+            });
+          },
+          onError: (err) {
+            debugPrint('[SoftwareController] Directory watcher error: $err');
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint('[SoftwareController] Could not attach file watcher: $e');
+    }
+  }
+
+  void _startPeriodicSync() {
+    _periodicSyncTimer?.cancel();
+    // Heartbeat every 4 seconds to catch any USB drive inserts or changes where watcher events might not fire
+    _periodicSyncTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
+      if (!isScanning.value && installingPackageId.value.isEmpty) {
+        try {
+          final res = await _apiService.fetchPackages();
+          // Only update if count, items, or directory status actually changed
+          if (res.packages.length != packagesResponse.value.packages.length ||
+              res.directoryExists != packagesResponse.value.directoryExists ||
+              res.summary.installedPackages != packagesResponse.value.summary.installedPackages) {
+            debugPrint('[SoftwareController] Real-time periodic sync updated package list.');
+            packagesResponse.value = res;
+            _updateWatcher(res.packagesDirectory);
+          }
+        } catch (_) {}
+      }
+    });
   }
 
   bool isCurrentInstalling(SoftwarePackage pkg) {

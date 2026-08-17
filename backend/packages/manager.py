@@ -17,10 +17,27 @@ import winreg
 import subprocess
 from typing import Dict, Any, List, Optional
 
+from utils.powershell import get_hidden_subprocess_kwargs
+
 logger = logging.getLogger(__name__)
 
-# Repository / Base Directory
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+def _find_repo_root() -> str:
+    """Finds the root repository folder containing config/ and Packages/."""
+    curr = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    candidates = [
+        curr,
+        os.path.abspath(os.path.join(curr, "..", "..", "..")),
+        os.path.abspath(os.path.join(curr, "..", "..")),
+        os.path.abspath(os.path.join(curr, "..")),
+        r"G:\MarkaziSystem",
+        os.getcwd(),
+    ]
+    for c in candidates:
+        if os.path.isdir(os.path.join(c, "Packages")) or os.path.isdir(os.path.join(c, "config")):
+            return c
+    return curr
+
+REPO_ROOT = _find_repo_root()
 CONFIG_FILE = os.path.join(REPO_ROOT, "config", "software_directory.json")
 
 
@@ -37,19 +54,20 @@ def _format_file_size(bytes_val: int) -> str:
 
 
 def get_packages_directory(custom_path: Optional[str] = None) -> str:
-    """
+    r"""
     Resolves the configured Packages root directory.
     Priority:
-    1. Custom path if provided
+    1. Custom path if provided and exists
     2. Config file config/software_directory.json
-    3. Default relative 'Packages' folder inside workspace
-    4. Auto-detect removable USB drive (e.g. E:\\Packages, D:\\Packages)
+    3. Candidate locations across repo root and workspace
+    4. Auto-detect removable USB drive (e.g. E:\Packages, D:\Packages, G:\Packages)
     """
     if custom_path and custom_path.strip():
         req_path = custom_path.strip()
         if not os.path.isabs(req_path):
             req_path = os.path.abspath(os.path.join(REPO_ROOT, req_path))
-        return req_path
+        if os.path.isdir(req_path):
+            return req_path
 
     # Read config file
     if os.path.isfile(CONFIG_FILE):
@@ -67,17 +85,25 @@ def get_packages_directory(custom_path: Optional[str] = None) -> str:
         except Exception as e:
             logger.warning(f"Error reading software_directory.json: {e}")
 
-    # Default workspace Packages folder
-    default_dir = os.path.abspath(os.path.join(REPO_ROOT, "Packages"))
-    if os.path.isdir(default_dir):
-        return default_dir
+    # Check all candidate locations
+    candidates = [
+        os.path.abspath(os.path.join(REPO_ROOT, "Packages")),
+        r"G:\MarkaziSystem\Packages",
+        os.path.abspath(os.path.join(os.getcwd(), "Packages")),
+        os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "Packages")),
+        os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Packages")),
+    ]
+    for c in candidates:
+        if os.path.isdir(c):
+            return c
 
-    # Check removable USB drives
-    for drive in ["D", "E", "F", "G", "H", "I", "U"]:
+    # Check all drive roots
+    for drive in ["C", "D", "E", "F", "G", "H", "I", "U", "V", "W"]:
         usb_dir = f"{drive}:\\Packages"
         if os.path.isdir(usb_dir):
-            logger.info(f"Auto-detected Packages directory on removable drive: {usb_dir}")
             return usb_dir
+
+    return os.path.abspath(os.path.join(REPO_ROOT, "Packages"))
 
 def get_package_icon_path(package_id: str, custom_dir: Optional[str] = None) -> Optional[str]:
     """Returns local icon path if present for given package id."""
@@ -247,18 +273,213 @@ def _extract_exe_metadata(file_path: str) -> Dict[str, str]:
     return meta
 
 
+# Global in-memory cache for extracted icons: file_path -> base64 string
+_GLOBAL_ICON_CACHE: Dict[str, Optional[str]] = {}
+
+
+# Proper 64-bit Win32 types for icon extraction
+HICON = wintypes.HANDLE
+HBITMAP = wintypes.HANDLE
+HDC = wintypes.HANDLE
+HINSTANCE = wintypes.HANDLE
+HWND = wintypes.HWND
+
+
+class ICONINFO(ctypes.Structure):
+    _fields_ = [
+        ("fIcon", wintypes.BOOL),
+        ("xHotspot", wintypes.DWORD),
+        ("yHotspot", wintypes.DWORD),
+        ("hbmMask", HBITMAP),
+        ("hbmColor", HBITMAP),
+    ]
+
+
+class BITMAP(ctypes.Structure):
+    _fields_ = [
+        ("bmType", wintypes.LONG),
+        ("bmWidth", wintypes.LONG),
+        ("bmHeight", wintypes.LONG),
+        ("bmWidthBytes", wintypes.LONG),
+        ("bmPlanes", wintypes.WORD),
+        ("bmBitsPixel", wintypes.WORD),
+        ("bmBits", ctypes.c_void_p),
+    ]
+
+
+class BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [
+        ("biSize", wintypes.DWORD),
+        ("biWidth", wintypes.LONG),
+        ("biHeight", wintypes.LONG),
+        ("biPlanes", wintypes.WORD),
+        ("biBitCount", wintypes.WORD),
+        ("biCompression", wintypes.DWORD),
+        ("biSizeImage", wintypes.DWORD),
+        ("biXPelsPerMeter", wintypes.LONG),
+        ("biYPelsPerMeter", wintypes.LONG),
+        ("biClrUsed", wintypes.DWORD),
+        ("biClrImportant", wintypes.DWORD),
+    ]
+
+
+# Setup proper ctypes function signatures
+try:
+    _shell32 = ctypes.windll.shell32
+    _user32 = ctypes.windll.user32
+    _gdi32 = ctypes.windll.gdi32
+    _kernel32 = ctypes.windll.kernel32
+
+    _shell32.ExtractAssociatedIconW.restype = HICON
+    _shell32.ExtractAssociatedIconW.argtypes = [HINSTANCE, wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_short)]
+
+    _user32.PrivateExtractIconsW.restype = wintypes.UINT
+    _user32.PrivateExtractIconsW.argtypes = [
+        wintypes.LPCWSTR, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+        ctypes.POINTER(HICON), ctypes.POINTER(wintypes.UINT),
+        wintypes.UINT, wintypes.UINT
+    ]
+
+    _user32.GetIconInfo.restype = wintypes.BOOL
+    _user32.GetIconInfo.argtypes = [HICON, ctypes.POINTER(ICONINFO)]
+
+    _user32.DestroyIcon.restype = wintypes.BOOL
+    _user32.DestroyIcon.argtypes = [HICON]
+
+    _user32.GetDC.restype = HDC
+    _user32.GetDC.argtypes = [HWND]
+
+    _user32.ReleaseDC.restype = ctypes.c_int
+    _user32.ReleaseDC.argtypes = [HWND, HDC]
+
+    _gdi32.CreateCompatibleDC.restype = HDC
+    _gdi32.CreateCompatibleDC.argtypes = [HDC]
+
+    _gdi32.DeleteDC.restype = wintypes.BOOL
+    _gdi32.DeleteDC.argtypes = [HDC]
+
+    _gdi32.GetObjectW.restype = ctypes.c_int
+    _gdi32.GetObjectW.argtypes = [HBITMAP, ctypes.c_int, ctypes.c_void_p]
+
+    _gdi32.GetDIBits.restype = ctypes.c_int
+    _gdi32.GetDIBits.argtypes = [
+        HDC, HBITMAP, wintypes.UINT, wintypes.UINT,
+        ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT
+    ]
+
+    _gdi32.DeleteObject.restype = wintypes.BOOL
+    _gdi32.DeleteObject.argtypes = [HBITMAP]
+except Exception as e:
+    logger.debug(f"Win32 ctypes initialization note: {e}")
+
+
+def _extract_single_icon_native(exe_path: str) -> Optional[str]:
+    """Pure Win32 Ctypes icon extractor: 0 processes, 0 window flashes, instant speed."""
+    if not os.path.isfile(exe_path):
+        return None
+
+    try:
+        from PIL import Image
+        import io
+        import base64
+    except ImportError:
+        return None
+
+    h_icon = None
+    try:
+        # Try PrivateExtractIconsW first for 48x48 icon
+        h_icons = (HICON * 1)()
+        icon_ids = (wintypes.UINT * 1)()
+        num = _user32.PrivateExtractIconsW(exe_path, 0, 48, 48, h_icons, icon_ids, 1, 0)
+        if num > 0 and h_icons[0]:
+            h_icon = h_icons[0]
+
+        if not h_icon:
+            # Fallback to ExtractAssociatedIconW
+            h_inst = _kernel32.GetModuleHandleW(None)
+            icon_idx = ctypes.c_short(0)
+            h_icon = _shell32.ExtractAssociatedIconW(h_inst, exe_path, ctypes.byref(icon_idx))
+
+        if not h_icon:
+            return None
+
+        icon_info = ICONINFO()
+        if not _user32.GetIconInfo(h_icon, ctypes.byref(icon_info)):
+            return None
+
+        hbm_color = icon_info.hbmColor
+        hbm_mask = icon_info.hbmMask
+        if not hbm_color:
+            return None
+
+        bmp = BITMAP()
+        _gdi32.GetObjectW(hbm_color, ctypes.sizeof(BITMAP), ctypes.byref(bmp))
+        width = bmp.bmWidth
+        height = bmp.bmHeight
+        if width <= 0 or height <= 0:
+            return None
+
+        hdc = _user32.GetDC(None)
+        mem_dc = _gdi32.CreateCompatibleDC(hdc)
+
+        bmi = BITMAPINFOHEADER()
+        bmi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+        bmi.biWidth = width
+        bmi.biHeight = -height  # Top-down DIB
+        bmi.biPlanes = 1
+        bmi.biBitCount = 32
+        bmi.biCompression = 0  # BI_RGB
+
+        buffer_size = width * height * 4
+        buf = (ctypes.c_ubyte * buffer_size)()
+
+        _gdi32.GetDIBits(
+            mem_dc,
+            hbm_color,
+            0,
+            height,
+            ctypes.byref(buf),
+            ctypes.byref(bmi),
+            0  # DIB_RGB_COLORS
+        )
+
+        _gdi32.DeleteDC(mem_dc)
+        _user32.ReleaseDC(None, hdc)
+        _gdi32.DeleteObject(hbm_color)
+        if hbm_mask:
+            _gdi32.DeleteObject(hbm_mask)
+
+        raw_bytes = bytes(buf)
+        img = Image.frombytes("RGBA", (width, height), raw_bytes, "raw", "BGRA")
+
+        output = io.BytesIO()
+        img.save(output, format="PNG")
+        png_bytes = output.getvalue()
+
+        b64 = base64.b64encode(png_bytes).decode("ascii")
+        return f"data:image/png;base64,{b64}"
+    except Exception as e:
+        logger.debug(f"Native icon extraction error for {exe_path}: {e}")
+        return None
+    finally:
+        if h_icon:
+            _user32.DestroyIcon(h_icon)
+
+
 def _extract_icons_batch(file_paths: List[str]) -> Dict[str, Optional[str]]:
     """
-    Extracts embedded icons for a batch of .exe files using a single PowerShell invocation.
-    Returns mapping of file_path -> base64 data URI string.
+    Extracts embedded icons for a batch of .exe files using pure native in-process Win32 API.
+    Zero subprocesses, zero window flashes, instant speed.
     """
-    results: Dict[str, Optional[str]] = {p: None for p in file_paths}
+    results: Dict[str, Optional[str]] = {}
     if not file_paths:
         return results
 
-    # Check for local icon files first
-    remaining_paths = []
     for path in file_paths:
+        if path in _GLOBAL_ICON_CACHE:
+            results[path] = _GLOBAL_ICON_CACHE[path]
+            continue
+
         folder = os.path.dirname(path)
         found = False
         for ico_name in ["app.ico", "icon.ico", "app.png", "icon.png"]:
@@ -270,59 +491,19 @@ def _extract_icons_batch(file_paths: List[str]) -> Dict[str, Optional[str]]:
                         data = f.read()
                     ext = os.path.splitext(candidate)[1].lower().replace(".", "")
                     mime = "image/x-icon" if ext == "ico" else f"image/{ext}"
-                    results[path] = f"data:{mime};base64,{base64.b64encode(data).decode('utf-8')}"
+                    uri = f"data:{mime};base64,{base64.b64encode(data).decode('utf-8')}"
+                    results[path] = uri
+                    _GLOBAL_ICON_CACHE[path] = uri
                     found = True
                     break
                 except Exception:
                     pass
+
         if not found:
-            remaining_paths.append(path)
-
-    if not remaining_paths:
-        return results
-
-    # Batch PowerShell extraction for remaining files
-    try:
-        paths_json = json.dumps(remaining_paths)
-        ps_script = f"""
-Add-Type -AssemblyName System.Drawing
-$paths = ConvertFrom-Json @'
-{paths_json}
-'@
-$res = @{{}}
-foreach ($p in $paths) {{
-    try {{
-        if (Test-Path $p) {{
-            $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
-            if ($icon) {{
-                $ms = New-Object System.IO.MemoryStream
-                $bmp = $icon.ToBitmap()
-                $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-                $res[$p] = [Convert]::ToBase64String($ms.ToArray())
-                $bmp.Dispose()
-                $icon.Dispose()
-                $ms.Dispose()
-            }}
-        }}
-    }} catch {{}}
-}}
-$res | ConvertTo-Json -Compress
-"""
-        proc = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps_script],
-            capture_output=True,
-            text=True,
-            timeout=8
-        )
-        out = proc.stdout.strip()
-        if out:
-            extracted_map = json.loads(out)
-            if isinstance(extracted_map, dict):
-                for p, b64 in extracted_map.items():
-                    if b64:
-                        results[p] = f"data:image/png;base64,{b64}"
-    except Exception as e:
-        logger.debug(f"Batch icon extraction error: {e}")
+            icon_data = _extract_single_icon_native(path)
+            if icon_data:
+                results[path] = icon_data
+                _GLOBAL_ICON_CACHE[path] = icon_data
 
     return results
 
@@ -623,7 +804,12 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
     if not launched:
         try:
             ps_cmd = f'Start-Process -FilePath "{abs_path}" -WorkingDirectory "{working_dir}" -Verb RunAs'
-            proc = subprocess.run(["powershell.exe", "-NoProfile", "-Command", ps_cmd], capture_output=True, timeout=5)
+            proc = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-Command", ps_cmd],
+                capture_output=True,
+                timeout=5,
+                **get_hidden_subprocess_kwargs()
+            )
             if proc.returncode == 0:
                 launched = True
                 logger.info(f"PowerShell Start-Process -Verb RunAs successful for {abs_path}")
@@ -636,7 +822,7 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
     # Method 4: Fallback standard subprocess.Popen
     if not launched:
         try:
-            subprocess.Popen([abs_path], cwd=working_dir)
+            subprocess.Popen([abs_path], cwd=working_dir, **get_hidden_subprocess_kwargs())
             launched = True
             logger.info(f"Standard subprocess.Popen successful for {abs_path}")
         except Exception as e:

@@ -1,7 +1,7 @@
 # backend/activation/windows_activation.py
 """
 Windows Activation Detection Module
-Queries official Windows licensing tools (slmgr.vbs) and WMI SoftwareLicensingProduct
+Queries official Windows licensing tools (WMI SoftwareLicensingProduct, slmgr.vbs, and Registry)
 to accurately detect activation state, channel, partial key, edition, and expiration.
 """
 
@@ -12,15 +12,59 @@ import logging
 from typing import Dict, Any, Optional
 
 from utils.formatters import clean_string
+from utils.powershell import run_powershell_json, get_hidden_subprocess_kwargs
 from activation.activation_tools import get_tool_status
 
 logger = logging.getLogger(__name__)
+
+# Windows OS Application ID in SoftwareLicensing service
+WINDOWS_APP_ID = "55c92734-d682-4d71-983e-d6ec3f16059f"
+
+
+def _query_wmi_licensing() -> Dict[str, Any]:
+    """
+    Queries WMI SoftwareLicensingProduct using PowerShell Get-CimInstance.
+    This is the most reliable, direct method on Windows 10 & 11 (returns LicenseStatus: 1 for Licensed).
+    """
+    res = {}
+    try:
+        script = """
+        $products = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL" -ErrorAction SilentlyContinue
+        $win = $products | Where-Object { $_.ApplicationId -eq '55c92734-d682-4d71-983e-d6ec3f16059f' -or $_.Name -like '*Windows*' } | Select-Object -First 1
+        if ($win) {
+            [PSCustomObject]@{
+                Name = $win.Name
+                Description = $win.Description
+                LicenseStatus = $win.LicenseStatus
+                PartialProductKey = $win.PartialProductKey
+                GracePeriodRemaining = $win.GracePeriodRemaining
+            } | ConvertTo-Json
+        }
+        """
+        data = run_powershell_json(script, timeout=8)
+        if isinstance(data, dict):
+            status_code = data.get("LicenseStatus", 0)
+            is_licensed = (status_code == 1)
+            res["status_code"] = status_code
+            res["activated"] = is_licensed
+            res["status_text"] = "Licensed" if is_licensed else ("Notification" if status_code == 5 else "Not Activated")
+            
+            if data.get("Name"):
+                res["name"] = data["Name"]
+            if data.get("Description"):
+                res["description"] = data["Description"]
+            if data.get("PartialProductKey"):
+                res["partial_key"] = data["PartialProductKey"]
+    except Exception as e:
+        logger.debug(f"WMI licensing query error: {e}")
+
+    return res
 
 
 def _query_slmgr_dli() -> Dict[str, Any]:
     """
     Executes slmgr.vbs /dli to retrieve edition, description, partial key, and license status.
-    Fast (typically < 500ms) and accessible without administrator privileges.
+    Fast and accessible without administrator privileges.
     """
     res = {}
     try:
@@ -32,7 +76,8 @@ def _query_slmgr_dli() -> Dict[str, Any]:
             ["cscript", "//nologo", slmgr_path, "/dli"],
             capture_output=True,
             text=True,
-            timeout=6
+            timeout=8,
+            **get_hidden_subprocess_kwargs()
         )
         out = proc.stdout.strip()
         if not out:
@@ -70,7 +115,8 @@ def _query_slmgr_xpr() -> Optional[str]:
             ["cscript", "//nologo", slmgr_path, "/xpr"],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=6,
+            **get_hidden_subprocess_kwargs()
         )
         out = proc.stdout.strip()
         if not out:
@@ -110,43 +156,58 @@ def get_windows_activation_info() -> Dict[str, Any]:
         "tool_path": None,
     }
 
-    # Step 1: Query slmgr.vbs /dli (Fast & accurate)
+    # Step 1: Query slmgr.vbs /dli
     dli_data = _query_slmgr_dli()
-    if dli_data:
-        info["activated"] = dli_data.get("activated", False)
-        info["status_text"] = dli_data.get("status_text", "Licensed" if info["activated"] else "Not Activated")
-        info["status_code"] = 1 if info["activated"] else 0
+    
+    # Step 2: Query WMI SoftwareLicensingProduct (robust fallback & verification)
+    wmi_data = _query_wmi_licensing()
 
-        if dli_data.get("name"):
-            clean_ed = clean_string(dli_data["name"]).replace("(R)", "").replace("(TM)", "").strip()
-            info["edition"] = clean_ed
+    # Combine results
+    activated = dli_data.get("activated", False) or wmi_data.get("activated", False)
+    info["activated"] = activated
+    info["status_code"] = 1 if activated else wmi_data.get("status_code", 0)
+    
+    if activated:
+        info["status_text"] = "Licensed"
+    else:
+        info["status_text"] = dli_data.get("status_text") or wmi_data.get("status_text") or "Not Activated"
 
-        if dli_data.get("description"):
-            desc = clean_string(dli_data["description"])
-            info["description"] = desc
-            ch_match = re.search(r'([A-Za-z0-9_:]+)\s+channel', desc, re.IGNORECASE)
-            if ch_match:
-                info["channel"] = ch_match.group(1).strip()
-            elif "volume" in desc.lower():
-                info["channel"] = "Volume"
-            elif "retail" in desc.lower():
-                info["channel"] = "Retail"
-            elif "oem" in desc.lower():
-                info["channel"] = "OEM"
+    # Edition name
+    raw_name = dli_data.get("name") or wmi_data.get("name")
+    if raw_name:
+        clean_ed = clean_string(raw_name).replace("(R)", "").replace("(TM)", "").strip()
+        info["edition"] = clean_ed
 
-        if dli_data.get("partial_key"):
-            info["partial_key"] = clean_string(dli_data["partial_key"])
+    # Description & Channel
+    raw_desc = dli_data.get("description") or wmi_data.get("description")
+    if raw_desc:
+        desc = clean_string(raw_desc)
+        info["description"] = desc
+        ch_match = re.search(r'([A-Za-z0-9_:]+)\s+channel', desc, re.IGNORECASE)
+        if ch_match:
+            info["channel"] = ch_match.group(1).strip()
+        elif "volume" in desc.lower():
+            info["channel"] = "Volume"
+        elif "retail" in desc.lower():
+            info["channel"] = "Retail"
+        elif "oem" in desc.lower():
+            info["channel"] = "OEM"
 
-        # Check expiration
-        xpr_exp = _query_slmgr_xpr()
-        if xpr_exp:
-            info["expiration"] = xpr_exp
-            info["is_permanent"] = False
-        else:
-            info["expiration"] = None
-            info["is_permanent"] = True
+    # Partial key
+    partial_key = dli_data.get("partial_key") or wmi_data.get("partial_key")
+    if partial_key:
+        info["partial_key"] = clean_string(partial_key)
 
-    # Step 2: Check Activation Tool Availability
+    # Check expiration
+    xpr_exp = _query_slmgr_xpr()
+    if xpr_exp:
+        info["expiration"] = xpr_exp
+        info["is_permanent"] = False
+    else:
+        info["expiration"] = None
+        info["is_permanent"] = True
+
+    # Step 3: Check Activation Tool Availability
     tool_status = get_tool_status("windows")
     info["tool_available"] = tool_status.get("available", False)
     info["tool_path"] = tool_status.get("tool_path")

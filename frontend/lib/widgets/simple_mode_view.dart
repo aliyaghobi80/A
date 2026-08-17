@@ -75,6 +75,11 @@ class SimpleModeView extends StatelessWidget {
               accentColor: const Color(0xFF3B82F6),
               primaryValue: info.cpu.name,
               secondaryValue: l10n.coresThreads(info.cpu.cores, info.cpu.threads),
+              specPills: [
+                '${info.cpu.cores} ${l10n.isPersian ? 'هسته' : 'Cores'}',
+                '${info.cpu.threads} ${l10n.isPersian ? 'رشته' : 'Threads'}',
+                if (info.cpu.maxClockDisplay != 'Not available') info.cpu.maxClockDisplay,
+              ],
               copyValue: info.cpu.name,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
             );
@@ -89,6 +94,11 @@ class SimpleModeView extends StatelessWidget {
               secondaryValue: info.ram.moduleSummary != 'Not available'
                   ? '${info.ram.moduleSummary}${info.ram.speedDisplay != 'Not available' ? ' • ${info.ram.speedDisplay}' : ''}'
                   : info.ram.speedDisplay,
+              specPills: [
+                if (info.ram.moduleSummary != 'Not available') info.ram.moduleSummary,
+                if (info.ram.speedDisplay != 'Not available') info.ram.speedDisplay,
+                if (info.ram.modules.isNotEmpty && info.ram.modules.first.type.isNotEmpty) info.ram.modules.first.type,
+              ],
               copyValue: info.ram.totalDisplay,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
             );
@@ -106,6 +116,10 @@ class SimpleModeView extends StatelessWidget {
               accentColor: const Color(0xFF8B5CF6),
               primaryValue: gpuPrimary,
               secondaryValue: gpuSecondary,
+              specPills: [
+                if (info.gpu.isNotEmpty && info.gpu.first.vramDisplay != 'Not available') info.gpu.first.vramDisplay,
+                if (info.gpu.isNotEmpty && info.gpu.first.driverVersion != 'Not available') 'Driver: ${info.gpu.first.driverVersion}',
+              ],
               copyValue: gpuPrimary,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
             );
@@ -117,7 +131,11 @@ class SimpleModeView extends StatelessWidget {
               icon: Icons.developer_board_rounded,
               accentColor: const Color(0xFF10B981),
               primaryValue: info.motherboard.model != 'Not available' ? info.motherboard.model : info.motherboard.manufacturer,
-              secondaryValue: info.motherboard.manufacturer,
+              secondaryValue: info.motherboard.manufacturer != 'Not available' ? info.motherboard.manufacturer : null,
+              specPills: [
+                if (info.bios.manufacturer != 'Not available') 'BIOS: ${info.bios.manufacturer}',
+                if (info.bios.version != 'Not available') info.bios.version,
+              ],
               copyValue: info.motherboard.model,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
             );
@@ -156,7 +174,7 @@ class SimpleModeView extends StatelessWidget {
                                 child: Text(
                                   d.capacityDisplay,
                                   style: const TextStyle(
-                                    fontSize: 15,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w800,
                                     color: Color(0xFF06B6D4),
                                   ),
@@ -169,7 +187,7 @@ class SimpleModeView extends StatelessWidget {
                                   child: Text(
                                     '${d.type} (${d.model})',
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w700,
                                       color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
                                     ),
@@ -192,8 +210,13 @@ class SimpleModeView extends StatelessWidget {
               categoryTitle: l10n.windows,
               icon: Icons.window_rounded,
               accentColor: const Color(0xFF0284C7),
-              primaryValue: info.windows.edition,
+              primaryValue: info.windows.edition != 'Not available' ? info.windows.edition : 'Windows 11',
               secondaryValue: '${info.windows.architecture}${info.windows.version != 'Not available' ? ' • ${info.windows.version}' : ''}',
+              specPills: [
+                info.windows.architecture,
+                if (info.windows.version != 'Not available') info.windows.version,
+                if (info.windows.build != 'Not available') 'Build ${info.windows.build}',
+              ],
               headerTrailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -214,7 +237,7 @@ class SimpleModeView extends StatelessWidget {
               ),
               copyValue: info.windows.edition,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
-              actionWidget: (!isWinActivated && info.windowsActivation.toolAvailable)
+              actionWidget: (!isWinActivated)
                   ? Obx(() {
                       final isRunning = activationCtrl.isActivatingWindows.value;
                       return SizedBox(
@@ -263,6 +286,13 @@ class SimpleModeView extends StatelessWidget {
               secondaryValue: officeInstalled && info.officeActivation.version != 'Not available'
                   ? '${info.officeActivation.architecture} • ${info.officeActivation.version}'
                   : null,
+              specPills: officeInstalled
+                  ? [
+                      info.officeActivation.architecture,
+                      if (info.officeActivation.version != 'Not available') 'v${info.officeActivation.version}',
+                      if (info.officeActivation.channel != 'Not available') info.officeActivation.channel,
+                    ]
+                  : null,
               headerTrailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -281,7 +311,7 @@ class SimpleModeView extends StatelessWidget {
               ),
               copyValue: officeInstalled ? info.officeActivation.product : null,
               onCopy: (val) => systemCtrl.copyToClipboard(context, val, '${l10n.copiedToClipboard}: $val'),
-              actionWidget: (officeInstalled && !officeActivated && info.officeActivation.toolAvailable)
+              actionWidget: (officeInstalled && !officeActivated)
                   ? Obx(() {
                       final isRunning = activationCtrl.isActivatingOffice.value;
                       return SizedBox(
@@ -882,6 +912,7 @@ class SimpleModeView extends StatelessWidget {
     required Color accentColor,
     required String primaryValue,
     String? secondaryValue,
+    List<String>? specPills,
     Widget? customContent,
     Widget? headerTrailing,
     Widget? actionWidget,
@@ -987,7 +1018,7 @@ class SimpleModeView extends StatelessWidget {
               child: Text(
                 primaryValue,
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 21,
                   fontWeight: FontWeight.w800,
                   color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
                   letterSpacing: -0.4,
@@ -1007,6 +1038,32 @@ class SimpleModeView extends StatelessWidget {
                     color: accentColor,
                   ),
                 ),
+              ),
+            ],
+            if (specPills != null && specPills.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: specPills.map((pill) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: isDark ? 0.15 : 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: accentColor.withValues(alpha: isDark ? 0.35 : 0.2),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Text(
+                    pill,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: accentColor,
+                    ),
+                  ),
+                )).toList(),
               ),
             ],
           ],
@@ -1036,31 +1093,33 @@ class SimpleModeView extends StatelessWidget {
     Widget iconWidget;
     if (pkg.iconBase64 != null && pkg.iconBase64!.isNotEmpty) {
       try {
-        final b64 = pkg.iconBase64!.contains(',')
-            ? pkg.iconBase64!.split(',').last
-            : pkg.iconBase64!;
+        final raw = pkg.iconBase64!;
+        final b64 = (raw.contains(',') ? raw.split(',').last : raw)
+            .trim()
+            .replaceAll('\n', '')
+            .replaceAll('\r', '');
         final bytes = base64Decode(b64);
         iconWidget = Image.memory(
           bytes,
           width: 28,
           height: 28,
-          filterQuality: FilterQuality.medium,
+          filterQuality: FilterQuality.high,
           errorBuilder: (context, error, stackTrace) => Icon(
-            isInstalled ? Icons.check_circle_rounded : Icons.inventory_2_rounded,
+            Icons.apps_rounded,
             size: 24,
             color: statusColor,
           ),
         );
       } catch (_) {
         iconWidget = Icon(
-          isInstalled ? Icons.check_circle_rounded : Icons.inventory_2_rounded,
+          Icons.apps_rounded,
           size: 24,
           color: statusColor,
         );
       }
     } else {
       iconWidget = Icon(
-        isInstalled ? Icons.check_circle_rounded : Icons.inventory_2_rounded,
+        Icons.apps_rounded,
         size: 24,
         color: statusColor,
       );
@@ -1503,78 +1562,149 @@ class SimpleModeView extends StatelessWidget {
     final exists = item.exists;
     final statusColor = exists ? const Color(0xFF10B981) : const Color(0xFFEF4444);
     final isFolder = item.type.toLowerCase() == 'folder';
+    final systemCtrl = Get.find<SystemInfoController>();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: exists
-              ? statusColor.withValues(alpha: isDark ? 0.3 : 0.2)
+              ? statusColor.withValues(alpha: isDark ? 0.35 : 0.2)
               : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+          width: 1.2,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(
-              exists ? Icons.check_rounded : Icons.close_rounded,
-              size: 16,
-              color: statusColor,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Text(
-                    item.displayName,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+          // Top Row: Icon + Display Name + Tag + Status Badge
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  isFolder
+                      ? (exists ? Icons.folder_rounded : Icons.folder_off_rounded)
+                      : (exists ? Icons.insert_drive_file_rounded : Icons.file_present_rounded),
+                  size: 18,
+                  color: statusColor,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          item.displayName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)).withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        isFolder ? l10n.folder : l10n.file,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  exists ? '✓ ${l10n.present}' : '✕ ${l10n.missing}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    isFolder ? l10n.folder : l10n.file,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Bottom Row: Exact File Path container with copy button
+          InkWell(
+            onTap: () => systemCtrl.copyToClipboard(
+              context,
+              item.path,
+              '${l10n.copiedToClipboard}: ${item.path}',
+            ),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF070D1E) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFCBD5E1),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.link_rounded,
+                    size: 14,
+                    color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Text(
+                        item.path,
+                        style: TextStyle(
+                          fontFamily: 'Consolas',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              exists ? l10n.present : l10n.missing,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: statusColor,
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.copy_rounded,
+                    size: 13,
+                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  ),
+                ],
               ),
             ),
           ),

@@ -1,39 +1,34 @@
 @echo off
-title Central System Checker - Demo Launcher
-echo =======================================================
-echo     Central System Checker - Demo
-echo =======================================================
-echo.
+setlocal
 
-:: Check if Python is installed
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] Python is not found in PATH. Please install Python 3.9+.
-    pause
-    exit /b 1
-)
+:: Find pythonw for completely windowless backend execution
+set "PYTHONW_BIN="
+where pythonw >nul 2>&1 && set "PYTHONW_BIN=pythonw"
+if not defined PYTHONW_BIN if exist "G:\python\pythonw.exe" set "PYTHONW_BIN=G:\python\pythonw.exe"
+if not defined PYTHONW_BIN if exist "C:\Python314\pythonw.exe" set "PYTHONW_BIN=C:\Python314\pythonw.exe"
+if not defined PYTHONW_BIN if exist "C:\Python312\pythonw.exe" set "PYTHONW_BIN=C:\Python312\pythonw.exe"
+if not defined PYTHONW_BIN if exist "C:\Python311\pythonw.exe" set "PYTHONW_BIN=C:\Python311\pythonw.exe"
+if not defined PYTHONW_BIN if exist "C:\Program Files\Python312\pythonw.exe" set "PYTHONW_BIN=C:\Program Files\Python312\pythonw.exe"
+if not defined PYTHONW_BIN set "PYTHONW_BIN=pythonw"
 
-:: Ensure latest Phase 2 backend service is started on port 18088
+:: Check if backend service is already active on port 18088
 netstat -ano | findstr :18088 >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [1/2] Starting Python system inspection backend on port 18088...
-    start /min "Central System Checker Backend" cmd /c "python backend\main.py --port 18088"
-    timeout /t 2 /nobreak >nul
-) else (
-    echo [1/2] Python backend active on port 18088.
+    start "" "%PYTHONW_BIN%" "%~dp0backend\main.py" --port 18088
+    timeout /t 1 /nobreak >nul
 )
 
-:: Launch Flutter application
-echo [2/2] Launching Central System Checker Desktop App...
-if exist "frontend\build\windows\x64\runner\Release\CentralSystemChecker.exe" (
-    start "" /D "frontend\build\windows\x64\runner\Release" "CentralSystemChecker.exe"
-) else if exist "frontend\build\windows\x64\runner\Release\central_system_checker.exe" (
-    start "" /D "frontend\build\windows\x64\runner\Release" "central_system_checker.exe"
-) else (
-    echo Running via Flutter CLI...
-    cd frontend
-    flutter run -d windows
+:: Launch Flutter Desktop Application
+if exist "%~dp0frontend\build\windows\x64\runner\Release\CentralSystemChecker.exe" (
+    start "" /D "%~dp0frontend\build\windows\x64\runner\Release" "CentralSystemChecker.exe"
+    exit 0
 )
 
-echo.
-echo Application started successfully!
+if exist "%~dp0frontend\build\windows\x64\runner\Release\central_system_checker.exe" (
+    start "" /D "%~dp0frontend\build\windows\x64\runner\Release" "central_system_checker.exe"
+    exit 0
+)
+
+cd /d "%~dp0frontend"
+flutter run -d windows
+exit 0

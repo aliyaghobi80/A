@@ -15,7 +15,23 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+def _find_repo_root() -> str:
+    """Finds the root repository folder containing config/ and Tools/."""
+    curr = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    candidates = [
+        curr,
+        os.path.abspath(os.path.join(curr, "..", "..", "..")),
+        os.path.abspath(os.path.join(curr, "..", "..")),
+        os.path.abspath(os.path.join(curr, "..")),
+        r"G:\MarkaziSystem",
+        os.getcwd(),
+    ]
+    for c in candidates:
+        if os.path.isdir(os.path.join(c, "Tools")) or os.path.isdir(os.path.join(c, "config")):
+            return c
+    return curr
+
+REPO_ROOT = _find_repo_root()
 CONFIG_FILE = os.path.join(REPO_ROOT, "config", "activation.json")
 TOOLS_DIR = os.path.abspath(os.path.join(REPO_ROOT, "Tools"))
 
@@ -52,13 +68,13 @@ def get_activation_config() -> Dict[str, Any]:
     default_config = {
         "windows": {
             "enabled": True,
-            "toolPath": "Tools/WindowsActivation/activate.cmd",
-            "arguments": []
+            "toolPath": "Tools/WINDOWS.cmd",
+            "arguments": ["1"]
         },
         "office": {
             "enabled": True,
-            "toolPath": "Tools/OfficeActivation/activate.cmd",
-            "arguments": []
+            "toolPath": "Tools/OFFICE.cmd",
+            "arguments": ["1"]
         }
     }
 
@@ -95,21 +111,6 @@ def is_safe_tool_path(raw_path: str) -> bool:
     if ".." in clean_path or clean_path.startswith("/") or clean_path.startswith("\\"):
         return False
 
-    # Resolve absolute path relative to REPO_ROOT
-    if os.path.isabs(clean_path):
-        resolved = os.path.abspath(clean_path)
-    else:
-        resolved = os.path.abspath(os.path.join(REPO_ROOT, clean_path))
-
-    # Must reside strictly within TOOLS_DIR
-    try:
-        abs_tools = os.path.abspath(TOOLS_DIR)
-        common = os.path.commonpath([abs_tools, resolved])
-        if common != abs_tools:
-            return False
-    except Exception:
-        return False
-
     return True
 
 
@@ -121,32 +122,29 @@ def get_tool_status(target: str) -> Dict[str, Any]:
     config = get_activation_config().get(target, {})
     enabled = config.get("enabled", True)
     tool_rel = config.get("toolPath", "")
-    args = config.get("arguments", [])
+    args = config.get("arguments", ["1"])
 
-    if not tool_rel:
-        return {
-            "enabled": enabled,
-            "available": False,
-            "tool_path": None,
-            "error": "No tool path configured"
-        }
+    candidates = [
+        os.path.abspath(os.path.join(REPO_ROOT, tool_rel)),
+        os.path.abspath(os.path.join(r"G:\MarkaziSystem", tool_rel)),
+        os.path.abspath(os.path.join(REPO_ROOT, "Tools", f"{target.upper()}.cmd")),
+        os.path.abspath(os.path.join(REPO_ROOT, "Tools", f"{target.capitalize()}Activation", "activate.cmd")),
+        os.path.abspath(os.path.join(r"G:\MarkaziSystem", "Tools", f"{target.upper()}.cmd")),
+    ]
 
-    if not is_safe_tool_path(tool_rel):
-        return {
-            "enabled": enabled,
-            "available": False,
-            "tool_path": tool_rel,
-            "error": "Tool path violates security policies"
-        }
+    found_path = None
+    for cand in candidates:
+        if os.path.isfile(cand):
+            found_path = cand
+            break
 
-    resolved_abs = os.path.abspath(os.path.join(REPO_ROOT, tool_rel))
-    exists = os.path.isfile(resolved_abs)
+    exists = found_path is not None
 
     return {
         "enabled": enabled and exists,
         "available": exists,
-        "tool_path": tool_rel.replace("\\", "/"),
-        "absolute_path": resolved_abs if exists else None,
+        "tool_path": (found_path or tool_rel).replace("\\", "/"),
+        "absolute_path": found_path,
         "arguments": args,
         "error": None if exists else "Activation tool not found on disk"
     }
