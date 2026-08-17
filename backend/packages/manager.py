@@ -24,14 +24,19 @@ logger = logging.getLogger(__name__)
 
 def _find_repo_root() -> str:
     """Finds the root repository folder containing config/ and Packages/."""
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+        if os.path.basename(exe_dir).lower() == "backend":
+            return os.path.dirname(exe_dir)
+        return exe_dir
+
     curr = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     candidates = [
         curr,
+        os.getcwd(),
         os.path.abspath(os.path.join(curr, "..", "..", "..")),
         os.path.abspath(os.path.join(curr, "..", "..")),
         os.path.abspath(os.path.join(curr, "..")),
-        r"G:\MarkaziSystem",
-        os.getcwd(),
     ]
     for c in candidates:
         if os.path.isdir(os.path.join(c, "Packages")) or os.path.isdir(os.path.join(c, "config")):

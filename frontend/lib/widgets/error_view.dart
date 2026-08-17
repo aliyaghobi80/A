@@ -52,7 +52,7 @@ class ErrorView extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              l10n.inspectionFailed,
+              l10n.isPersian ? 'ارتباط با موتور سیستم برقرار نشد.' : 'Unable to connect to the system engine.',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -61,7 +61,9 @@ class ErrorView extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              errorMessage,
+              l10n.isPersian
+                  ? 'لطفاً اطمینان حاصل کنید که سرویس پس‌زمینه در حال اجراست و روی دکمه «تلاش مجدد» کلیک کنید.'
+                  : 'Please ensure the local background engine is running and click "Retry Connection".',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,

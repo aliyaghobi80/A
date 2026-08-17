@@ -51,3 +51,7 @@ frontend/windows/flutter/ephemeral/
 *.ilk
 *.exp
 *.lib
+build_backend_out/
+dist/
+logs/
+data/logs/

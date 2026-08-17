@@ -17,7 +17,23 @@ DEFAULT_PORT = 18088
 
 def setup_logging(verbose: bool = False):
     level = logging.DEBUG if verbose else logging.INFO
-    log_file = os.path.join(BASE_DIR, "service.log")
+    # Store logs in logs/ inside application root or BASE_DIR
+    app_root = BASE_DIR
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+        app_root = os.path.dirname(exe_dir) if os.path.basename(exe_dir).lower() == "backend" else exe_dir
+    else:
+        curr = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+        if os.path.isdir(os.path.join(curr, "config")):
+            app_root = curr
+
+    logs_dir = os.path.join(app_root, "logs")
+    try:
+        os.makedirs(logs_dir, exist_ok=True)
+        log_file = os.path.join(logs_dir, "server.log")
+    except Exception:
+        log_file = os.path.join(BASE_DIR, "service.log")
+
     handlers = []
     try:
         handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
