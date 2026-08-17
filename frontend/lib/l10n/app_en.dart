@@ -537,5 +537,67 @@ class AppLocalizationsEn implements AppLocalizations {
   @override
   String scanCompleted(double durationMs, String hostName) =>
       'Scan completed in ${durationMs.toStringAsFixed(1)}ms on $hostName';
+
+  // Phase 4 — Full System QC & One-Click Preparation
+  @override
+  String get runFullCheck => 'Run Full Check';
+
+  @override
+  String get fullSystemCheck => 'Full System Check';
+
+  @override
+  String get systemReady => 'System Ready';
+
+  @override
+  String get prepareSystem => 'Prepare System';
+
+  @override
+  String get runCheckAgain => 'Run Check Again';
+
+  @override
+  String get viewProblems => 'View Problems';
+
+  @override
+  String get installSelected => 'Install Selected';
+
+  @override
+  String get passed => 'Passed';
+
+  @override
+  String get failed => 'Failed';
+
+  @override
+  String get warning => 'Warning';
+
+  @override
+  String get notPresentState => 'Not Present';
+
+  @override
+  String get problems => 'Problems & Warnings';
+
+  @override
+  String get noProblemsFound => 'No problems found; system is fully ready.';
+
+  @override
+  String get prepareSystemDescription => 'Select desired corrective actions to execute automatically in sequence.';
+
+  @override
+  String get confirmPrepareSystemTitle => 'Confirm System Preparation';
+
+  @override
+  String get confirmPrepareSystemMessage => 'The selected actions will be executed sequentially with Administrator elevation. Proceed?';
+
+  @override
+  String get selectActionsToExecute => 'Select Actions to Execute';
+
+  @override
+  String get executeSelectedActions => 'Execute Selected Actions';
+
+  @override
+  String qcProblemsFound(int count) => '$count item(s) need attention';
+
+  @override
+  String qcPassedCategoriesCount(int passed, int total) => '$passed of $total categories passed';
 }
+
 

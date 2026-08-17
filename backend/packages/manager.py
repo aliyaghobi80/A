@@ -11,6 +11,7 @@ import os
 import sys
 import json
 import ctypes
+from ctypes import wintypes
 import struct
 import logging
 import winreg

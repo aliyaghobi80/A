@@ -17,6 +17,7 @@ from packages.manager import scan_packages, install_package, open_package, get_p
 from activation.windows_activation import get_windows_activation_info
 from activation.office_activation import get_office_activation_info
 from activation.activation_tools import execute_activation_tool
+from qc.qc_engine import evaluate_system_qc
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,8 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Central System Checker Backend",
-                "version": "3.0.0",
-                "phase": 3
+                "version": "4.0.0",
+                "phase": 4
             }
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return
@@ -71,6 +72,21 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps(data, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/qc/status" or path == "/api/qc":
+            with _cache_lock:
+                if _cached_data is None:
+                    _cached_data = collect_all_system_info()
+                data = _cached_data
+            pkgs = scan_packages()
+            qc_report = evaluate_system_qc(data, pkgs)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(qc_report, indent=2).encode("utf-8"))
             return
 
         elif path == "/api/packages":
@@ -149,6 +165,21 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps(data, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/qc/run" or path == "/api/qc/check":
+            logger.info("Full system QC check requested via POST...")
+            with _cache_lock:
+                _cached_data = collect_all_system_info()
+                data = _cached_data
+            pkgs = scan_packages()
+            qc_report = evaluate_system_qc(data, pkgs)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(qc_report, indent=2).encode("utf-8"))
             return
 
         elif path == "/api/packages/scan":

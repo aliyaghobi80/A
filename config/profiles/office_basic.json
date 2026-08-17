@@ -1,0 +1,18 @@
+{
+  "profileId": "office_basic",
+  "name": "Standard Office Workstation",
+  "description": "Standard corporate PC preset with basic browser, archive utility, and core office suite",
+  "software": [
+    { "id": "chrome", "name": "Google Chrome", "required": true },
+    { "id": "winrar", "name": "WinRAR", "required": true },
+    { "id": "vlc", "name": "VLC Media Player", "required": false },
+    { "id": "office", "name": "Microsoft Office", "required": true }
+  ],
+  "files": [
+    { "id": "system_hosts", "name": "System Hosts File", "required": true }
+  ],
+  "activation": {
+    "requireWindows": true,
+    "requireOffice": true
+  }
+}

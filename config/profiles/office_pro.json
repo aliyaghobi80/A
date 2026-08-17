@@ -1,0 +1,20 @@
+{
+  "profileId": "office_pro",
+  "name": "Professional Workstation",
+  "description": "Full-featured professional PC preset with all standard tools, multimedia, and full office suite",
+  "software": [
+    { "id": "chrome", "name": "Google Chrome", "required": true },
+    { "id": "winrar", "name": "WinRAR", "required": true },
+    { "id": "vlc", "name": "VLC Media Player", "required": true },
+    { "id": "office", "name": "Microsoft Office", "required": true }
+  ],
+  "files": [
+    { "id": "training_folder", "name": "Training Folder", "required": true },
+    { "id": "desktop_tools", "name": "Desktop Tools", "required": true },
+    { "id": "system_hosts", "name": "System Hosts File", "required": true }
+  ],
+  "activation": {
+    "requireWindows": true,
+    "requireOffice": true
+  }
+}

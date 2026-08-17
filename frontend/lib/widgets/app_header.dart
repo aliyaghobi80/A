@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import '../controllers/qc_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../services/settings_service.dart';
 import 'dialogs/exit_dialog.dart';
@@ -285,6 +287,67 @@ class AppHeader extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
+            const SizedBox(width: 10),
+
+            // Prominent Full System Check (QC) Button
+            Builder(
+              builder: (ctx) {
+                if (Get.isRegistered<QcController>()) {
+                  final qcCtrl = Get.find<QcController>();
+                  return Obx(() {
+                    final isChecking = qcCtrl.isChecking.value;
+                    return ElevatedButton(
+                      onPressed: isChecking ? null : () => qcCtrl.runFullCheck(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF059669), // Emerald Accent
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: const Color(0xFF059669).withValues(alpha: 0.6),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isCompact ? 12 : 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isChecking) ...[
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            ),
+                            if (!isCompact) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                l10n.checking,
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ] else ...[
+                            const Icon(Icons.health_and_safety_rounded, size: 16),
+                            if (!isCompact) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                l10n.runFullCheck,
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ],
+                        ],
+                      ),
+                    );
+                  });
+                }
+                return const SizedBox.shrink();
+              },
             ),
             const SizedBox(width: 10),
 

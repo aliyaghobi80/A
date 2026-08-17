@@ -6,7 +6,7 @@
       "displayName": "Training Folder",
       "path": "C:\\CompanyFiles\\Training",
       "type": "folder",
-      "required": true
+      "required": false
     },
     {
       "id": "desktop_tools",
@@ -14,7 +14,7 @@
       "displayName": "Desktop Tools",
       "path": "C:\\Users\\Public\\Desktop\\CompanyTools",
       "type": "folder",
-      "required": true
+      "required": false
     },
     {
       "id": "system_hosts",

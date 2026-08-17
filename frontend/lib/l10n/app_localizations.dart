@@ -247,6 +247,28 @@ abstract class AppLocalizations {
 
   // Footer
   String scanCompleted(double durationMs, String hostName);
+
+  // Phase 4 — Full System QC & One-Click Preparation
+  String get runFullCheck;
+  String get fullSystemCheck;
+  String get systemReady;
+  String get prepareSystem;
+  String get runCheckAgain;
+  String get viewProblems;
+  String get installSelected;
+  String get passed;
+  String get failed;
+  String get warning;
+  String get notPresentState;
+  String get problems;
+  String get noProblemsFound;
+  String get prepareSystemDescription;
+  String get confirmPrepareSystemTitle;
+  String get confirmPrepareSystemMessage;
+  String get selectActionsToExecute;
+  String get executeSelectedActions;
+  String qcProblemsFound(int count);
+  String qcPassedCategoriesCount(int passed, int total);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

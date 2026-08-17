@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../controllers/software_controller.dart';
 import '../models/system_info.dart';
 import 'summary_hero_bar.dart';
+import 'qc/qc_summary_banner.dart';
 import 'cards/cpu_card.dart';
 import 'cards/motherboard_card.dart';
 import 'cards/ram_card.dart';
@@ -34,6 +35,9 @@ class AdvancedModeView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Full System QC Summary Banner
+        const QcSummaryBanner(),
+
         // Top Hero Overview Bar
         SummaryHeroBar(info: info),
         const SizedBox(height: 20),

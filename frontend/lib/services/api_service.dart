@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/system_info.dart';
+import '../models/qc_report.dart';
 import 'backend_process_manager.dart';
 
 class ApiService {
@@ -186,24 +187,45 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> getActivationStatus() async {
+  Future<QcReport> fetchQcStatus() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return {};
+      return QcReport.empty();
     }
 
     try {
-      final uri = Uri.parse('$baseUrl/api/activation/status');
-      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+      final uri = Uri.parse('$baseUrl/api/qc/status');
+      final response = await http.get(uri).timeout(timeoutDuration);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
-        return data;
+        return QcReport.fromJson(data);
       }
-      return {};
+      return QcReport.empty();
     } catch (e) {
-      debugPrint('[ApiService] getActivationStatus error: $e');
-      return {};
+      debugPrint('[ApiService] fetchQcStatus error: $e');
+      return QcReport.empty();
+    }
+  }
+
+  Future<QcReport> runQcCheck() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return QcReport.empty();
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/qc/run');
+      final response = await http.post(uri).timeout(timeoutDuration);
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return QcReport.fromJson(data);
+      }
+      return QcReport.empty();
+    } catch (e) {
+      debugPrint('[ApiService] runQcCheck error: $e');
+      return QcReport.empty();
     }
   }
 }

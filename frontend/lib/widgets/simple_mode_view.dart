@@ -6,6 +6,7 @@ import '../controllers/software_controller.dart';
 import '../controllers/system_info_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
+import 'qc/qc_summary_banner.dart';
 
 class SimpleModeView extends StatelessWidget {
   final SystemInfo info;
@@ -30,9 +31,8 @@ class SimpleModeView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. Quick Status Summary Bar (Top)
-        _buildQuickStatusSummary(context, info, l10n, isDark),
-        const SizedBox(height: 22),
+        // 1. Full System QC Summary Banner (Top)
+        const QcSummaryBanner(),
 
         // 2. Hardware Section Header with 1-click Copy
         _buildSectionHeader(
@@ -659,214 +659,7 @@ class SimpleModeView extends StatelessWidget {
     );
   }
 
-  Widget _buildQuickStatusSummary(BuildContext context, SystemInfo info, AppLocalizations l10n, bool isDark) {
-    final isSystemReady = info.driverSummary.allHealthy &&
-        info.softwareSummary.allInstalled &&
-        info.filesSummary.allPresent &&
-        info.windowsActivation.activated &&
-        (!info.officeActivation.installed || info.officeActivation.activated);
-    final statusColor = isSystemReady ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
-    final statusText = isSystemReady ? l10n.ready : l10n.needsAttention;
 
-    final drvHealthy = info.driverSummary.healthyCount;
-    final drvTotal = info.driverSummary.totalPresentCount;
-
-    final softInstalled = info.softwareSummary.installedCount;
-    final softTotal = info.softwareSummary.totalCount;
-
-    final filesPresent = info.filesSummary.presentCount;
-    final filesTotal = info.filesSummary.totalCount;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF131D33) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0xFF22304E) : const Color(0xFFE2E8F0),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isCompact = constraints.maxWidth < 750;
-
-          final statusTile = Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: statusColor.withValues(alpha: 0.5),
-                      blurRadius: 6,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    l10n.systemStatus,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                    ),
-                  ),
-                  Text(
-                    statusText,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: statusColor,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          );
-
-          Widget metricBadge({
-            required IconData icon,
-            required String label,
-            required String countText,
-            required Color color,
-          }) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: isDark ? 0.15 : 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: color.withValues(alpha: 0.25)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 16, color: color),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
-                        ),
-                      ),
-                      Text(
-                        countText,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: color,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final winBadge = metricBadge(
-            icon: Icons.laptop_windows_rounded,
-            label: l10n.windows,
-            countText: info.windowsActivation.activated ? l10n.activated : l10n.notActivated,
-            color: info.windowsActivation.activated ? const Color(0xFF0284C7) : const Color(0xFFEF4444),
-          );
-
-          final officeBadge = metricBadge(
-            icon: Icons.business_center_rounded,
-            label: l10n.office,
-            countText: !info.officeActivation.installed
-                ? l10n.notInstalled
-                : (info.officeActivation.activated ? l10n.activated : l10n.notActivated),
-            color: !info.officeActivation.installed
-                ? const Color(0xFF64748B)
-                : (info.officeActivation.activated ? const Color(0xFFD97706) : const Color(0xFFEF4444)),
-          );
-
-          final drvBadge = metricBadge(
-            icon: Icons.settings_suggest_rounded,
-            label: l10n.drivers,
-            countText: l10n.driverSummaryCount(drvHealthy, drvTotal),
-            color: info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-          );
-
-          final softBadge = metricBadge(
-            icon: Icons.apps_rounded,
-            label: l10n.software,
-            countText: l10n.softwareSummaryCount(softInstalled, softTotal),
-            color: info.softwareSummary.allInstalled ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-          );
-
-          final filesBadge = metricBadge(
-            icon: Icons.folder_special_rounded,
-            label: l10n.requiredFiles,
-            countText: l10n.filesSummaryCount(filesPresent, filesTotal),
-            color: info.filesSummary.allPresent ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-          );
-
-          final badges = [winBadge, if (info.officeActivation.installed) officeBadge, drvBadge, softBadge, filesBadge];
-
-          if (isCompact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                statusTile,
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: badges,
-                ),
-              ],
-            );
-          }
-
-          return Row(
-            children: [
-              statusTile,
-              const SizedBox(width: 24),
-              Container(
-                height: 32,
-                width: 1,
-                color: isDark ? const Color(0xFF22304E) : const Color(0xFFE2E8F0),
-              ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.start,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: badges,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
 
   Widget _buildSectionHeader({
     required BuildContext context,

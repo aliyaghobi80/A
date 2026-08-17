@@ -537,5 +537,67 @@ class AppLocalizationsFa implements AppLocalizations {
   @override
   String scanCompleted(double durationMs, String hostName) =>
       'بررسی در ${durationMs.toStringAsFixed(1)} میلی‌ثانیه برای $hostName انجام شد';
+
+  // Phase 4 — Full System QC & One-Click Preparation
+  @override
+  String get runFullCheck => 'بررسی کامل سیستم';
+
+  @override
+  String get fullSystemCheck => 'بررسی کامل سیستم';
+
+  @override
+  String get systemReady => 'سیستم آماده است';
+
+  @override
+  String get prepareSystem => 'آماده‌سازی سیستم';
+
+  @override
+  String get runCheckAgain => 'بررسی مجدد';
+
+  @override
+  String get viewProblems => 'مشاهده مشکلات';
+
+  @override
+  String get installSelected => 'نصب موارد انتخاب‌شده';
+
+  @override
+  String get passed => 'موفق';
+
+  @override
+  String get failed => 'خطا';
+
+  @override
+  String get warning => 'هشدار';
+
+  @override
+  String get notPresentState => 'موجود نیست';
+
+  @override
+  String get problems => 'مشکلات و هشدارها';
+
+  @override
+  String get noProblemsFound => 'هیچ مشکلی یافت نشد؛ سیستم کاملاً آماده است.';
+
+  @override
+  String get prepareSystemDescription => 'اقدامات اصلاحی موردنظر را جهت اجرای خودکار و ترتیبی انتخاب نمایید.';
+
+  @override
+  String get confirmPrepareSystemTitle => 'تأیید آماده‌سازی خودکار سیستم';
+
+  @override
+  String get confirmPrepareSystemMessage => 'موارد انتخاب‌شده به ترتیب نصب و فعالسازی خواهند شد. آیا ادامه می‌دهید؟';
+
+  @override
+  String get selectActionsToExecute => 'انتخاب اقدامات جهت اجرا';
+
+  @override
+  String get executeSelectedActions => 'اجرای اقدامات انتخاب‌شده';
+
+  @override
+  String qcProblemsFound(int count) => '$count مورد نیاز به بررسی دارد';
+
+  @override
+  String qcPassedCategoriesCount(int passed, int total) => '$passed از $total بخش تأیید شد';
 }
+
 
