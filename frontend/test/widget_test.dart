@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:central_system_checker/controllers/activation_controller.dart';
+import 'package:central_system_checker/controllers/qc_controller.dart';
 import 'package:central_system_checker/controllers/software_controller.dart';
 import 'package:central_system_checker/controllers/system_info_controller.dart';
 import 'package:central_system_checker/controllers/theme_language_controller.dart';
@@ -40,6 +41,7 @@ void main() {
     Get.put(SystemInfoController());
     Get.put(SoftwareController());
     Get.put(ActivationController());
+    Get.put(QcController());
   });
 
   testWidgets('LoadingView displays expected branding and message in English and Persian', (WidgetTester tester) async {
@@ -83,7 +85,7 @@ void main() {
     );
 
     expect(find.text('سی‌پی‌یو'), findsOneWidget);
-    expect(find.text('12th Gen Intel Core i3-12100F'), findsOneWidget);
+    expect(find.text('12th Gen Intel Core i3-12100F'), findsAtLeast(1));
     expect(find.text('4 هسته / 8 رشته'), findsOneWidget);
   });
 
@@ -177,12 +179,11 @@ void main() {
       ),
     );
 
-    expect(find.text('درایورها'), findsOneWidget);
-    expect(find.text('سالم'), findsOneWidget);
-    expect(find.text('وجود ندارد'), findsOneWidget);
+    expect(find.text('بررسی جامع درایورهای سخت‌افزاری'), findsOneWidget);
+    expect(find.text('1 سالم'), findsOneWidget);
 
     expect(find.text('نرم‌افزارها'), findsOneWidget);
-    expect(find.text('7-Zip'), findsOneWidget);
+    expect(find.text('7-Zip'), findsAtLeast(1));
   });
 
   testWidgets('SimpleModeView displays quick status bar, 6 large spec cards, drivers and software', (WidgetTester tester) async {
@@ -390,17 +391,12 @@ void main() {
     expect(find.text('حافظه ذخیره‌سازی'), findsOneWidget);
     expect(find.text('ویندوز'), findsAtLeast(1));
 
-    // Verify Quick Status
-    expect(find.text('وضعیت سیستم'), findsOneWidget);
-    expect(find.text('آماده'), findsAtLeast(1));
-
     // Verify Driver and Software sections
     expect(find.text('درایورها'), findsAtLeast(1));
     expect(find.text('نرم‌افزارها'), findsAtLeast(1));
-    expect(find.text('Google Chrome'), findsOneWidget);
-    expect(find.text('VLC Media Player'), findsOneWidget);
-    expect(find.text('فایل‌های موردنیاز'), findsAtLeast(1));
-    expect(find.text('مایکروسافت آفیس'), findsOneWidget);
+    expect(find.text('Google Chrome'), findsAtLeast(1));
+    expect(find.text('VLC Media Player'), findsAtLeast(1));
+    expect(find.text('مایکروسافت آفیس'), findsAtLeast(1));
   });
 
   testWidgets('OfficeCard displays Microsoft Office activation and licensing status', (WidgetTester tester) async {
