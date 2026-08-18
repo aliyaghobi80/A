@@ -66,6 +66,25 @@ def step_sync_release_folder(backend_exe: str):
             shutil.copytree(src, dst)
             print(f" * Copied {folder} -> {dst}")
 
+    # 2.5 Bundle Visual C++ Runtime DLLs for legacy / fresh Windows compatibility
+    system32 = os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32")
+    vc_dlls = [
+        "vcruntime140.dll",
+        "vcruntime140_1.dll",
+        "msvcp140.dll",
+        "msvcp140_1.dll",
+        "msvcp140_2.dll",
+        "msvcp140_atomic_wait.dll",
+        "msvcp140_codecvt_ids.dll",
+        "vcomp140.dll",
+    ]
+    for dll in vc_dlls:
+        src_dll = os.path.join(system32, dll)
+        if os.path.isfile(src_dll):
+            shutil.copy2(src_dll, os.path.join(FLUTTER_RELEASE_DIR, dll))
+            shutil.copy2(src_dll, os.path.join(dest_backend_dir, dll))
+    print(f" * Bundled {len(vc_dlls)} Visual C++ runtime DLLs for 100% legacy/clean Windows compatibility.")
+
     # 3. Create logs and data folders
     os.makedirs(os.path.join(FLUTTER_RELEASE_DIR, "logs"), exist_ok=True)
     os.makedirs(os.path.join(FLUTTER_RELEASE_DIR, "data"), exist_ok=True)

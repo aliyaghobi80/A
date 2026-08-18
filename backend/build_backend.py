@@ -49,6 +49,7 @@ def build_backend(output_dir: str = None):
         "windows.system",
         "windows.network",
         "windows.proxy",
+        "windows.reboot",
         "software.detector",
         "software.registry",
         "software.office",

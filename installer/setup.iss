@@ -25,6 +25,7 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+MinVersion=6.1
 PrivilegesRequired=admin
 DisableProgramGroupPage=auto
 CloseApplications=no

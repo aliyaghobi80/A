@@ -39,6 +39,9 @@ class SimpleModeView extends StatelessWidget {
         // 1.2 Manual Proxy Warning Banner (If active)
         _buildManualProxyWarningBanner(context, info.proxy, isDark, l10n, systemCtrl),
 
+        // 1.3 System Restart Suggestion Banner (If pending drivers / updates)
+        _buildRestartSuggestionBanner(context, info.reboot, isDark, l10n, systemCtrl),
+
         // 1.5 Quick System Summary Strip (Compact one-liner)
         _buildSystemSummaryStrip(context, info, isDark, l10n, systemCtrl),
         const SizedBox(height: 14),
@@ -489,23 +492,47 @@ class SimpleModeView extends StatelessWidget {
           icon: Icons.settings_suggest_rounded,
           title: l10n.drivers,
           color: const Color(0xFF0D9488),
-          trailing: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: (info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: (info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.3),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: (info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  l10n.driverSummaryCount(info.driverSummary.healthyCount, info.driverSummary.totalPresentCount),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                  ),
+                ),
               ),
-            ),
-            child: Text(
-              l10n.driverSummaryCount(info.driverSummary.healthyCount, info.driverSummary.totalPresentCount),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: info.driverSummary.allHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () => systemCtrl.restartSystemInteractive(context),
+                icon: const Icon(Icons.restart_alt_rounded, size: 14),
+                label: Text(
+                  l10n.isPersian ? 'ری‌استارت سیستم' : 'Restart System',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF0D9488),
+                  side: BorderSide(
+                    color: const Color(0xFF0D9488).withValues(alpha: isDark ? 0.6 : 0.4),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
         const SizedBox(height: 12),
@@ -827,6 +854,139 @@ class SimpleModeView extends StatelessWidget {
   }
 
 
+
+  Widget _buildRestartSuggestionBanner(
+    BuildContext context,
+    RebootInfo reboot,
+    bool isDark,
+    AppLocalizations l10n,
+    SystemInfoController systemCtrl,
+  ) {
+    if (!reboot.rebootRequired) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF1E1B4B), const Color(0xFF1E293B), const Color(0xFF0F172A)]
+              : [const Color(0xFFEEF2FF), const Color(0xFFF1F5F9), const Color(0xFFF8FAFC)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF6366F1).withValues(alpha: isDark ? 0.6 : 0.4),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withValues(alpha: isDark ? 0.2 : 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.4),
+              ),
+            ),
+            child: const Icon(
+              Icons.restart_alt_rounded,
+              color: Color(0xFF6366F1),
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      l10n.isPersian
+                          ? 'پیشنهاد: سیستم را ری‌استارت کنید'
+                          : 'Recommendation: Restart System',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF6366F1),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        l10n.isPersian ? 'جهت اعمال درایورها' : 'To apply drivers',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF6366F1),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.isPersian
+                      ? (reboot.reasons.isNotEmpty
+                          ? 'تغییراتی در سیستم ثبت شده (${reboot.reasons.join("، ")}). جهت شناسایی و فعال‌سازی کامل تمام درایورها و سخت‌افزارها، یک‌بار سیستم را ری‌استارت کنید.'
+                          : 'درایورها یا برنامه‌های جدید نصب شده‌اند. جهت اعمال و شناسایی کامل، ری‌استارت سیستم پیشنهاد می‌شود.')
+                      : 'New drivers or system changes were detected. Restarting the system will finalize hardware detection.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Obx(() {
+            final isRestarting = systemCtrl.isRestarting.value;
+            return ElevatedButton.icon(
+              onPressed: isRestarting ? null : () => systemCtrl.restartSystemInteractive(context),
+              icon: isRestarting
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.restart_alt_rounded, size: 16),
+              label: Text(
+                isRestarting
+                    ? (l10n.isPersian ? 'در حال ری‌استارت...' : 'Restarting...')
+                    : (l10n.isPersian ? 'ری‌استارت سیستم' : 'Restart System'),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 2,
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
 
   Widget _buildManualProxyWarningBanner(
     BuildContext context,

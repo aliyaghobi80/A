@@ -21,6 +21,7 @@ class SystemInfo {
   final OfficeActivationInfo officeActivation;
   final BatteryInfo battery;
   final ProxyInfo proxy;
+  final RebootInfo reboot;
 
   SystemInfo({
     required this.status,
@@ -45,13 +46,15 @@ class SystemInfo {
     OfficeActivationInfo? officeActivation,
     BatteryInfo? battery,
     ProxyInfo? proxy,
+    RebootInfo? reboot,
   })  : driverSummary = driverSummary ?? DriverSummary.empty(),
         softwareSummary = softwareSummary ?? SoftwareSummary.empty(),
         filesSummary = filesSummary ?? FilesSummary.empty(),
         windowsActivation = windowsActivation ?? WindowsActivationInfo.empty(),
         officeActivation = officeActivation ?? OfficeActivationInfo.empty(),
         battery = battery ?? BatteryInfo.empty(),
-        proxy = proxy ?? ProxyInfo.empty();
+        proxy = proxy ?? ProxyInfo.empty(),
+        reboot = reboot ?? RebootInfo.empty();
 
   factory SystemInfo.fromJson(Map<String, dynamic> json) {
     return SystemInfo(
@@ -89,6 +92,7 @@ class SystemInfo {
       officeActivation: OfficeActivationInfo.fromJson(json['office_activation'] as Map<String, dynamic>? ?? {}),
       battery: BatteryInfo.fromJson(json['battery'] as Map<String, dynamic>? ?? {}),
       proxy: ProxyInfo.fromJson(json['proxy'] as Map<String, dynamic>? ?? {}),
+      reboot: RebootInfo.fromJson(json['reboot'] as Map<String, dynamic>? ?? {}),
     );
   }
 }
@@ -1183,4 +1187,33 @@ class ProxyInfo {
     );
   }
 }
+
+class RebootInfo {
+  final bool rebootRequired;
+  final List<String> reasons;
+  final List<String> details;
+  final String summary;
+  final String summaryEn;
+
+  RebootInfo({
+    required this.rebootRequired,
+    this.reasons = const [],
+    this.details = const [],
+    this.summary = '',
+    this.summaryEn = '',
+  });
+
+  factory RebootInfo.empty() => RebootInfo(rebootRequired: false);
+
+  factory RebootInfo.fromJson(Map<String, dynamic> json) {
+    return RebootInfo(
+      rebootRequired: json['reboot_required'] as bool? ?? false,
+      reasons: (json['reasons'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      details: (json['details'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      summary: json['summary'] ?? '',
+      summaryEn: json['summary_en'] ?? '',
+    );
+  }
+}
+
 

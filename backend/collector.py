@@ -26,6 +26,7 @@ from activation.windows_activation import get_windows_activation_info
 from activation.office_activation import get_office_activation_info
 from hardware.battery import get_battery_info
 from windows.proxy import get_proxy_info
+from windows.reboot import check_pending_reboot
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +34,13 @@ def collect_all_system_info() -> Dict[str, Any]:
     """
     Collects complete hardware, Windows specifications, important device drivers,
     installed required software, required file/folder presence checks,
-    battery health, manual proxy status, and Windows & Microsoft Office activation status.
+    battery health, manual proxy status, pending reboot status, and Windows & Microsoft Office activation status.
     Uses concurrent workers to inspect components in parallel.
     Guarantees a clean, non-crashing structured dictionary.
     """
     start_time = time.perf_counter()
     
-    with ThreadPoolExecutor(max_workers=15) as executor:
+    with ThreadPoolExecutor(max_workers=16) as executor:
         future_cpu = executor.submit(get_cpu_info)
         future_mb = executor.submit(get_motherboard_info)
         future_ram = executor.submit(get_ram_info)
@@ -55,6 +56,7 @@ def collect_all_system_info() -> Dict[str, Any]:
         future_off_act = executor.submit(get_office_activation_info)
         future_battery = executor.submit(get_battery_info)
         future_proxy = executor.submit(get_proxy_info)
+        future_reboot = executor.submit(check_pending_reboot)
 
         def safe_get(future, default_val, name):
             try:
@@ -78,6 +80,7 @@ def collect_all_system_info() -> Dict[str, Any]:
         off_act_data = safe_get(future_off_act, {"installed": False, "activated": False, "status_text": "Not available"}, "Office Activation")
         battery_data = safe_get(future_battery, {"has_battery": False, "is_desktop": True}, "Battery")
         proxy_data = safe_get(future_proxy, {"enabled": False, "server": "", "has_manual_proxy": False}, "Proxy")
+        reboot_data = safe_get(future_reboot, {"reboot_required": False, "reasons": []}, "Reboot")
 
     # Generate Smart Driver Recommendations for Markazi Techs
     try:
@@ -119,6 +122,7 @@ def collect_all_system_info() -> Dict[str, Any]:
         "bios": bios,
         "network": network,
         "proxy": proxy_data,
+        "reboot": reboot_data,
         "drivers": drivers_data.get("drivers", []),
         "driver_summary": drivers_data.get("driver_summary", {}),
         "software": soft_data.get("items", []),

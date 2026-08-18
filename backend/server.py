@@ -168,6 +168,17 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
             return
 
+        elif path == "/api/reboot" or path == "/api/reboot/status":
+            logger.info("Querying pending reboot status...")
+            from windows.reboot import check_pending_reboot
+            reboot_info = check_pending_reboot()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(reboot_info, indent=2).encode("utf-8"))
+            return
+
         else:
             self.send_response(404)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -388,6 +399,34 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             with _cache_lock:
                 _cached_data = None
 
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/reboot/restart":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+            delay = int(payload.get("delay_seconds", 3))
+            reason = str(payload.get("reason", "Markazi System QC - اعمال تغییرات و درایورها"))
+            from windows.reboot import execute_system_restart
+            result = execute_system_restart(delay_seconds=delay, reason_msg=reason)
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/reboot/cancel":
+            from windows.reboot import cancel_system_restart
+            result = cancel_system_restart()
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()

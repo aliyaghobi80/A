@@ -191,7 +191,12 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
             final cardGpu = GpuCard(gpus: info.gpu);
             final cardStorage = StorageCard(storage: info.storage);
             final cardSoftware = SoftwareCard(software: info.software, summary: info.softwareSummary);
-            final cardDrivers = DriverCard(drivers: info.drivers, summary: info.driverSummary);
+            final cardDrivers = DriverCard(
+              drivers: info.drivers,
+              summary: info.driverSummary,
+              reboot: info.reboot,
+              onRestart: () => systemCtrl.restartSystemInteractive(context),
+            );
             final cardBios = BiosCard(bios: info.bios);
 
             final cardRam = RamCard(ram: info.ram);

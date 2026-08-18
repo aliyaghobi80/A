@@ -203,6 +203,62 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> restartSystem({int delaySeconds = 3, String reason = ''}) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {
+        'success': false,
+        'message': 'Backend service is not running.',
+      };
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/reboot/restart');
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'delay_seconds': delaySeconds, 'reason': reason}),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] restartSystem error: $e');
+      return {
+        'success': false,
+        'message': 'Error restarting system: $e',
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> cancelRestart() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {
+        'success': false,
+        'message': 'Backend service is not running.',
+      };
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/reboot/cancel');
+      final response = await http
+          .post(uri, headers: {'Content-Type': 'application/json; charset=utf-8'})
+          .timeout(const Duration(seconds: 10));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] cancelRestart error: $e');
+      return {
+        'success': false,
+        'message': 'Error cancelling restart: $e',
+      };
+    }
+  }
+
   Future<ActivationResult> activateWindows() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {

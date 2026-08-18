@@ -8,11 +8,15 @@ import 'card_wrapper.dart';
 class DriverCard extends StatefulWidget {
   final List<DriverItem> drivers;
   final DriverSummary summary;
+  final RebootInfo? reboot;
+  final VoidCallback? onRestart;
 
   const DriverCard({
     super.key,
     required this.drivers,
     required this.summary,
+    this.reboot,
+    this.onRestart,
   });
 
   @override
@@ -98,6 +102,67 @@ class _DriverCardState extends State<DriverCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 0. Pending Reboot Suggestion Banner
+          if (widget.reboot?.rebootRequired == true || widget.onRestart != null) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1).withValues(alpha: isDark ? 0.15 : 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: const Color(0xFF6366F1).withValues(alpha: isDark ? 0.5 : 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.restart_alt_rounded, color: Color(0xFF6366F1), size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.isPersian ? 'پیشنهاد ری‌استارت پس از اتمام نصب درایورها' : 'Restart Recommended After Driver Install',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF6366F1),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          l10n.isPersian
+                              ? 'پس از اجرای فایل‌های نصبی درایورها، جهت شناسایی کامل سخت‌افزارها توسط ویندوز سیستم را ری‌استارت کنید.'
+                              : 'After installing driver packages, restart the system to finalize full hardware detection.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (widget.onRestart != null) ...[
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      onPressed: widget.onRestart,
+                      icon: const Icon(Icons.restart_alt_rounded, size: 14),
+                      label: Text(l10n.isPersian ? 'ری‌استارت سیستم' : 'Restart System'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6366F1),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+
           // 1. Smart Troubleshooting & Official Recommendation Assistant
           if (recs.mainSearchQuery.isNotEmpty) ...[
             _buildSmartRecommendationBox(context, recs, isDark, l10n),

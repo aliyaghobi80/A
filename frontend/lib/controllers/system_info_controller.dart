@@ -13,6 +13,7 @@ class SystemInfoController extends GetxController {
   final RxBool isLoading = true.obs;
   final RxBool isRefreshing = false.obs;
   final RxBool isDisablingProxy = false.obs;
+  final RxBool isRestarting = false.obs;
   final RxString errorMessage = ''.obs;
 
   @override
@@ -200,5 +201,118 @@ class SystemInfoController extends GetxController {
     } finally {
       isDisablingProxy.value = false;
     }
+  }
+
+  Future<void> restartSystemInteractive(BuildContext context, {int delaySeconds = 4, String reason = ''}) async {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF131D33) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.restart_alt_rounded, color: Color(0xFF2563EB), size: 24),
+            const SizedBox(width: 10),
+            Text(
+              l10n.isPersian ? 'ری‌استارت سیستم' : 'Restart System',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          l10n.isPersian
+              ? 'جهت اعمال و شناسایی کامل درایورها و بسته‌های نصب‌شده، آیا مایل به ری‌استارت سیستم هستید؟'
+              : 'To finalize and detect all installed drivers and packages, do you want to restart the system now?',
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            icon: const Icon(Icons.restart_alt_rounded, size: 16),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            label: Text(l10n.isPersian ? 'ری‌استارت الآن' : 'Restart Now'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      isRestarting.value = true;
+      try {
+        final res = await _apiService.restartSystem(delaySeconds: delaySeconds, reason: reason);
+        final success = res['success'] == true;
+        final msg = res['message'] as String? ?? (success ? (l10n.isPersian ? 'سیستم به زودی ری‌استارت می‌شود...' : 'System restarting...') : 'خطا در ری‌استارت');
+
+        if (context.mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text(msg),
+              backgroundColor: success ? const Color(0xFF2563EB) : const Color(0xFFEF4444),
+              duration: Duration(seconds: delaySeconds + 3),
+              behavior: SnackBarBehavior.floating,
+              action: success
+                  ? SnackBarAction(
+                      label: l10n.isPersian ? 'لغو ری‌استارت' : 'Cancel',
+                      textColor: Colors.amber,
+                      onPressed: () => cancelRestart(context),
+                    )
+                  : null,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text('Error restarting: $e'),
+              backgroundColor: const Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } finally {
+        isRestarting.value = false;
+      }
+    }
+  }
+
+  Future<void> cancelRestart(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    try {
+      final res = await _apiService.cancelRestart();
+      final success = res['success'] == true;
+      final msg = res['message'] as String? ?? (success ? (l10n.isPersian ? 'دستور ری‌استارت لغو شد.' : 'Restart cancelled.') : 'خطا');
+
+      if (context.mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {}
   }
 }
