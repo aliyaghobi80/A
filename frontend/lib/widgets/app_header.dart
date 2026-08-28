@@ -32,7 +32,8 @@ class AppHeader extends StatelessWidget {
   Widget _buildSegmentedButton<T>({
     required BuildContext context,
     required T selectedValue,
-    required List<({T value, String label, String? tooltip, IconData? icon})> options,
+    required List<({T value, String label, String? tooltip, IconData? icon})>
+    options,
     required ValueChanged<T> onSelected,
   }) {
     final theme = Theme.of(context);
@@ -53,60 +54,74 @@ class AppHeader extends StatelessWidget {
         children: options.map((opt) {
           final isSelected = selectedValue == opt.value;
 
-          Widget btn = InkWell(
-            borderRadius: BorderRadius.circular(7),
-            onTap: () => onSelected(opt.value),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? (isDark ? const Color(0xFF2563EB) : Colors.white)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(7),
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (opt.icon != null) ...[
-                    Icon(
-                      opt.icon,
-                      size: 14,
-                      color: isSelected
-                          ? (isDark ? Colors.white : const Color(0xFF2563EB))
-                          : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+          Widget btn = Semantics(
+            button: true,
+            selected: isSelected,
+            label: opt.tooltip ?? opt.label,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(7),
+              onTap: () => onSelected(opt.value),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                constraints: const BoxConstraints(minHeight: 44),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? (isDark ? const Color(0xFF2563EB) : Colors.white)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.3 : 0.08,
+                            ),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (opt.icon != null) ...[
+                      Icon(
+                        opt.icon,
+                        size: 14,
+                        color: isSelected
+                            ? (isDark ? Colors.white : const Color(0xFF2563EB))
+                            : (isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B)),
+                      ),
+                      const SizedBox(width: 5),
+                    ],
+                    Text(
+                      opt.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        color: isSelected
+                            ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                            : (isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B)),
+                      ),
                     ),
-                    const SizedBox(width: 5),
                   ],
-                  Text(
-                    opt.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                      color: isSelected
-                          ? (isDark ? Colors.white : const Color(0xFF0F172A))
-                          : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           );
 
           if (opt.tooltip != null) {
-            btn = Tooltip(
-              message: opt.tooltip!,
-              child: btn,
-            );
+            btn = Tooltip(message: opt.tooltip!, child: btn);
           }
 
           return btn;
@@ -136,7 +151,9 @@ class AppHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF2563EB).withValues(alpha: isDark ? 0.3 : 0.15),
+                    color: const Color(
+                      0xFF2563EB,
+                    ).withValues(alpha: isDark ? 0.3 : 0.15),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   ),
@@ -157,7 +174,11 @@ class AppHeader extends StatelessWidget {
                       ),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.computer_rounded, size: 24, color: Colors.white),
+                    child: const Icon(
+                      Icons.computer_rounded,
+                      size: 24,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -177,19 +198,30 @@ class AppHeader extends StatelessWidget {
                         fontSize: 19,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.3,
-                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        color: isDark
+                            ? const Color(0xFFF8FAFC)
+                            : const Color(0xFF0F172A),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
-                        color: (isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
-                            .withValues(alpha: 0.12),
+                        color:
+                            (isDark
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFF059669))
+                                .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(5),
                         border: Border.all(
-                          color: (isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
-                              .withValues(alpha: 0.3),
+                          color:
+                              (isDark
+                                      ? const Color(0xFF10B981)
+                                      : const Color(0xFF059669))
+                                  .withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
@@ -210,7 +242,9 @@ class AppHeader extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
-                              color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857),
+                              color: isDark
+                                  ? const Color(0xFF6EE7B7)
+                                  : const Color(0xFF047857),
                             ),
                           ),
                         ],
@@ -224,7 +258,9 @@ class AppHeader extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
                   ),
                 ),
               ],
@@ -259,25 +295,17 @@ class AppHeader extends StatelessWidget {
               selectedValue: currentLanguage,
               onSelected: onLanguageChanged,
               options: [
-                (
-                  value: 'en',
-                  label: 'EN',
-                  tooltip: 'English',
-                  icon: null,
-                ),
-                (
-                  value: 'fa',
-                  label: 'FA',
-                  tooltip: 'فارسی',
-                  icon: null,
-                ),
+                (value: 'en', label: 'EN', tooltip: 'English', icon: null),
+                (value: 'fa', label: 'FA', tooltip: 'فارسی', icon: null),
               ],
             ),
             const SizedBox(width: 10),
 
             // Theme Toggle Button
             Tooltip(
-              message: isDarkMode ? l10n.switchToLightMode : l10n.switchToDarkMode,
+              message: isDarkMode
+                  ? l10n.switchToLightMode
+                  : l10n.switchToDarkMode,
               child: InkWell(
                 borderRadius: BorderRadius.circular(9),
                 onTap: onToggleTheme,
@@ -287,13 +315,19 @@ class AppHeader extends StatelessWidget {
                     color: isDark ? const Color(0xFF192238) : Colors.white,
                     borderRadius: BorderRadius.circular(9),
                     border: Border.all(
-                      color: isDark ? const Color(0xFF263554) : const Color(0xFFE2E8F0),
+                      color: isDark
+                          ? const Color(0xFF263554)
+                          : const Color(0xFFE2E8F0),
                     ),
                   ),
                   child: Icon(
-                    isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                    isDarkMode
+                        ? Icons.light_mode_rounded
+                        : Icons.dark_mode_rounded,
                     size: 18,
-                    color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF475569),
+                    color: isDark
+                        ? const Color(0xFFFCD34D)
+                        : const Color(0xFF475569),
                   ),
                 ),
               ),
@@ -308,11 +342,17 @@ class AppHeader extends StatelessWidget {
                   return Obx(() {
                     final isChecking = qcCtrl.isChecking.value;
                     return ElevatedButton(
-                      onPressed: isChecking ? null : () => qcCtrl.runFullCheck(context),
+                      onPressed: isChecking
+                          ? null
+                          : () => qcCtrl.runFullCheck(context),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF059669), // Emerald Accent
+                        backgroundColor: const Color(
+                          0xFF059669,
+                        ), // Emerald Accent
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor: const Color(0xFF059669).withValues(alpha: 0.6),
+                        disabledBackgroundColor: const Color(
+                          0xFF059669,
+                        ).withValues(alpha: 0.6),
                         padding: EdgeInsets.symmetric(
                           horizontal: isCompact ? 12 : 16,
                           vertical: 12,
@@ -331,23 +371,34 @@ class AppHeader extends StatelessWidget {
                               height: 14,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             ),
                             if (!isCompact) ...[
                               const SizedBox(width: 8),
                               Text(
                                 l10n.checking,
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ],
                           ] else ...[
-                            const Icon(Icons.health_and_safety_rounded, size: 16),
+                            const Icon(
+                              Icons.health_and_safety_rounded,
+                              size: 16,
+                            ),
                             if (!isCompact) ...[
                               const SizedBox(width: 6),
                               Text(
                                 l10n.runFullCheck,
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ],
                           ],
@@ -367,7 +418,9 @@ class AppHeader extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.6),
+                disabledBackgroundColor: const Color(
+                  0xFF2563EB,
+                ).withValues(alpha: 0.6),
                 padding: EdgeInsets.symmetric(
                   horizontal: isCompact ? 12 : 16,
                   vertical: 12,
@@ -393,7 +446,10 @@ class AppHeader extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         l10n.refreshing,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ] else ...[
@@ -402,7 +458,10 @@ class AppHeader extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         l10n.refresh,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ],
@@ -420,7 +479,11 @@ class AppHeader extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(9),
                   decoration: BoxDecoration(
-                    color: (isDark ? const Color(0xFFEF4444) : const Color(0xFFFEE2E2)).withValues(alpha: 0.15),
+                    color:
+                        (isDark
+                                ? const Color(0xFFEF4444)
+                                : const Color(0xFFFEE2E2))
+                            .withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(9),
                     border: Border.all(
                       color: const Color(0xFFEF4444).withValues(alpha: 0.3),

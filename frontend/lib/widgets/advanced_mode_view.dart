@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../controllers/driver_install_controller.dart';
 import '../controllers/software_controller.dart';
 import '../controllers/system_info_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -55,6 +56,7 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
   @override
   Widget build(BuildContext context) {
     final softwareCtrl = Get.find<SoftwareController>();
+    final driverInstallCtrl = Get.find<DriverInstallController>();
     final systemCtrl = Get.find<SystemInfoController>();
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -191,12 +193,20 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
             final cardGpu = GpuCard(gpus: info.gpu);
             final cardStorage = StorageCard(storage: info.storage);
             final cardSoftware = SoftwareCard(software: info.software, summary: info.softwareSummary);
-            final cardDrivers = DriverCard(
-              drivers: info.drivers,
-              summary: info.driverSummary,
-              reboot: info.reboot,
-              onRestart: () => systemCtrl.restartSystemInteractive(context),
-            );
+            final cardDrivers = Obx(() {
+              final isDriverBatch = driverInstallCtrl.isBatchInstalling.value;
+              final driverBatchStatus = driverInstallCtrl.batchStatus.value;
+              return DriverCard(
+                drivers: info.drivers,
+                summary: info.driverSummary,
+                reboot: info.reboot,
+                onRestart: () => systemCtrl.restartSystemInteractive(context),
+                onAutoInstallDrivers: () => driverInstallCtrl.selectFolderAndScan(context),
+                isBatchInstalling: isDriverBatch,
+                batchStatus: driverBatchStatus,
+                onCancelBatch: () => driverInstallCtrl.cancelDriverAutoInstall(context),
+              );
+            });
             final cardBios = BiosCard(bios: info.bios);
 
             final cardRam = RamCard(ram: info.ram);
@@ -217,6 +227,8 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
             final cardPackages = Obx(() {
               final pkgRes = softwareCtrl.packagesResponse.value;
               final isScanning = softwareCtrl.isScanning.value;
+              final isBatch = softwareCtrl.isBatchInstalling.value;
+              final batchStatus = softwareCtrl.batchStatus.value;
 
               return PackagesCard(
                 packages: pkgRes.packages,
@@ -226,6 +238,11 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
                 onScan: () => softwareCtrl.scanPackages(),
                 onChangeDirectory: () => softwareCtrl.changePackagesDirectory(context),
                 isScanning: isScanning,
+                onAutoInstallAll: () => softwareCtrl.startAutoInstallAll(context),
+                isBatchInstalling: isBatch,
+                batchStatus: batchStatus,
+                onCancelBatch: () => softwareCtrl.cancelBatchInstallInteractive(context),
+                onInstallSilent: (pkg) => softwareCtrl.installPackageSilent(context, pkg),
                 onInstall: (packageId, name) {
                   final pkg = pkgRes.packages.firstWhereOrNull(
                     (p) => (p.relativePath.isNotEmpty ? p.relativePath : p.id) == packageId,

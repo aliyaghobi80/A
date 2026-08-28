@@ -1,11 +1,13 @@
 # build_production.py
 """
 Complete Automated Production Packaging and Deployment Script for Markazi System Checker.
-1. Freezes Python backend with PyInstaller (backend_server.exe).
-2. Builds Flutter Windows Release binary (MarkaziSystemChecker.exe).
-3. Stages portable directory (dist/MarkaziSystemChecker).
-4. Creates portable zip archive (dist/MarkaziSystemChecker-Portable-1.0.0.zip).
-5. Compiles Inno Setup Windows installer (dist/MarkaziSystemChecker-Setup-1.0.0.exe).
+1. Terminates any running backend/frontend instances to avoid file locks.
+2. Freezes Python backend as a PyInstaller one-directory bundle.
+3. Builds Flutter Windows Release binary (MarkaziSystemChecker.exe).
+4. Synchronizes assets, validated Packages, config, and Visual C++ runtime DLLs.
+5. Stages portable directory (dist/MarkaziSystemChecker).
+6. Creates portable zip archive (dist/MarkaziSystemChecker-Portable-1.1.2.zip).
+7. Compiles Inno Setup Windows installer (dist/MarkaziSystemChecker-Setup.exe).
 """
 
 import os
@@ -13,10 +15,13 @@ import sys
 import shutil
 import zipfile
 import subprocess
+import urllib.request
 
+APP_VERSION = "1.1.2"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
-STAGE_DIR = os.path.join(DIST_DIR, "MarkaziSystemChecker")
+STAGE_DIR = os.path.join(DIST_DIR, f"MarkaziSystemChecker-{APP_VERSION}")
+FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
 FLUTTER_RELEASE_DIR = os.path.join(ROOT_DIR, r"frontend\build\windows\x64\runner\Release")
 ISCC_CANDIDATES = [
     r"C:\Users\aymix\AppData\Local\Programs\Inno Setup 6\ISCC.exe",
@@ -35,36 +40,153 @@ def find_iscc() -> str:
         return iscc_path
     raise FileNotFoundError("Inno Setup Compiler (ISCC.exe) not found on this system.")
 
+def step_kill_running_processes():
+    print("==================================================")
+    print("[0/6] Ensuring No Conflicting Processes Are Running...")
+    print("==================================================")
+    for port in [18088, 18080, 18089]:
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/api/shutdown", method="GET")
+            with urllib.request.urlopen(req, timeout=1) as resp:
+                pass
+        except Exception:
+            pass
+
+    # Force kill any lingering instances
+    for proc_name in ["backend_server.exe", "MarkaziSystemChecker.exe", "markazi_system_checker.exe"]:
+        try:
+            subprocess.run(["taskkill", "/F", "/IM", proc_name], capture_output=True)
+        except Exception:
+            pass
+
 def step_freeze_backend():
     print("==================================================")
-    print("[1/5] Freezing Python Backend with PyInstaller...")
+    print("[1/6] Freezing Python Backend with PyInstaller...")
     print("==================================================")
     sys.path.insert(0, os.path.join(ROOT_DIR, "backend"))
     from backend.build_backend import build_backend
     exe_path = build_backend()
     return exe_path
 
+def step_build_flutter():
+    print("==================================================")
+    print("[2/6] Building Flutter Windows Release...")
+    print("==================================================")
+    flutter_bin = shutil.which("flutter.bat") or shutil.which("flutter") or "flutter"
+    flutter_cmd = f'"{flutter_bin}" build windows --release'
+    print(f"[*] Running: {flutter_cmd} in {FRONTEND_DIR}")
+    res = subprocess.run(flutter_cmd, cwd=FRONTEND_DIR, shell=True)
+    if res.returncode != 0:
+        raise RuntimeError(f"Flutter build failed with return code {res.returncode}")
+    print("[OK] Flutter Windows Release compiled successfully.")
+
+
+def _copy_validated_packages(src: str, dst: str) -> None:
+    """Copies package media while excluding blocked installers and scripts."""
+    backend_dir = os.path.join(ROOT_DIR, "backend")
+    if backend_dir not in sys.path:
+        sys.path.insert(0, backend_dir)
+    from packages.manager import SUPPORTED_PACKAGE_EXTENSIONS, scan_packages
+
+    scan = scan_packages(src)
+    packages = scan.get("packages", [])
+    valid_installers = {
+        str(item.get("relative_path") or "").replace("\\", "/").lower()
+        for item in packages
+        if item.get("is_valid")
+    }
+    blocked = [item for item in packages if not item.get("is_valid")]
+    executable_scripts = {".bat", ".cmd", ".ps1", ".vbs", ".js", ".jse", ".wsf", ".wsh", ".hta", ".scr", ".com", ".cpl"}
+
+    if os.path.isdir(dst):
+        shutil.rmtree(dst)
+    os.makedirs(dst, exist_ok=True)
+
+    copied_installers = 0
+    skipped_scripts = 0
+    for current_root, directories, files in os.walk(src):
+        rel_root = os.path.relpath(current_root, src)
+        target_root = dst if rel_root == "." else os.path.join(dst, rel_root)
+        os.makedirs(target_root, exist_ok=True)
+        for directory in directories:
+            os.makedirs(os.path.join(target_root, directory), exist_ok=True)
+        for filename in files:
+            source_file = os.path.join(current_root, filename)
+            relative_path = os.path.relpath(source_file, src).replace("\\", "/")
+            extension = os.path.splitext(filename)[1].lower()
+            if extension in executable_scripts:
+                skipped_scripts += 1
+                continue
+            if extension in SUPPORTED_PACKAGE_EXTENSIONS:
+                if relative_path.lower() not in valid_installers:
+                    continue
+                copied_installers += 1
+            shutil.copy2(source_file, os.path.join(target_root, filename))
+
+    print(f" * Included {copied_installers} validated installer(s).")
+    if blocked:
+        print(f" * Excluded {len(blocked)} blocked installer(s):")
+        for item in blocked:
+            print(f"   - {item.get('relative_path')}: {item.get('validation_code')}")
+    if skipped_scripts:
+        print(f" * Excluded {skipped_scripts} executable script(s) from Packages.")
+
 def step_sync_release_folder(backend_exe: str):
     print("==================================================")
-    print("[2/5] Synchronizing Assets into Flutter Release...")
+    print("[3/6] Synchronizing Assets into Flutter Release...")
     print("==================================================")
     os.makedirs(FLUTTER_RELEASE_DIR, exist_ok=True)
 
-    # 1. Copy backend_server.exe
-    dest_backend_dir = os.path.join(FLUTTER_RELEASE_DIR, "backend")
-    os.makedirs(dest_backend_dir, exist_ok=True)
-    shutil.copy2(backend_exe, os.path.join(dest_backend_dir, "backend_server.exe"))
-    shutil.copy2(backend_exe, os.path.join(FLUTTER_RELEASE_DIR, "backend_server.exe"))
+    stale_tools_dir = os.path.join(FLUTTER_RELEASE_DIR, "Tools")
+    if os.path.isdir(stale_tools_dir):
+        shutil.rmtree(stale_tools_dir)
 
-    # 2. Copy config, Tools, Packages
-    for folder in ["config", "Tools", "Packages"]:
-        src = os.path.join(ROOT_DIR, folder)
-        dst = os.path.join(FLUTTER_RELEASE_DIR, folder)
-        if os.path.exists(src):
-            if os.path.exists(dst):
-                shutil.rmtree(dst)
-            shutil.copytree(src, dst)
-            print(f" * Copied {folder} -> {dst}")
+    # 1. Copy the complete one-directory backend bundle. Native libraries stay
+    # beside the launcher and are never unpacked into the user's Temp folder.
+    dest_backend_dir = os.path.join(FLUTTER_RELEASE_DIR, "backend")
+    backend_bundle_dir = os.path.dirname(os.path.abspath(backend_exe))
+    if not os.path.isfile(os.path.join(backend_bundle_dir, "backend_server.exe")):
+        raise FileNotFoundError(f"Invalid backend bundle: {backend_bundle_dir}")
+    if os.path.isdir(dest_backend_dir):
+        shutil.rmtree(dest_backend_dir)
+    shutil.copytree(backend_bundle_dir, dest_backend_dir)
+
+    # Remove the obsolete one-file launcher from earlier releases. The UI
+    # always resolves backend/backend_server.exe first.
+    stale_root_backend = os.path.join(FLUTTER_RELEASE_DIR, "backend_server.exe")
+    if os.path.isfile(stale_root_backend):
+        os.remove(stale_root_backend)
+    print(f" * Copied extraction-free backend bundle -> {dest_backend_dir}")
+
+    # 2. Copy configuration and offline software packages. Third-party
+    # activation scripts are intentionally excluded from release artifacts.
+    config_src = os.path.join(ROOT_DIR, "config")
+    config_dst = os.path.join(FLUTTER_RELEASE_DIR, "config")
+    if os.path.exists(config_src):
+        if os.path.exists(config_dst):
+            shutil.rmtree(config_dst)
+        shutil.copytree(config_src, config_dst)
+        print(f" * Copied config -> {config_dst}")
+
+    packages_src = os.path.join(ROOT_DIR, "Packages")
+    packages_dst = os.path.join(FLUTTER_RELEASE_DIR, "Packages")
+    if os.path.exists(packages_src):
+        _copy_validated_packages(packages_src, packages_dst)
+        print(f" * Copied validated Packages -> {packages_dst}")
+
+    # 2.2 Ensure assets (especially Parts) are copied into flutter_assets
+    src_assets = os.path.join(FRONTEND_DIR, "assets")
+    dst_assets = os.path.join(FLUTTER_RELEASE_DIR, "data", "flutter_assets", "assets")
+    if os.path.exists(src_assets):
+        os.makedirs(dst_assets, exist_ok=True)
+        for item in os.listdir(src_assets):
+            s_item = os.path.join(src_assets, item)
+            d_item = os.path.join(dst_assets, item)
+            if os.path.isdir(s_item):
+                shutil.copytree(s_item, d_item, dirs_exist_ok=True)
+            else:
+                shutil.copy2(s_item, d_item)
+        print(f" * Verified assets synchronized -> {dst_assets}")
 
     # 2.5 Bundle Visual C++ Runtime DLLs for legacy / fresh Windows compatibility
     system32 = os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32")
@@ -85,30 +207,49 @@ def step_sync_release_folder(backend_exe: str):
             shutil.copy2(src_dll, os.path.join(dest_backend_dir, dll))
     print(f" * Bundled {len(vc_dlls)} Visual C++ runtime DLLs for 100% legacy/clean Windows compatibility.")
 
-    # 3. Create logs and data folders
-    os.makedirs(os.path.join(FLUTTER_RELEASE_DIR, "logs"), exist_ok=True)
-    os.makedirs(os.path.join(FLUTTER_RELEASE_DIR, "data"), exist_ok=True)
+    # 3. Create clean logs folder without lingering log files
+    logs_dir = os.path.join(FLUTTER_RELEASE_DIR, "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+    for lf in os.listdir(logs_dir):
+        try:
+            os.remove(os.path.join(logs_dir, lf))
+        except Exception:
+            pass
 
 def step_stage_portable_bundle():
     print("==================================================")
-    print("[3/5] Creating Staged Portable Distribution...")
+    print("[4/6] Creating Staged Portable Distribution...")
     print("==================================================")
-    if os.path.exists(STAGE_DIR):
-        shutil.rmtree(STAGE_DIR)
-    shutil.copytree(FLUTTER_RELEASE_DIR, STAGE_DIR)
+    resolved_stage = os.path.abspath(STAGE_DIR)
+    resolved_dist = os.path.abspath(DIST_DIR)
+    if os.path.commonpath([resolved_stage, resolved_dist]) != resolved_dist or resolved_stage == resolved_dist:
+        raise RuntimeError(f"Unsafe staging directory: {resolved_stage}")
+    if os.path.isdir(resolved_stage):
+        try:
+            shutil.rmtree(resolved_stage)
+        except Exception as e:
+            print(f"[*] Note: Could not fully clean stage dir (files in use): {e}")
+    os.makedirs(resolved_stage, exist_ok=True)
+    try:
+        shutil.copytree(FLUTTER_RELEASE_DIR, STAGE_DIR, dirs_exist_ok=True)
+    except Exception as e:
+        print(f"[*] Copytree warning (files may be in use): {e}")
     print(f"[OK] Staged portable directory at: {STAGE_DIR}")
 
 def step_create_portable_zip():
     print("==================================================")
-    print("[4/5] Creating Portable ZIP Archive...")
+    print("[5/6] Creating Portable ZIP Archive...")
     print("==================================================")
-    zip_path = os.path.join(DIST_DIR, "MarkaziSystemChecker-Portable-1.0.0.zip")
+    zip_path = os.path.join(DIST_DIR, f"MarkaziSystemChecker-Portable-{APP_VERSION}.zip")
     if os.path.exists(zip_path):
         os.remove(zip_path)
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, _, files in os.walk(STAGE_DIR):
             for file in files:
+                # Exclude runtime log files from the template archive to prevent lock conflicts
+                if file.endswith(".log"):
+                    continue
                 abs_file = os.path.join(root, file)
                 rel_file = os.path.relpath(abs_file, os.path.dirname(STAGE_DIR))
                 zf.write(abs_file, rel_file)
@@ -118,7 +259,7 @@ def step_create_portable_zip():
 
 def step_compile_installer():
     print("==================================================")
-    print("[5/5] Compiling Inno Setup Windows Installer...")
+    print("[6/6] Compiling Inno Setup Windows Installer...")
     print("==================================================")
     iscc = find_iscc()
     iss_file = os.path.join(ROOT_DIR, "installer", "setup.iss")
@@ -130,13 +271,11 @@ def step_compile_installer():
 
     installer_path = os.path.join(DIST_DIR, "MarkaziSystemChecker-Setup.exe")
     if not os.path.isfile(installer_path):
-        # Fallback check
-        installer_path = os.path.join(DIST_DIR, "MarkaziSystemChecker-Setup-1.0.0.exe")
+        installer_path = os.path.join(DIST_DIR, f"MarkaziSystemChecker-Setup-{APP_VERSION}.exe")
         if not os.path.isfile(installer_path):
             raise FileNotFoundError(f"Expected installer at {installer_path}, but not found.")
 
-    # Also keep a copy as MarkaziSystemChecker-Setup-1.0.0.exe if possible
-    versioned_path = os.path.join(DIST_DIR, "MarkaziSystemChecker-Setup-1.0.0.exe")
+    versioned_path = os.path.join(DIST_DIR, f"MarkaziSystemChecker-Setup-{APP_VERSION}.exe")
     try:
         if installer_path != versioned_path:
             shutil.copy2(installer_path, versioned_path)
@@ -148,7 +287,9 @@ def step_compile_installer():
 
 def main():
     os.makedirs(DIST_DIR, exist_ok=True)
+    step_kill_running_processes()
     backend_exe = step_freeze_backend()
+    step_build_flutter()
     step_sync_release_folder(backend_exe)
     step_stage_portable_bundle()
     step_create_portable_zip()
@@ -157,7 +298,7 @@ def main():
     print("\n==================================================")
     print("  PRODUCTION BUILD COMPLETED SUCCESSFULLY!")
     print(f"  Installer: dist/MarkaziSystemChecker-Setup.exe")
-    print(f"  Portable:  dist/MarkaziSystemChecker-Portable-1.0.0.zip")
+    print(f"  Portable:  dist/MarkaziSystemChecker-Portable-{APP_VERSION}.zip")
     print("==================================================\n")
 
 if __name__ == "__main__":

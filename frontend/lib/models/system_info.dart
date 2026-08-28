@@ -47,14 +47,14 @@ class SystemInfo {
     BatteryInfo? battery,
     ProxyInfo? proxy,
     RebootInfo? reboot,
-  })  : driverSummary = driverSummary ?? DriverSummary.empty(),
-        softwareSummary = softwareSummary ?? SoftwareSummary.empty(),
-        filesSummary = filesSummary ?? FilesSummary.empty(),
-        windowsActivation = windowsActivation ?? WindowsActivationInfo.empty(),
-        officeActivation = officeActivation ?? OfficeActivationInfo.empty(),
-        battery = battery ?? BatteryInfo.empty(),
-        proxy = proxy ?? ProxyInfo.empty(),
-        reboot = reboot ?? RebootInfo.empty();
+  }) : driverSummary = driverSummary ?? DriverSummary.empty(),
+       softwareSummary = softwareSummary ?? SoftwareSummary.empty(),
+       filesSummary = filesSummary ?? FilesSummary.empty(),
+       windowsActivation = windowsActivation ?? WindowsActivationInfo.empty(),
+       officeActivation = officeActivation ?? OfficeActivationInfo.empty(),
+       battery = battery ?? BatteryInfo.empty(),
+       proxy = proxy ?? ProxyInfo.empty(),
+       reboot = reboot ?? RebootInfo.empty();
 
   factory SystemInfo.fromJson(Map<String, dynamic> json) {
     return SystemInfo(
@@ -62,7 +62,9 @@ class SystemInfo {
       timestamp: json['timestamp'] ?? '',
       scanDurationMs: (json['scan_duration_ms'] as num?)?.toDouble() ?? 0.0,
       cpu: CpuInfo.fromJson(json['cpu'] as Map<String, dynamic>? ?? {}),
-      motherboard: MotherboardInfo.fromJson(json['motherboard'] as Map<String, dynamic>? ?? {}),
+      motherboard: MotherboardInfo.fromJson(
+        json['motherboard'] as Map<String, dynamic>? ?? {},
+      ),
       ram: RamInfo.fromJson(json['ram'] as Map<String, dynamic>? ?? {}),
       gpu: (json['gpu'] as List<dynamic>? ?? [])
           .map((e) => GpuInfo.fromJson(e as Map<String, dynamic>))
@@ -70,8 +72,12 @@ class SystemInfo {
       storage: (json['storage'] as List<dynamic>? ?? [])
           .map((e) => StorageInfo.fromJson(e as Map<String, dynamic>))
           .toList(),
-      windows: WindowsInfo.fromJson(json['windows'] as Map<String, dynamic>? ?? {}),
-      system: SystemMetaInfo.fromJson(json['system'] as Map<String, dynamic>? ?? {}),
+      windows: WindowsInfo.fromJson(
+        json['windows'] as Map<String, dynamic>? ?? {},
+      ),
+      system: SystemMetaInfo.fromJson(
+        json['system'] as Map<String, dynamic>? ?? {},
+      ),
       bios: BiosInfo.fromJson(json['bios'] as Map<String, dynamic>? ?? {}),
       network: (json['network'] as List<dynamic>? ?? [])
           .map((e) => NetworkInfo.fromJson(e as Map<String, dynamic>))
@@ -79,20 +85,34 @@ class SystemInfo {
       drivers: (json['drivers'] as List<dynamic>? ?? [])
           .map((e) => DriverItem.fromJson(e as Map<String, dynamic>))
           .toList(),
-      driverSummary: DriverSummary.fromJson(json['driver_summary'] as Map<String, dynamic>? ?? {}),
+      driverSummary: DriverSummary.fromJson(
+        json['driver_summary'] as Map<String, dynamic>? ?? {},
+      ),
       software: (json['software'] as List<dynamic>? ?? [])
           .map((e) => SoftwareItem.fromJson(e as Map<String, dynamic>))
           .toList(),
-      softwareSummary: SoftwareSummary.fromJson(json['software_summary'] as Map<String, dynamic>? ?? {}),
+      softwareSummary: SoftwareSummary.fromJson(
+        json['software_summary'] as Map<String, dynamic>? ?? {},
+      ),
       requiredFiles: (json['required_files'] as List<dynamic>? ?? [])
           .map((e) => RequiredFileItem.fromJson(e as Map<String, dynamic>))
           .toList(),
-      filesSummary: FilesSummary.fromJson(json['files_summary'] as Map<String, dynamic>? ?? {}),
-      windowsActivation: WindowsActivationInfo.fromJson(json['windows_activation'] as Map<String, dynamic>? ?? {}),
-      officeActivation: OfficeActivationInfo.fromJson(json['office_activation'] as Map<String, dynamic>? ?? {}),
-      battery: BatteryInfo.fromJson(json['battery'] as Map<String, dynamic>? ?? {}),
+      filesSummary: FilesSummary.fromJson(
+        json['files_summary'] as Map<String, dynamic>? ?? {},
+      ),
+      windowsActivation: WindowsActivationInfo.fromJson(
+        json['windows_activation'] as Map<String, dynamic>? ?? {},
+      ),
+      officeActivation: OfficeActivationInfo.fromJson(
+        json['office_activation'] as Map<String, dynamic>? ?? {},
+      ),
+      battery: BatteryInfo.fromJson(
+        json['battery'] as Map<String, dynamic>? ?? {},
+      ),
       proxy: ProxyInfo.fromJson(json['proxy'] as Map<String, dynamic>? ?? {}),
-      reboot: RebootInfo.fromJson(json['reboot'] as Map<String, dynamic>? ?? {}),
+      reboot: RebootInfo.fromJson(
+        json['reboot'] as Map<String, dynamic>? ?? {},
+      ),
     );
   }
 }
@@ -146,13 +166,17 @@ class DriverItem {
       isHealthy: json['is_healthy'] as bool? ?? false,
       isPresent: json['is_present'] as bool? ?? true,
       problemCode: json['problem_code'] as int? ?? 0,
-      statusDescription: json['status_description'] ?? 'دستگاه به درستی کار می‌کند',
-      statusDescriptionEn: json['status_description_en'] ?? 'Device is working properly',
+      statusDescription:
+          json['status_description'] ?? 'دستگاه به درستی کار می‌کند',
+      statusDescriptionEn:
+          json['status_description_en'] ?? 'Device is working properly',
       instanceId: json['instance_id'] ?? 'Not available',
       manufacturer: json['manufacturer'] ?? 'Unknown',
       pnpClass: json['pnp_class'] ?? '',
       recommendation: json['recommendation'] is Map<String, dynamic>
-          ? DriverRecommendation.fromJson(json['recommendation'] as Map<String, dynamic>)
+          ? DriverRecommendation.fromJson(
+              json['recommendation'] as Map<String, dynamic>,
+            )
           : null,
     );
   }
@@ -233,28 +257,34 @@ class SystemDriverRecommendations {
       mainSearchQuery: json['main_search_query'] ?? '',
       missingCount: json['missing_count'] as int? ?? 0,
       hasMissing: json['has_missing'] ?? false,
-      installationOrderFa: (json['installation_order_fa'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
-      installationOrderEn: (json['installation_order_en'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      installationOrderFa:
+          (json['installation_order_fa'] as List<dynamic>? ?? [])
+              .map((e) => e.toString())
+              .toList(),
+      installationOrderEn:
+          (json['installation_order_en'] as List<dynamic>? ?? [])
+              .map((e) => e.toString())
+              .toList(),
       techTipsFa: json['tech_tips_fa'] ?? '',
     );
   }
 
   factory SystemDriverRecommendations.empty() => SystemDriverRecommendations(
-        brand: '',
-        brandFa: '',
-        model: '',
-        deviceTypeFa: '',
-        isLaptop: false,
-        portalName: '',
-        portalNameFa: '',
-        portalUrl: '',
-        mainSearchQuery: '',
-        missingCount: 0,
-        hasMissing: false,
-        installationOrderFa: [],
-        installationOrderEn: [],
-        techTipsFa: '',
-      );
+    brand: '',
+    brandFa: '',
+    model: '',
+    deviceTypeFa: '',
+    isLaptop: false,
+    portalName: '',
+    portalNameFa: '',
+    portalUrl: '',
+    mainSearchQuery: '',
+    missingCount: 0,
+    hasMissing: false,
+    installationOrderFa: [],
+    installationOrderEn: [],
+    techTipsFa: '',
+  );
 }
 
 class DriverSummary {
@@ -285,18 +315,18 @@ class DriverSummary {
   }) : recommendations = recommendations ?? SystemDriverRecommendations.empty();
 
   factory DriverSummary.empty() => DriverSummary(
-        healthyCount: 0,
-        totalPresentCount: 0,
-        totalScannedCount: 0,
-        problemCount: 0,
-        missingCount: 0,
-        allHealthy: false,
-        hasMissingDrivers: false,
-        hasProblem: false,
-        statusText: 'Checking',
-        missingDevices: [],
-        recommendations: SystemDriverRecommendations.empty(),
-      );
+    healthyCount: 0,
+    totalPresentCount: 0,
+    totalScannedCount: 0,
+    problemCount: 0,
+    missingCount: 0,
+    allHealthy: false,
+    hasMissingDrivers: false,
+    hasProblem: false,
+    statusText: 'Checking',
+    missingDevices: [],
+    recommendations: SystemDriverRecommendations.empty(),
+  );
 
   factory DriverSummary.fromJson(Map<String, dynamic> json) {
     return DriverSummary(
@@ -313,7 +343,9 @@ class DriverSummary {
           .map((e) => DriverItem.fromJson(e as Map<String, dynamic>))
           .toList(),
       recommendations: json['recommendations'] is Map<String, dynamic>
-          ? SystemDriverRecommendations.fromJson(json['recommendations'] as Map<String, dynamic>)
+          ? SystemDriverRecommendations.fromJson(
+              json['recommendations'] as Map<String, dynamic>,
+            )
           : SystemDriverRecommendations.empty(),
     );
   }
@@ -327,20 +359,30 @@ class SoftwarePackage {
   final String fullPath;
   final String version;
   final String publisher;
+  final String packageFormat;
+  final String installerType;
   final String? detectionId;
   final String? silentArguments;
   final String fileSizeDisplay;
   final bool isValid;
   final String? validationError;
+  final String validationCode;
+  final String trustLevel;
   final String status;
   final bool isInstalled;
   final String installedVersion;
   final bool installAllowed;
+  final bool autoInstallSupported;
+  final bool manualInstallSupported;
+  final String detectionSource;
   final bool hasIcon;
   final String? iconBase64;
   final String? iconUrl;
   final String? installedExePath;
   final String? installLocation;
+  final bool isDuplicate;
+  final String? duplicateOf;
+  final int duplicateCount;
 
   SoftwarePackage({
     required this.id,
@@ -350,20 +392,30 @@ class SoftwarePackage {
     this.fullPath = '',
     required this.version,
     required this.publisher,
+    this.packageFormat = 'EXE',
+    this.installerType = 'unknown',
     this.detectionId,
     this.silentArguments,
     this.fileSizeDisplay = '',
     required this.isValid,
     this.validationError,
+    this.validationCode = 'ok',
+    this.trustLevel = 'unknown',
     required this.status,
     required this.isInstalled,
     required this.installedVersion,
     required this.installAllowed,
+    this.autoInstallSupported = false,
+    this.manualInstallSupported = true,
+    this.detectionSource = 'none',
     required this.hasIcon,
     this.iconBase64,
     this.iconUrl,
     this.installedExePath,
     this.installLocation,
+    this.isDuplicate = false,
+    this.duplicateOf,
+    this.duplicateCount = 0,
   });
 
   String get installPathTooltip {
@@ -371,7 +423,9 @@ class SoftwarePackage {
       if (installedExePath != null && installedExePath!.isNotEmpty) {
         return 'مسیر نصب:\n$installedExePath';
       }
-      if (installLocation != null && installLocation!.isNotEmpty && installLocation != 'Not available') {
+      if (installLocation != null &&
+          installLocation!.isNotEmpty &&
+          installLocation != 'Not available') {
         return 'مسیر نصب:\n$installLocation';
       }
       return 'نرم‌افزار در رجیستری ویندوز ثبت شده است.';
@@ -392,20 +446,35 @@ class SoftwarePackage {
       fullPath: json['full_path'] ?? '',
       version: json['version'] ?? 'Unknown',
       publisher: json['publisher'] ?? '',
+      packageFormat: json['package_format'] ?? 'EXE',
+      installerType: json['installer_type'] ?? 'unknown',
       detectionId: json['detection_id'],
       silentArguments: json['silent_arguments'],
       fileSizeDisplay: json['file_size_display'] ?? '',
       isValid: json['is_valid'] as bool? ?? true,
       validationError: json['validation_error'],
-      status: json['status'] ?? (json['is_installed'] == true ? 'Installed' : 'Not Installed'),
+      validationCode: json['validation_code'] ?? 'ok',
+      trustLevel: json['trust_level'] ?? 'unknown',
+      status:
+          json['status'] ??
+          (json['is_installed'] == true ? 'Installed' : 'Not Installed'),
       isInstalled: json['is_installed'] as bool? ?? false,
       installedVersion: json['installed_version'] ?? 'Not available',
-      installAllowed: json['install_allowed'] as bool? ?? (!((json['is_installed'] as bool?) ?? false)),
-      hasIcon: (json['has_icon'] as bool? ?? false) || json['icon_base64'] != null,
+      installAllowed:
+          json['install_allowed'] as bool? ??
+          (!((json['is_installed'] as bool?) ?? false)),
+      autoInstallSupported: json['auto_install_supported'] as bool? ?? false,
+      manualInstallSupported: json['manual_install_supported'] as bool? ?? true,
+      detectionSource: json['detection_source'] ?? 'none',
+      hasIcon:
+          (json['has_icon'] as bool? ?? false) || json['icon_base64'] != null,
       iconBase64: json['icon_base64'],
       iconUrl: json['icon_url'],
       installedExePath: json['installed_exe_path'],
       installLocation: json['install_location'],
+      isDuplicate: json['is_duplicate'] as bool? ?? false,
+      duplicateOf: json['duplicate_of'] as String?,
+      duplicateCount: json['duplicate_count'] as int? ?? 0,
     );
   }
 }
@@ -415,20 +484,32 @@ class PackageSummary {
   final int validPackages;
   final int installedPackages;
   final int availableToInstall;
+  final int autoInstallable;
+  final int manualOnly;
+  final int blockedPackages;
+  final int duplicatePackages;
 
   PackageSummary({
     required this.totalPackages,
     required this.validPackages,
     required this.installedPackages,
     required this.availableToInstall,
+    this.autoInstallable = 0,
+    this.manualOnly = 0,
+    this.blockedPackages = 0,
+    this.duplicatePackages = 0,
   });
 
   factory PackageSummary.empty() => PackageSummary(
-        totalPackages: 0,
-        validPackages: 0,
-        installedPackages: 0,
-        availableToInstall: 0,
-      );
+    totalPackages: 0,
+    validPackages: 0,
+    installedPackages: 0,
+    availableToInstall: 0,
+    autoInstallable: 0,
+    manualOnly: 0,
+    blockedPackages: 0,
+    duplicatePackages: 0,
+  );
 
   factory PackageSummary.fromJson(Map<String, dynamic> json) {
     return PackageSummary(
@@ -436,6 +517,10 @@ class PackageSummary {
       validPackages: json['valid_packages'] as int? ?? 0,
       installedPackages: json['installed_packages'] as int? ?? 0,
       availableToInstall: json['available_to_install'] as int? ?? 0,
+      autoInstallable: json['auto_installable'] as int? ?? 0,
+      manualOnly: json['manual_only'] as int? ?? 0,
+      blockedPackages: json['blocked_packages'] as int? ?? 0,
+      duplicatePackages: json['duplicate_packages'] as int? ?? 0,
     );
   }
 }
@@ -454,11 +539,11 @@ class PackagesResponse {
   });
 
   factory PackagesResponse.empty() => PackagesResponse(
-        directoryExists: true,
-        packagesDirectory: '',
-        packages: [],
-        summary: PackageSummary.empty(),
-      );
+    directoryExists: true,
+    packagesDirectory: '',
+    packages: [],
+    summary: PackageSummary.empty(),
+  );
 
   factory PackagesResponse.fromJson(Map<String, dynamic> json) {
     return PackagesResponse(
@@ -467,7 +552,9 @@ class PackagesResponse {
       packages: (json['packages'] as List<dynamic>? ?? [])
           .map((e) => SoftwarePackage.fromJson(e as Map<String, dynamic>))
           .toList(),
-      summary: PackageSummary.fromJson(json['summary'] as Map<String, dynamic>? ?? {}),
+      summary: PackageSummary.fromJson(
+        json['summary'] as Map<String, dynamic>? ?? {},
+      ),
     );
   }
 }
@@ -503,7 +590,8 @@ class SoftwareItem {
       name: json['name'] ?? 'Unknown Software',
       displayName: json['display_name'] ?? json['name'] ?? 'Unknown Software',
       status: json['status'] ?? 'Not Installed',
-      isInstalled: json['is_installed'] as bool? ?? (json['status'] == 'Installed'),
+      isInstalled:
+          json['is_installed'] as bool? ?? (json['status'] == 'Installed'),
       version: json['version'] ?? 'Not available',
       productName: json['product_name'] ?? json['display_name'] ?? 'Unknown',
       detectionSource: json['detection_source'] ?? 'None',
@@ -524,11 +612,8 @@ class SoftwareSummary {
     required this.allInstalled,
   });
 
-  factory SoftwareSummary.empty() => SoftwareSummary(
-        installedCount: 0,
-        totalCount: 0,
-        allInstalled: false,
-      );
+  factory SoftwareSummary.empty() =>
+      SoftwareSummary(installedCount: 0, totalCount: 0, allInstalled: false);
 
   factory SoftwareSummary.fromJson(Map<String, dynamic> json) {
     return SoftwareSummary(
@@ -569,7 +654,8 @@ class RequiredFileItem {
       displayName: json['display_name'] ?? json['name'] ?? 'Unknown File',
       path: json['path'] ?? '',
       type: json['type'] ?? 'folder',
-      status: json['status'] ?? (json['exists'] == true ? 'Present' : 'Missing'),
+      status:
+          json['status'] ?? (json['exists'] == true ? 'Present' : 'Missing'),
       exists: json['exists'] as bool? ?? false,
       required: json['required'] as bool? ?? true,
       errorMessage: json['error_message'],
@@ -588,11 +674,8 @@ class FilesSummary {
     required this.allPresent,
   });
 
-  factory FilesSummary.empty() => FilesSummary(
-        presentCount: 0,
-        totalCount: 0,
-        allPresent: false,
-      );
+  factory FilesSummary.empty() =>
+      FilesSummary(presentCount: 0, totalCount: 0, allPresent: false);
 
   factory FilesSummary.fromJson(Map<String, dynamic> json) {
     return FilesSummary(
@@ -650,18 +733,24 @@ class MotherboardInfo {
   final String manufacturer;
   final String model;
   final String serial;
+  final String uuid;
+  final String version;
 
   MotherboardInfo({
     required this.manufacturer,
     required this.model,
     required this.serial,
+    this.uuid = '-',
+    this.version = '-',
   });
 
   factory MotherboardInfo.fromJson(Map<String, dynamic> json) {
     return MotherboardInfo(
       manufacturer: json['manufacturer'] ?? 'Not available',
       model: json['model'] ?? 'Not available',
-      serial: json['serial'] ?? 'Not available',
+      serial: json['serial'] ?? '-',
+      uuid: json['uuid'] ?? '-',
+      version: json['version'] ?? '-',
     );
   }
 }
@@ -720,7 +809,7 @@ class RamModule {
     required this.type,
     required this.manufacturer,
     required this.partNumber,
-    this.serial = 'Not available',
+    this.serial = '-',
   });
 
   factory RamModule.fromJson(Map<String, dynamic> json) {
@@ -732,8 +821,8 @@ class RamModule {
       speedDisplay: json['speed_display'] ?? 'Not available',
       type: json['type'] ?? 'RAM',
       manufacturer: json['manufacturer'] ?? 'Not available',
-      partNumber: json['part_number'] ?? 'Not available',
-      serial: json['serial'] ?? 'Not available',
+      partNumber: json['part_number'] ?? '-',
+      serial: json['serial'] ?? '-',
     );
   }
 }
@@ -769,6 +858,9 @@ class GpuInfo {
 
 class StorageInfo {
   final String model;
+  final String rawModel;
+  final String typeDescription;
+  final String partNumber;
   final String type;
   final String busType;
   final int? capacityBytes;
@@ -776,9 +868,30 @@ class StorageInfo {
   final String capacityDisplay;
   final String serial;
   final String healthStatus;
+  final int? healthPercent;
+  final String healthType; // 'REAL' | 'ESTIMATED' | 'UNKNOWN'
+  final String healthGrade; // 'EXCELLENT' | 'GOOD' | 'WARNING' | 'CRITICAL' | 'UNKNOWN'
+  final String healthGradeFa;
+  final String healthSource;
+  final String source;
+  final int? wearPercent;
+  final int? temperatureC;
+  final int? powerOnHours;
+  final int? powerCycles;
+  final int? unsafeShutdowns;
+  final int? mediaErrors;
+  final int? availableSparePercent;
+  final int? reallocatedSectors;
+  final int? pendingSectors;
+  final int? uncorrectableSectors;
+  final String smartStatus;
+  final String diagnosticError;
 
   StorageInfo({
     required this.model,
+    this.rawModel = '',
+    this.typeDescription = 'Storage',
+    this.partNumber = '-',
     required this.type,
     required this.busType,
     this.capacityBytes,
@@ -786,18 +899,57 @@ class StorageInfo {
     required this.capacityDisplay,
     required this.serial,
     required this.healthStatus,
+    this.healthPercent,
+    this.healthType = 'UNKNOWN',
+    this.healthGrade = 'UNKNOWN',
+    this.healthGradeFa = 'نامشخص',
+    this.healthSource = 'Unknown',
+    this.source = 'Unknown',
+    this.wearPercent,
+    this.temperatureC,
+    this.powerOnHours,
+    this.powerCycles,
+    this.unsafeShutdowns,
+    this.mediaErrors,
+    this.availableSparePercent,
+    this.reallocatedSectors,
+    this.pendingSectors,
+    this.uncorrectableSectors,
+    this.smartStatus = 'UNKNOWN',
+    this.diagnosticError = '',
   });
 
   factory StorageInfo.fromJson(Map<String, dynamic> json) {
     return StorageInfo(
       model: json['model'] ?? 'Not available',
+      rawModel: json['raw_model'] ?? json['model'] ?? 'Not available',
+      typeDescription: json['type_description'] ?? json['type'] ?? 'Storage',
+      partNumber: json['part_number'] ?? '-',
       type: json['type'] ?? 'Storage',
       busType: json['bus_type'] ?? 'Not available',
       capacityBytes: json['capacity_bytes'] as int?,
       capacityGb: (json['capacity_gb'] as num?)?.toDouble(),
       capacityDisplay: json['capacity_display'] ?? 'Not available',
-      serial: json['serial'] ?? 'Not available',
+      serial: json['serial'] ?? '-',
       healthStatus: json['health_status'] ?? 'Healthy',
+      healthPercent: json['health_percent'] as int?,
+      healthType: json['health_type'] ?? 'UNKNOWN',
+      healthGrade: json['health_grade'] ?? 'UNKNOWN',
+      healthGradeFa: json['health_grade_fa'] ?? 'نامشخص',
+      healthSource: json['health_source'] ?? json['source'] ?? 'Unknown',
+      source: json['source'] ?? json['health_source'] ?? 'Unknown',
+      wearPercent: json['wear_percent'] as int?,
+      temperatureC: json['temperature_c'] as int?,
+      powerOnHours: json['power_on_hours'] as int?,
+      powerCycles: json['power_cycles'] as int?,
+      unsafeShutdowns: json['unsafe_shutdowns'] as int?,
+      mediaErrors: json['media_errors'] as int?,
+      availableSparePercent: json['available_spare_percent'] as int?,
+      reallocatedSectors: json['reallocated_sectors'] as int?,
+      pendingSectors: json['pending_sectors'] as int?,
+      uncorrectableSectors: json['uncorrectable_sectors'] as int?,
+      smartStatus: json['smart_status'] ?? 'UNKNOWN',
+      diagnosticError: json['diagnostic_error'] ?? '',
     );
   }
 }
@@ -830,12 +982,20 @@ class SystemMetaInfo {
   final String manufacturer;
   final String model;
   final String serial;
+  final String uuid;
+  final String sku;
+  final String assetTag;
+  final String chassisType;
 
   SystemMetaInfo({
     required this.computerName,
     required this.manufacturer,
     required this.model,
     this.serial = 'Not available',
+    this.uuid = 'Not available',
+    this.sku = 'Not available',
+    this.assetTag = 'Not available',
+    this.chassisType = 'Unknown',
   });
 
   factory SystemMetaInfo.fromJson(Map<String, dynamic> json) {
@@ -844,6 +1004,10 @@ class SystemMetaInfo {
       manufacturer: json['manufacturer'] ?? 'Not available',
       model: json['model'] ?? 'Not available',
       serial: json['serial'] ?? 'Not available',
+      uuid: json['uuid'] ?? 'Not available',
+      sku: json['sku'] ?? 'Not available',
+      assetTag: json['asset_tag'] ?? 'Not available',
+      chassisType: json['chassis_type'] ?? 'Unknown',
     );
   }
 }
@@ -933,32 +1097,35 @@ class WindowsActivationInfo {
   });
 
   factory WindowsActivationInfo.empty() => WindowsActivationInfo(
-        installed: true,
-        activated: false,
-        statusCode: 0,
-        statusText: 'Not available',
-        channel: 'Not available',
-        partialKey: 'Not available',
-        edition: 'Windows',
-        description: 'Not available',
-        expiration: null,
-        isPermanent: true,
-        toolAvailable: false,
-        toolPath: null,
-      );
+    installed: true,
+    activated: false,
+    statusCode: 0,
+    statusText: 'Not available',
+    channel: 'Not available',
+    partialKey: 'Not available',
+    edition: 'Windows',
+    description: 'Not available',
+    expiration: null,
+    isPermanent: true,
+    toolAvailable: false,
+    toolPath: null,
+  );
 
   factory WindowsActivationInfo.fromJson(Map<String, dynamic> json) {
     return WindowsActivationInfo(
       installed: json['installed'] as bool? ?? true,
       activated: json['activated'] as bool? ?? false,
       statusCode: json['status_code'] as int? ?? 0,
-      statusText: json['status_text'] ?? (json['activated'] == true ? 'Licensed' : 'Not Activated'),
+      statusText:
+          json['status_text'] ??
+          (json['activated'] == true ? 'Licensed' : 'Not Activated'),
       channel: json['channel'] ?? 'Not available',
       partialKey: json['partial_key'] ?? 'Not available',
       edition: json['edition'] ?? 'Windows',
       description: json['description'] ?? 'Not available',
       expiration: json['expiration'] as String?,
-      isPermanent: json['is_permanent'] as bool? ?? (json['expiration'] == null),
+      isPermanent:
+          json['is_permanent'] as bool? ?? (json['expiration'] == null),
       toolAvailable: json['tool_available'] as bool? ?? false,
       toolPath: json['tool_path'] as String?,
     );
@@ -997,33 +1164,36 @@ class OfficeActivationInfo {
   });
 
   factory OfficeActivationInfo.empty() => OfficeActivationInfo(
-        installed: false,
-        product: 'Not installed',
-        version: 'Not available',
-        architecture: 'Not available',
-        installType: 'Unknown',
-        activated: false,
-        statusCode: 0,
-        statusText: 'Not installed',
-        channel: 'Not available',
-        partialKey: 'Not available',
-        expiration: null,
-        toolAvailable: false,
-        toolPath: null,
-      );
+    installed: false,
+    product: 'Not installed',
+    version: 'Not available',
+    architecture: 'Not available',
+    installType: 'Unknown',
+    activated: false,
+    statusCode: 0,
+    statusText: 'Not installed',
+    channel: 'Not available',
+    partialKey: 'Not available',
+    expiration: null,
+    toolAvailable: false,
+    toolPath: null,
+  );
 
   factory OfficeActivationInfo.fromJson(Map<String, dynamic> json) {
     final isInst = json['installed'] as bool? ?? false;
     final isAct = json['activated'] as bool? ?? false;
     return OfficeActivationInfo(
       installed: isInst,
-      product: json['product'] ?? (isInst ? 'Microsoft Office' : 'Not installed'),
+      product:
+          json['product'] ?? (isInst ? 'Microsoft Office' : 'Not installed'),
       version: json['version'] ?? 'Not available',
       architecture: json['architecture'] ?? 'Not available',
       installType: json['install_type'] ?? 'Unknown',
       activated: isAct,
       statusCode: json['status_code'] as int? ?? 0,
-      statusText: json['status_text'] ?? (!isInst ? 'Not installed' : (isAct ? 'Licensed' : 'Not Activated')),
+      statusText:
+          json['status_text'] ??
+          (!isInst ? 'Not installed' : (isAct ? 'Licensed' : 'Not Activated')),
       channel: json['channel'] ?? 'Not available',
       partialKey: json['partial_key'] ?? 'Not available',
       expiration: json['expiration'] as String?,
@@ -1062,13 +1232,13 @@ class ActivationResult {
   }
 
   factory ActivationResult.error(String msg) => ActivationResult(
-        success: false,
-        cancelled: false,
-        exitCode: -1,
-        output: '',
-        error: msg,
-        message: msg,
-      );
+    success: false,
+    cancelled: false,
+    exitCode: -1,
+    output: '',
+    error: msg,
+    message: msg,
+  );
 }
 
 class BatteryInfo {
@@ -1084,6 +1254,9 @@ class BatteryInfo {
   final bool acConnected;
   final String powerSource;
   final String powerSourceFa;
+  final int? psuWattage;
+  final String psuDisplay;
+  final bool psuDetected;
   final int? cycleCount;
   final String name;
   final String manufacturer;
@@ -1106,6 +1279,9 @@ class BatteryInfo {
     this.acConnected = true,
     this.powerSource = 'AC Power',
     this.powerSourceFa = 'برق مستقیم',
+    this.psuWattage,
+    this.psuDisplay = 'PSU: Not Detected',
+    this.psuDetected = false,
     this.cycleCount,
     this.name = 'Desktop (No Battery)',
     this.manufacturer = 'Not available',
@@ -1130,6 +1306,9 @@ class BatteryInfo {
       acConnected: json['ac_connected'] ?? true,
       powerSource: json['power_source'] ?? 'AC Power',
       powerSourceFa: json['power_source_fa'] ?? 'برق مستقیم',
+      psuWattage: json['psu_wattage'] as int?,
+      psuDisplay: json['psu_display'] ?? 'PSU: Not Detected',
+      psuDetected: json['psu_detected'] ?? false,
       cycleCount: json['cycle_count'] as int?,
       name: json['name'] ?? 'Not available',
       manufacturer: json['manufacturer'] ?? 'Not available',
@@ -1141,7 +1320,8 @@ class BatteryInfo {
     );
   }
 
-  factory BatteryInfo.empty() => BatteryInfo(hasBattery: false, isDesktop: true);
+  factory BatteryInfo.empty() =>
+      BatteryInfo(hasBattery: false, isDesktop: true);
 }
 
 class ProxyInfo {
@@ -1167,11 +1347,8 @@ class ProxyInfo {
     this.statusTextEn = 'Disabled',
   });
 
-  factory ProxyInfo.empty() => ProxyInfo(
-    enabled: false,
-    server: '',
-    hasManualProxy: false,
-  );
+  factory ProxyInfo.empty() =>
+      ProxyInfo(enabled: false, server: '', hasManualProxy: false);
 
   factory ProxyInfo.fromJson(Map<String, dynamic> json) {
     return ProxyInfo(
@@ -1208,12 +1385,301 @@ class RebootInfo {
   factory RebootInfo.fromJson(Map<String, dynamic> json) {
     return RebootInfo(
       rebootRequired: json['reboot_required'] as bool? ?? false,
-      reasons: (json['reasons'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
-      details: (json['details'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      reasons: (json['reasons'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      details: (json['details'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList(),
       summary: json['summary'] ?? '',
       summaryEn: json['summary_en'] ?? '',
     );
   }
 }
 
+// -------------------------------------------------------------
+// Batch Software Installation Models
+// -------------------------------------------------------------
 
+class BatchInstallItem {
+  final String id;
+  final String name;
+  final String filename;
+  final String relativePath;
+  final String status; // queued, installing, completed, failed, skipped
+  final String message;
+  final String installedVersion;
+  final int? exitCode;
+
+  BatchInstallItem({
+    required this.id,
+    required this.name,
+    this.filename = '',
+    this.relativePath = '',
+    this.status = 'queued',
+    this.message = '',
+    this.installedVersion = '',
+    this.exitCode,
+  });
+
+  factory BatchInstallItem.fromJson(Map<String, dynamic> json) {
+    return BatchInstallItem(
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      filename: json['filename'] ?? '',
+      relativePath: json['relative_path'] ?? '',
+      status: json['status'] ?? 'queued',
+      message: json['message'] ?? '',
+      installedVersion: json['installed_version'] ?? '',
+      exitCode: json['exit_code'] as int?,
+    );
+  }
+}
+
+class BatchInstallStatus {
+  final bool isRunning;
+  final bool cancelled;
+  final int total;
+  final int completed;
+  final int failed;
+  final int skipped;
+  final String? currentItemName;
+  final int currentItemIndex;
+  final double progressPercent;
+  final List<BatchInstallItem> items;
+  final String summaryMessage;
+
+  BatchInstallStatus({
+    required this.isRunning,
+    this.cancelled = false,
+    this.total = 0,
+    this.completed = 0,
+    this.failed = 0,
+    this.skipped = 0,
+    this.currentItemName,
+    this.currentItemIndex = 0,
+    this.progressPercent = 0.0,
+    this.items = const [],
+    this.summaryMessage = '',
+  });
+
+  factory BatchInstallStatus.empty() => BatchInstallStatus(isRunning: false);
+
+  factory BatchInstallStatus.fromJson(Map<String, dynamic> json) {
+    return BatchInstallStatus(
+      isRunning: json['is_running'] as bool? ?? false,
+      cancelled: json['cancelled'] as bool? ?? false,
+      total: json['total'] as int? ?? 0,
+      completed: json['completed'] as int? ?? 0,
+      failed: json['failed'] as int? ?? 0,
+      skipped: json['skipped'] as int? ?? 0,
+      currentItemName: json['current_item_name'] as String?,
+      currentItemIndex: json['current_item_index'] as int? ?? 0,
+      progressPercent: (json['progress_percent'] as num?)?.toDouble() ?? 0.0,
+      items: (json['items'] as List<dynamic>? ?? [])
+          .map((e) => BatchInstallItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      summaryMessage: json['summary_message'] ?? '',
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// Driver Batch Installation Models
+// -------------------------------------------------------------
+
+class ScannedDriverFile {
+  final String filename;
+  final String relativePath;
+  final String fullPath;
+  final String type; // exe, msi, inf
+  final int fileSizeBytes;
+  final String fileSizeDisplay;
+  final String installerType;
+  final bool autoInstallSupported;
+  final bool isValid;
+  final String? validationError;
+
+  ScannedDriverFile({
+    required this.filename,
+    required this.relativePath,
+    required this.fullPath,
+    required this.type,
+    this.fileSizeBytes = 0,
+    this.fileSizeDisplay = '',
+    this.installerType = 'unknown',
+    this.autoInstallSupported = false,
+    this.isValid = true,
+    this.validationError,
+  });
+
+  factory ScannedDriverFile.fromJson(Map<String, dynamic> json) {
+    return ScannedDriverFile(
+      filename: json['filename'] ?? '',
+      relativePath: json['relative_path'] ?? '',
+      fullPath: json['full_path'] ?? '',
+      type: json['type'] ?? 'exe',
+      fileSizeBytes: json['file_size_bytes'] as int? ?? 0,
+      fileSizeDisplay: json['file_size_display'] ?? '',
+      installerType: json['installer_type'] ?? 'unknown',
+      autoInstallSupported: json['auto_install_supported'] as bool? ?? false,
+      isValid: json['is_valid'] as bool? ?? true,
+      validationError: json['validation_error'],
+    );
+  }
+}
+
+class DriverInstallItem {
+  final String filename;
+  final String relativePath;
+  final String type;
+  final String fileSizeDisplay;
+  final String status; // queued, installing, completed, failed, skipped
+  final String message;
+  final int? exitCode;
+
+  DriverInstallItem({
+    required this.filename,
+    this.relativePath = '',
+    this.type = 'exe',
+    this.fileSizeDisplay = '',
+    this.status = 'queued',
+    this.message = '',
+    this.exitCode,
+  });
+
+  factory DriverInstallItem.fromJson(Map<String, dynamic> json) {
+    return DriverInstallItem(
+      filename: json['filename'] ?? '',
+      relativePath: json['relative_path'] ?? '',
+      type: json['type'] ?? 'exe',
+      fileSizeDisplay: json['file_size_display'] ?? '',
+      status: json['status'] ?? 'queued',
+      message: json['message'] ?? '',
+      exitCode: json['exit_code'] as int?,
+    );
+  }
+}
+
+class DriverBatchStatus {
+  final bool isRunning;
+  final bool cancelled;
+  final int total;
+  final int completed;
+  final int failed;
+  final int skipped;
+  final String? currentFile;
+  final int currentIndex;
+  final double progressPercent;
+  final String folderPath;
+  final bool rebootRequired;
+  final String summaryMessage;
+  final List<DriverInstallItem> items;
+
+  DriverBatchStatus({
+    required this.isRunning,
+    this.cancelled = false,
+    this.total = 0,
+    this.completed = 0,
+    this.failed = 0,
+    this.skipped = 0,
+    this.currentFile,
+    this.currentIndex = 0,
+    this.progressPercent = 0.0,
+    this.folderPath = '',
+    this.rebootRequired = false,
+    this.summaryMessage = '',
+    this.items = const [],
+  });
+
+  factory DriverBatchStatus.empty() => DriverBatchStatus(isRunning: false);
+
+  factory DriverBatchStatus.fromJson(Map<String, dynamic> json) {
+    return DriverBatchStatus(
+      isRunning: json['is_running'] as bool? ?? false,
+      cancelled: json['cancelled'] as bool? ?? false,
+      total: json['total'] as int? ?? 0,
+      completed: json['completed'] as int? ?? 0,
+      failed: json['failed'] as int? ?? 0,
+      skipped: json['skipped'] as int? ?? 0,
+      currentFile: json['current_file'] as String?,
+      currentIndex: json['current_index'] as int? ?? 0,
+      progressPercent: (json['progress_percent'] as num?)?.toDouble() ?? 0.0,
+      folderPath: json['folder_path'] ?? '',
+      rebootRequired: json['reboot_required'] as bool? ?? false,
+      summaryMessage: json['summary_message'] ?? '',
+      items: (json['items'] as List<dynamic>? ?? [])
+          .map((e) => DriverInstallItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+
+class ActivationToolItem {
+  final String name;
+  final String relativePath;
+  final String fullPath;
+  final String extension;
+  final String description;
+  final String statusText;
+  final bool isValid;
+
+  ActivationToolItem({
+    required this.name,
+    required this.relativePath,
+    this.fullPath = '',
+    this.extension = 'CMD',
+    required this.description,
+    this.statusText = 'آماده',
+    this.isValid = true,
+  });
+
+  factory ActivationToolItem.fromJson(Map<String, dynamic> json) {
+    return ActivationToolItem(
+      name: json['name'] ?? '',
+      relativePath: json['relative_path'] ?? json['name'] ?? '',
+      fullPath: json['full_path'] ?? '',
+      extension: json['extension'] ?? 'CMD',
+      description: json['description'] ?? 'ابزار فعال‌سازی',
+      statusText: json['status_text'] ?? 'آماده',
+      isValid: json['is_valid'] as bool? ?? true,
+    );
+  }
+}
+
+class ToolsDirectoryStatus {
+  final bool success;
+  final String toolsDirectory;
+  final bool isConfigured;
+  final int totalTools;
+  final List<ActivationToolItem> tools;
+
+  ToolsDirectoryStatus({
+    this.success = true,
+    required this.toolsDirectory,
+    this.isConfigured = false,
+    this.totalTools = 0,
+    required this.tools,
+  });
+
+  factory ToolsDirectoryStatus.empty() => ToolsDirectoryStatus(
+    success: true,
+    toolsDirectory: '',
+    isConfigured: false,
+    totalTools: 0,
+    tools: [],
+  );
+
+  factory ToolsDirectoryStatus.fromJson(Map<String, dynamic> json) {
+    return ToolsDirectoryStatus(
+      success: json['success'] as bool? ?? true,
+      toolsDirectory: json['tools_directory'] ?? '',
+      isConfigured: json['is_configured'] as bool? ?? false,
+      totalTools: json['total_tools'] as int? ?? 0,
+      tools: (json['tools'] as List<dynamic>? ?? [])
+          .map((e) => ActivationToolItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}

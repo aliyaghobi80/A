@@ -14,8 +14,13 @@ class PackagesCard extends StatelessWidget {
   final VoidCallback? onChangeDirectory;
   final bool isScanning;
   final Function(String packageId, String name)? onInstall;
+  final Function(SoftwarePackage pkg)? onInstallSilent;
   final Function(SoftwarePackage pkg)? onOpen;
   final Function(SoftwarePackage pkg)? onUninstall;
+  final VoidCallback? onAutoInstallAll;
+  final bool isBatchInstalling;
+  final BatchInstallStatus? batchStatus;
+  final VoidCallback? onCancelBatch;
 
   const PackagesCard({
     super.key,
@@ -27,8 +32,13 @@ class PackagesCard extends StatelessWidget {
     this.onChangeDirectory,
     this.isScanning = false,
     this.onInstall,
+    this.onInstallSilent,
     this.onOpen,
     this.onUninstall,
+    this.onAutoInstallAll,
+    this.isBatchInstalling = false,
+    this.batchStatus,
+    this.onCancelBatch,
   });
 
   Widget _buildIcon(SoftwarePackage pkg, bool isDark) {
@@ -45,7 +55,8 @@ class PackagesCard extends StatelessWidget {
           width: 24,
           height: 24,
           filterQuality: FilterQuality.high,
-          errorBuilder: (context, error, stackTrace) => _fallbackIcon(pkg, isDark),
+          errorBuilder: (context, error, stackTrace) =>
+              _fallbackIcon(pkg, isDark),
         );
       } catch (_) {
         return _fallbackIcon(pkg, isDark);
@@ -58,7 +69,11 @@ class PackagesCard extends StatelessWidget {
     return Icon(
       Icons.apps_rounded,
       size: 20,
-      color: pkg.isInstalled ? const Color(0xFF10B981) : const Color(0xFF6366F1),
+      color: !pkg.isValid
+          ? const Color(0xFFEF4444)
+          : (pkg.isInstalled
+                ? const Color(0xFF10B981)
+                : const Color(0xFF6366F1)),
     );
   }
 
@@ -67,47 +82,113 @@ class PackagesCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
+    final availableToInstall = packages
+        .where(
+          (p) =>
+              p.installAllowed &&
+              p.autoInstallSupported &&
+              p.isValid &&
+              !p.isInstalled,
+        )
+        .length;
 
     return CardWrapper(
       icon: Icons.apps_rounded,
       title: l10n.availableSoftware,
-      summarySubtitle: '${summary.installedPackages} / ${summary.totalPackages} ${l10n.installed}',
+      summarySubtitle: summary.blockedPackages > 0
+          ? '${summary.installedPackages} ${l10n.installed} • ${summary.blockedPackages} ${l10n.isPersian ? "مسدود" : "blocked"}'
+          : '${summary.installedPackages} / ${summary.totalPackages} ${l10n.installed}',
       iconColor: const Color(0xFF6366F1),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (onAutoInstallAll != null && availableToInstall > 0) ...[
+            ElevatedButton.icon(
+              onPressed: (isScanning || isBatchInstalling)
+                  ? null
+                  : onAutoInstallAll,
+              icon: isBatchInstalling
+                  ? const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.auto_fix_high_rounded, size: 13),
+              label: Text(
+                isBatchInstalling
+                    ? (l10n.isPersian ? 'در حال نصب...' : 'Installing...')
+                    : (l10n.isPersian
+                          ? 'نصب خودکار همه ($availableToInstall)'
+                          : 'Auto Install ($availableToInstall)'),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
           if (onChangeDirectory != null) ...[
             OutlinedButton.icon(
-              onPressed: isScanning ? null : onChangeDirectory,
+              onPressed: (isScanning || isBatchInstalling)
+                  ? null
+                  : onChangeDirectory,
               icon: const Icon(Icons.folder_open_rounded, size: 14),
               label: Text(l10n.isPersian ? 'پوشه' : 'Folder'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF6366F1),
                 side: const BorderSide(color: Color(0xFF6366F1)),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
               ),
             ),
             const SizedBox(width: 6),
           ],
           if (onScan != null)
             ElevatedButton.icon(
-              onPressed: isScanning ? null : onScan,
+              onPressed: (isScanning || isBatchInstalling) ? null : onScan,
               icon: isScanning
                   ? const SizedBox(
                       width: 12,
                       height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Icon(Icons.refresh_rounded, size: 14),
               label: Text(isScanning ? l10n.scanning : l10n.scan),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6366F1),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
               ),
             ),
         ],
@@ -122,116 +203,155 @@ class PackagesCard extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-                    ),
+                  color: isDark
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFFE2E8F0),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.folder_rounded,
-                        size: 13,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${l10n.scanningDirectory} ',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        ),
-                      ),
-                      Expanded(
-                        child: Directionality(
-                          textDirection: TextDirection.ltr,
-                          child: Text(
-                            packagesDirectory,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                      if (onChangeDirectory != null) ...[
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.edit_outlined,
-                          size: 13,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 14),
-            Divider(
-              color: isDark ? const Color(0xFF1E2C4A) : const Color(0xFFF1F5F9),
-              thickness: 1,
-              height: 1,
-            ),
-            const SizedBox(height: 16),
-
-            if (!directoryExists)
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.folder_off_rounded, color: Color(0xFFF59E0B), size: 20),
-                    const SizedBox(width: 10),
+                    Icon(
+                      Icons.folder_rounded,
+                      size: 13,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${l10n.scanningDirectory} ',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
                     Expanded(
-                      child: Text(
-                        l10n.softwareDirectoryNotFound,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFF59E0B),
+                      child: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          packagesDirectory,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? const Color(0xFFCBD5E1)
+                                : const Color(0xFF475569),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
+                    if (onChangeDirectory != null) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.edit_outlined,
+                        size: 13,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ],
                   ],
                 ),
-              )
-            else if (packages.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: Text(
-                    l10n.noPackagesFound,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 14),
+          Divider(
+            color: isDark ? const Color(0xFF1E2C4A) : const Color(0xFFF1F5F9),
+            thickness: 1,
+            height: 1,
+          ),
+          const SizedBox(height: 16),
+
+          // Batch Progress Banner
+          if (batchStatus != null &&
+              (batchStatus!.isRunning ||
+                  (isBatchInstalling && batchStatus!.items.isNotEmpty))) ...[
+            _buildBatchProgress(context, isDark, l10n),
+            const SizedBox(height: 14),
+          ],
+
+          if (!directoryExists)
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.folder_off_rounded,
+                    color: Color(0xFFF59E0B),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      l10n.softwareDirectoryNotFound,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFF59E0B),
+                      ),
                     ),
                   ),
+                ],
+              ),
+            )
+          else if (packages.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  l10n.noPackagesFound,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                  ),
                 ),
-              )
-            else
-              ...packages.map((pkg) => _buildPackageRow(context, pkg, isDark, l10n)),
-          ],
-        ),
-      );
+              ),
+            )
+          else
+            ...packages.map(
+              (pkg) => _buildPackageRow(context, pkg, isDark, l10n),
+            ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildPackageRow(BuildContext context, SoftwarePackage pkg, bool isDark, AppLocalizations l10n) {
+  Widget _buildPackageRow(
+    BuildContext context,
+    SoftwarePackage pkg,
+    bool isDark,
+    AppLocalizations l10n,
+  ) {
     final isInstalled = pkg.isInstalled;
     final installAllowed = pkg.installAllowed;
 
-    final statusColor = isInstalled ? const Color(0xFF10B981) : const Color(0xFF6366F1);
-    final statusText = isInstalled ? l10n.installed : l10n.notInstalled;
+    final statusColor = !pkg.isValid
+        ? const Color(0xFFEF4444)
+        : (isInstalled ? const Color(0xFF10B981) : const Color(0xFF6366F1));
+    final statusText = !pkg.isValid
+        ? (l10n.isPersian ? 'مسدود' : 'Blocked')
+        : (isInstalled ? l10n.installed : l10n.notInstalled);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -240,7 +360,9 @@ class PackagesCard extends StatelessWidget {
         color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isInstalled
+          color: !pkg.isValid
+              ? const Color(0xFFEF4444).withValues(alpha: 0.5)
+              : isInstalled
               ? statusColor.withValues(alpha: isDark ? 0.3 : 0.2)
               : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
         ),
@@ -255,7 +377,9 @@ class PackagesCard extends StatelessWidget {
               color: isDark ? const Color(0xFF0B132B) : const Color(0xFF0F172A),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isDark ? const Color(0xFF38BDF8).withValues(alpha: 0.4) : const Color(0xFF64748B),
+                color: isDark
+                    ? const Color(0xFF38BDF8).withValues(alpha: 0.4)
+                    : const Color(0xFF64748B),
                 width: 1,
               ),
               boxShadow: [
@@ -296,16 +420,23 @@ class PackagesCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                          color: isDark
+                              ? const Color(0xFFF8FAFC)
+                              : const Color(0xFF0F172A),
                         ),
                       ),
                     ),
                     if (pkg.version.isNotEmpty && pkg.version != 'Unknown') ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 1.5,
+                        ),
                         decoration: BoxDecoration(
-                          color: (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                          color: (isDark
+                              ? const Color(0xFF334155)
+                              : const Color(0xFFE2E8F0)),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Directionality(
@@ -315,7 +446,9 @@ class PackagesCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                              color: isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF475569),
                             ),
                           ),
                         ),
@@ -328,20 +461,35 @@ class PackagesCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
-                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                          color: isDark
+                              ? const Color(0xFF64748B)
+                              : const Color(0xFF94A3B8),
                         ),
                       ),
                     ],
+                    const SizedBox(width: 6),
+                    Text(
+                      pkg.packageFormat,
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: statusColor,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 3),
                 Directionality(
                   textDirection: TextDirection.ltr,
                   child: Text(
-                    pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.filename,
+                    pkg.relativePath.isNotEmpty
+                        ? pkg.relativePath
+                        : pkg.filename,
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -351,25 +499,103 @@ class PackagesCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          if (installAllowed && onInstall != null)
-            ElevatedButton.icon(
-              onPressed: () => onInstall!(pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id, pkg.name),
-              icon: const Icon(Icons.install_desktop_rounded, size: 14),
-              label: Text(l10n.install),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          if (!pkg.isValid)
+            Tooltip(
+              message: pkg.validationError ?? statusText,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.gpp_bad_outlined, size: 14, color: statusColor),
+                    const SizedBox(width: 5),
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             )
-          else
+          else if (installAllowed)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onInstallSilent != null && pkg.autoInstallSupported) ...[
+                  ElevatedButton.icon(
+                    onPressed: isBatchInstalling
+                        ? null
+                        : () => onInstallSilent!(pkg),
+                    icon: const Icon(Icons.auto_fix_high_rounded, size: 13),
+                    label: Text(l10n.isPersian ? 'نصب خودکار' : 'Auto Install'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                if (onInstall != null)
+                  OutlinedButton.icon(
+                    onPressed: isBatchInstalling
+                        ? null
+                        : () => onInstall!(
+                            pkg.relativePath.isNotEmpty
+                                ? pkg.relativePath
+                                : pkg.id,
+                            pkg.name,
+                          ),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 12),
+                    label: Text(l10n.isPersian ? 'نصب دستی' : 'Manual Install'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF2563EB),
+                      side: BorderSide(
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.6),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+              ],
+            )
+          else if (isInstalled)
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
@@ -381,7 +607,11 @@ class PackagesCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.check_circle_rounded, size: 13, color: statusColor),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 13,
+                        color: statusColor,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         statusText,
@@ -403,9 +633,17 @@ class PackagesCard extends StatelessWidget {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF0284C7),
                       side: const BorderSide(color: Color(0xFF38BDF8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
                     ),
                   ),
                 ],
@@ -417,15 +655,141 @@ class PackagesCard extends StatelessWidget {
                     label: Text(l10n.uninstall),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFEF4444),
-                      side: BorderSide(color: const Color(0xFFEF4444).withValues(alpha: 0.5)),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      side: BorderSide(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.5),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
                     ),
                   ),
                 ],
               ],
+            )
+          else
+            Text(
+              l10n.isPersian ? 'نیازمند بررسی دستی' : 'Manual review',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFFF59E0B),
+              ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBatchProgress(
+    BuildContext context,
+    bool isDark,
+    AppLocalizations l10n,
+  ) {
+    final b = batchStatus!;
+    final isRunning = b.isRunning;
+    final total = b.total;
+    final percent = b.progressPercent;
+    final currentItem = b.currentItemName;
+    final failed = b.failed;
+
+    Color color = isRunning
+        ? const Color(0xFF10B981)
+        : (failed == 0 ? const Color(0xFF10B981) : const Color(0xFFF59E0B));
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F1E2E) : const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: color.withValues(alpha: isDark ? 0.6 : 0.4),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              isRunning
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF10B981),
+                      ),
+                    )
+                  : Icon(
+                      failed == 0
+                          ? Icons.check_circle_rounded
+                          : Icons.warning_amber_rounded,
+                      color: color,
+                      size: 18,
+                    ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isRunning
+                      ? (currentItem != null
+                            ? 'نصب خودکار: $currentItem (${b.currentItemIndex + 1} از $total)'
+                            : 'در حال نصب خودکار...')
+                      : b.summaryMessage,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? const Color(0xFFF1F5F9)
+                        : const Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              Text(
+                '${percent.toStringAsFixed(0)}%',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+              if (isRunning && onCancelBatch != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: onCancelBatch,
+                  tooltip: 'لغو',
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: Color(0xFFEF4444),
+                  ),
+                  style: IconButton.styleFrom(
+                    padding: const EdgeInsets.all(4),
+                    minimumSize: Size.zero,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: total > 0 ? (percent / 100.0).clamp(0.0, 1.0) : null,
+              minHeight: 5,
+              backgroundColor: isDark
+                  ? const Color(0xFF1E293B)
+                  : const Color(0xFFE2E8F0),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
         ],
       ),
     );

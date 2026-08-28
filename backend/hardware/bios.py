@@ -3,7 +3,7 @@ import winreg
 from typing import Dict, Any
 
 from utils.powershell import run_powershell_json
-from utils.formatters import clean_string, parse_wmi_date
+from utils.formatters import clean_string, clean_serial_number, parse_wmi_date
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,9 @@ def get_bios_info() -> Dict[str, Any]:
                 bios_result["date"] = parse_wmi_date(data["ReleaseDate"])
 
             if data.get("SerialNumber"):
-                bios_result["serial"] = clean_string(data["SerialNumber"])
+                bios_result["serial"] = clean_serial_number(data["SerialNumber"], default="-")
+            else:
+                bios_result["serial"] = "-"
     except Exception as e:
         logger.error(f"Error querying Win32_BIOS: {e}")
 

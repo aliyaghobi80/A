@@ -1,25 +1,14 @@
 import logging
-import os
 import winreg
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from utils.powershell import run_powershell_json
-from utils.formatters import clean_string, format_mhz
+from utils.formatters import clean_string, clean_serial_number, format_mhz
+from hardware.normalizer import normalize_cpu_info
 
 logger = logging.getLogger(__name__)
 
-def _normalize_manufacturer(mfg: str) -> str:
-    cleaned = clean_string(mfg)
-    if "GenuineIntel" in cleaned or "Intel" in cleaned:
-        return "Intel"
-    if "AuthenticAMD" in cleaned or "AMD" in cleaned:
-        return "AMD"
-    if "ARM" in cleaned:
-        return "ARM"
-    return cleaned
-
 def _get_cpu_registry() -> Dict[str, Any]:
-    """Fallback to read CPU properties directly from Windows Registry."""
     data = {}
     try:
         reg_path = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
@@ -44,24 +33,15 @@ def _get_cpu_registry() -> Dict[str, Any]:
     return data
 
 def get_cpu_info() -> Dict[str, Any]:
-    """
-    Detects CPU hardware information using Win32_Processor and Registry fallbacks.
-    Returns:
-        name: str
-        manufacturer: str
-        cores: int or str
-        threads: int or str
-        max_clock_mhz: int or None
-        max_clock_display: str
-    """
     cpu_result = {
         "name": "Not available",
+        "raw_name": "Not available",
         "manufacturer": "Not available",
         "cores": "Not available",
         "threads": "Not available",
         "max_clock_mhz": None,
         "max_clock_display": "Not available",
-        "serial": "Not available",
+        "serial": "Not available"
     }
 
     try:
@@ -71,60 +51,44 @@ def get_cpu_info() -> Dict[str, Any]:
             "ConvertTo-Json"
         )
         data = run_powershell_json(script)
-        
-        # If multiple physical sockets exist, data could be a list
         if isinstance(data, list) and len(data) > 0:
-            primary = data[0]
-            # Aggregate cores/threads if multiple sockets
-            total_cores = sum(d.get("NumberOfCores", 0) for d in data if isinstance(d, dict))
-            total_threads = sum(d.get("NumberOfLogicalProcessors", 0) for d in data if isinstance(d, dict))
-        elif isinstance(data, dict):
-            primary = data
-            total_cores = primary.get("NumberOfCores")
-            total_threads = primary.get("NumberOfLogicalProcessors")
-        else:
-            primary = {}
-            total_cores = None
-            total_threads = None
+            data = data[0]
 
-        if primary.get("Name"):
-            cpu_result["name"] = clean_string(primary["Name"])
-            
-        if primary.get("Manufacturer"):
-            cpu_result["manufacturer"] = _normalize_manufacturer(primary["Manufacturer"])
+        if isinstance(data, dict):
+            raw_name = clean_string(data.get("Name"))
+            raw_mfg = clean_string(data.get("Manufacturer"))
+            norm = normalize_cpu_info(raw_name, raw_mfg)
 
-        if primary.get("ProcessorId"):
-            cpu_result["serial"] = clean_string(primary["ProcessorId"])
-            
-        if total_cores:
-            cpu_result["cores"] = int(total_cores)
-            
-        if total_threads:
-            cpu_result["threads"] = int(total_threads)
-            
-        if primary.get("MaxClockSpeed"):
-            try:
-                mhz = int(primary["MaxClockSpeed"])
-                cpu_result["max_clock_mhz"] = mhz
-                cpu_result["max_clock_display"] = format_mhz(mhz)
-            except (ValueError, TypeError):
-                pass
-                
+            cpu_result["name"] = norm["normalized_name"]
+            cpu_result["raw_name"] = raw_name
+            cpu_result["manufacturer"] = norm["vendor"]
+            cpu_result["cores"] = data.get("NumberOfCores", "Not available")
+            cpu_result["threads"] = data.get("NumberOfLogicalProcessors", "Not available")
+
+            max_clock = data.get("MaxClockSpeed")
+            if max_clock:
+                try:
+                    mhz_val = int(max_clock)
+                    cpu_result["max_clock_mhz"] = mhz_val
+                    cpu_result["max_clock_display"] = format_mhz(mhz_val)
+                except (ValueError, TypeError):
+                    pass
+            cpu_result["serial"] = clean_serial_number(data.get("ProcessorId"), default="Not available")
+
     except Exception as e:
-        logger.error(f"Error querying Win32_Processor: {e}")
+        logger.error(f"Failed to detect CPU: {e}")
 
-    # Fallback to Registry if any critical field is missing
-    reg_data = _get_cpu_registry()
-    if cpu_result["name"] == "Not available" and reg_data.get("name"):
-        cpu_result["name"] = clean_string(reg_data["name"])
-    if cpu_result["manufacturer"] == "Not available" and reg_data.get("manufacturer"):
-        cpu_result["manufacturer"] = _normalize_manufacturer(reg_data["manufacturer"])
-    if cpu_result["max_clock_mhz"] is None and reg_data.get("max_clock_mhz"):
-        cpu_result["max_clock_mhz"] = reg_data["max_clock_mhz"]
-        cpu_result["max_clock_display"] = format_mhz(reg_data["max_clock_mhz"])
-    if cpu_result["threads"] == "Not available":
-        logical_count = os.cpu_count()
-        if logical_count:
-            cpu_result["threads"] = logical_count
+    # Fallback to Registry if missing
+    if cpu_result["name"] == "Not available":
+        reg = _get_cpu_registry()
+        raw_name = reg.get("name", "Not available")
+        raw_mfg = reg.get("manufacturer", "Not available")
+        norm = normalize_cpu_info(raw_name, raw_mfg)
+        cpu_result["name"] = norm["normalized_name"]
+        cpu_result["raw_name"] = raw_name
+        cpu_result["manufacturer"] = norm["vendor"]
+        if reg.get("max_clock_mhz"):
+            cpu_result["max_clock_mhz"] = reg["max_clock_mhz"]
+            cpu_result["max_clock_display"] = format_mhz(reg["max_clock_mhz"])
 
     return cpu_result

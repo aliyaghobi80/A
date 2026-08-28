@@ -192,8 +192,10 @@ class QcIssue {
   final QcState status;
   final QcState severity;
   final String description;
+  final String solutionTitle;
+  final String solutionSteps;
   final bool isRequired;
-  final String actionType; // 'install_software', 'activate_windows', 'activate_office', 'open_folder', 'view_details', 'none'
+  final String actionType; // 'install_software', 'activate_windows', 'activate_office', 'disable_proxy', 'install_drivers', 'open_folder', 'view_details', 'none'
   final String actionLabel;
   final String actionTarget;
   final String? packageFilename;
@@ -207,6 +209,8 @@ class QcIssue {
     required this.status,
     required this.severity,
     required this.description,
+    this.solutionTitle = '',
+    this.solutionSteps = '',
     required this.isRequired,
     required this.actionType,
     required this.actionLabel,
@@ -224,6 +228,8 @@ class QcIssue {
       status: QcState.fromString(json['status'] as String?),
       severity: QcState.fromString(json['severity'] as String?),
       description: json['description'] as String? ?? '',
+      solutionTitle: json['solution_title'] as String? ?? '',
+      solutionSteps: json['solution_steps'] as String? ?? '',
       isRequired: json['is_required'] as bool? ?? true,
       actionType: json['action_type'] as String? ?? 'none',
       actionLabel: json['action_label'] as String? ?? '',

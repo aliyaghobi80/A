@@ -20,11 +20,17 @@ class StorageCard extends StatelessWidget {
         ? storage.map((s) => '${s.capacityDisplay} ${s.type}').join(' • ')
         : l10n.noStorageDetected;
 
+    final primaryStorage = storage.isNotEmpty ? storage.first : null;
+
     return CardWrapper(
       icon: Icons.album_rounded,
       title: l10n.physicalStorageDevices,
       summarySubtitle: summarySub,
-      illustration: const StorageIllustration(),
+      illustration: StorageIllustration(
+        storageType: primaryStorage?.type,
+        busType: primaryStorage?.busType,
+        model: primaryStorage?.model,
+      ),
       iconColor: const Color(0xFF06B6D4),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -72,15 +78,17 @@ class StorageCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(7),
+                        width: 32,
+                        height: 32,
+                        padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
                           color: badgeColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Icon(
-                          isSsd ? Icons.speed_rounded : Icons.dns_rounded,
-                          size: 16,
-                          color: badgeColor,
+                        child: StorageIllustration(
+                          storageType: drive.type,
+                          busType: drive.busType,
+                          model: drive.model,
                         ),
                       ),
                       const SizedBox(width: 10),

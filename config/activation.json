@@ -1,12 +1,17 @@
 {
   "windows": {
     "enabled": true,
-    "toolPath": "Tools/WINDOWS.cmd",
-    "arguments": ["1"]
+    "toolPath": "H:\\KMS v6\\Window.cmd",
+    "arguments": [
+      "1"
+    ]
   },
   "office": {
     "enabled": true,
-    "toolPath": "Tools/OFFICE.cmd",
-    "arguments": ["1"]
-  }
+    "toolPath": "H:\\KMS v6\\Window.cmd",
+    "arguments": [
+      "1"
+    ]
+  },
+  "customToolsDir": "H:\\KMS v6"
 }

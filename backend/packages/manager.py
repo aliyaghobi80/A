@@ -12,6 +12,9 @@ import sys
 import json
 import ctypes
 from ctypes import wintypes
+import hashlib
+import re
+import shlex
 import struct
 import logging
 import winreg
@@ -19,6 +22,7 @@ import subprocess
 from typing import Dict, Any, List, Optional
 
 from utils.powershell import get_hidden_subprocess_kwargs
+from software.registry import get_app_path_from_registry
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +49,80 @@ def _find_repo_root() -> str:
 
 REPO_ROOT = _find_repo_root()
 CONFIG_FILE = os.path.join(REPO_ROOT, "config", "software_directory.json")
+
+# Formats Windows can install directly. Batch/script files are deliberately not
+# accepted: they are arbitrary code rather than self-describing installers.
+SUPPORTED_PACKAGE_EXTENSIONS = {
+    ".exe",
+    ".msi",
+    ".msp",
+    ".msu",
+    ".msix",
+    ".msixbundle",
+    ".appx",
+    ".appxbundle",
+}
+
+_AUTO_EXE_INSTALLER_TYPES = {
+    "innosetup",
+    "nsis",
+    "wix",
+    "7zip",
+    "winrar",
+    "chrome",
+    "vlc",
+}
+
+_SYSTEM_BINARIES = {
+    "cmd.exe",
+    "conhost.exe",
+    "explorer.exe",
+    "mmc.exe",
+    "mshta.exe",
+    "notepad.exe",
+    "powershell.exe",
+    "pwsh.exe",
+    "reg.exe",
+    "regedit.exe",
+    "rundll32.exe",
+    "taskmgr.exe",
+    "wscript.exe",
+}
+
+_KNOWN_PACKAGE_DETECTION: Dict[str, Dict[str, List[str]]] = {
+    "vlc": {
+        "aliases": ["vlc", "vlc media player", "videolan vlc"],
+        "app_paths": ["vlc.exe"],
+        "paths": [
+            r"C:\Program Files\VideoLAN\VLC\vlc.exe",
+            r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
+        ],
+    },
+    "chrome": {
+        "aliases": ["google chrome", "chrome"],
+        "app_paths": ["chrome.exe"],
+        "paths": [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ],
+    },
+    "winrar": {
+        "aliases": ["winrar"],
+        "app_paths": ["winrar.exe"],
+        "paths": [
+            r"C:\Program Files\WinRAR\WinRAR.exe",
+            r"C:\Program Files (x86)\WinRAR\WinRAR.exe",
+        ],
+    },
+    "7zip": {
+        "aliases": ["7-zip", "7zip"],
+        "app_paths": ["7zfm.exe"],
+        "paths": [
+            r"C:\Program Files\7-Zip\7zFM.exe",
+            r"C:\Program Files (x86)\7-Zip\7zFM.exe",
+        ],
+    },
+}
 
 
 def _format_file_size(bytes_val: int) -> str:
@@ -102,6 +180,10 @@ def get_packages_directory(custom_path: Optional[str] = None) -> str:
     for c in candidates:
         if os.path.isdir(c):
             return c
+
+    # Keep the intended default path so the API can report a clear
+    # directory_exists=false response instead of returning None.
+    return os.path.abspath(os.path.join(REPO_ROOT, "Packages"))
 
 def set_packages_directory(custom_dir: str) -> Dict[str, Any]:
     """Updates and persists the active Packages directory in config/software_directory.json."""
@@ -197,6 +279,8 @@ def get_all_installed_registry_apps() -> List[Dict[str, str]]:
                             dpub = get_val("Publisher")
                             dloc = get_val("InstallLocation")
                             dexe = get_val("DisplayIcon")
+                            duninstall = get_val("UninstallString")
+                            dquiet_uninstall = get_val("QuietUninstallString")
 
                             results.append({
                                 "name": dname,
@@ -204,6 +288,9 @@ def get_all_installed_registry_apps() -> List[Dict[str, str]]:
                                 "publisher": dpub,
                                 "location": dloc,
                                 "icon": dexe,
+                                "uninstall_string": duninstall,
+                                "quiet_uninstall_string": dquiet_uninstall,
+                                "registry_key": kname,
                             })
                     except Exception:
                         pass
@@ -549,10 +636,382 @@ def _clean_software_keywords(text: str) -> List[str]:
     return keywords
 
 
+def _normalize_identity(value: str) -> str:
+    """Normalizes product names without collapsing meaningful brand tokens."""
+    value = (value or "").lower()
+    value = re.sub(r"\.(exe|msi|msp|msu|msix|appx)(bundle)?$", "", value)
+    value = re.sub(r"\b(setup|installer|install|offline|online|x64|x86|64-bit|32-bit)\b", " ", value)
+    value = re.sub(r"\b(v?\d+(?:[._-]\d+){0,4})\b", " ", value)
+    value = re.sub(r"[^a-z0-9\u0600-\u06ff]+", " ", value)
+    return " ".join(value.split())
+
+
+def _identity_tokens(value: str) -> set[str]:
+    stop = {"the", "for", "and", "app", "application", "software", "player"}
+    return {token for token in _normalize_identity(value).split() if len(token) >= 2 and token not in stop}
+
+
+def _stable_package_id(relative_path: str) -> str:
+    normalized = relative_path.replace("\\", "/").lower().strip()
+    stem = _normalize_identity(os.path.splitext(os.path.basename(normalized))[0]).replace(" ", "_") or "package"
+    digest = hashlib.sha256(normalized.encode("utf-8", errors="ignore")).hexdigest()[:10]
+    return f"{stem}_{digest}"
+
+
+def _load_matching_manifest(folder: str, filename: str) -> Dict[str, Any]:
+    """Loads package.json only when it actually describes the discovered file."""
+    manifest_path = os.path.join(folder, "package.json")
+    if not os.path.isfile(manifest_path):
+        return {}
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+            manifest = json.load(manifest_file)
+        if not isinstance(manifest, dict):
+            return {}
+        declared = str(manifest.get("installer") or "").replace("\\", "/").strip()
+        if declared and os.path.basename(declared).lower() != filename.lower():
+            return {}
+        return manifest
+    except Exception as exc:
+        logger.warning("Invalid package manifest at %s: %s", manifest_path, exc)
+        return {}
+
+
+def _validate_installer(
+    file_path: str,
+    metadata: Dict[str, str],
+    installer_type: str,
+    manifest: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Classifies a candidate as automatic, manual-only, or blocked."""
+    extension = os.path.splitext(file_path)[1].lower()
+    filename = os.path.basename(file_path)
+
+    if extension not in SUPPORTED_PACKAGE_EXTENSIONS:
+        return {
+            "is_valid": False,
+            "validation_code": "unsupported_extension",
+            "validation_error": f"Unsupported installer format: {extension or 'none'}",
+            "auto_install_supported": False,
+            "manual_install_supported": False,
+            "trust_level": "blocked",
+        }
+
+    if extension == ".exe":
+        original = os.path.basename(metadata.get("original_filename") or "").lower()
+        product = (metadata.get("product_name") or "").lower()
+        description = (metadata.get("file_description") or "").lower()
+        publisher = (metadata.get("publisher") or "").lower()
+
+        # A renamed Windows binary is not an installer. This catches files such
+        # as notepad.exe renamed to vlc.exe before anything can execute them.
+        if original in _SYSTEM_BINARIES and original != filename.lower():
+            return {
+                "is_valid": False,
+                "validation_code": "identity_mismatch",
+                "validation_error": (
+                    f"File identity mismatch: {filename} is signed/described as {original}. "
+                    "The file was blocked and will not be executed."
+                ),
+                "auto_install_supported": False,
+                "manual_install_supported": False,
+                "trust_level": "blocked",
+            }
+
+        is_windows_component = (
+            "microsoft" in publisher
+            and ("operating system" in product or original in _SYSTEM_BINARIES)
+            and not any(word in description for word in ("setup", "installer", "update", "package"))
+        )
+        if is_windows_component:
+            return {
+                "is_valid": False,
+                "validation_code": "system_binary",
+                "validation_error": "This executable is a Windows component, not an application installer.",
+                "auto_install_supported": False,
+                "manual_install_supported": False,
+                "trust_level": "blocked",
+            }
+
+        has_installer_signal = bool(manifest) or installer_type != "unknown" or any(
+            word in f"{filename} {description} {product}".lower()
+            for word in ("setup", "installer", "install", "deployment", "bootstrapper")
+        )
+        if not has_installer_signal:
+            return {
+                "is_valid": False,
+                "validation_code": "not_an_installer",
+                "validation_error": "The executable does not contain recognizable installer metadata.",
+                "auto_install_supported": False,
+                "manual_install_supported": False,
+                "trust_level": "blocked",
+            }
+
+        has_declared_silent_args = bool(str(manifest.get("silentArguments") or "").strip())
+        auto_supported = has_declared_silent_args or installer_type in _AUTO_EXE_INSTALLER_TYPES
+        return {
+            "is_valid": True,
+            "validation_code": "ok" if auto_supported else "manual_only",
+            "validation_error": None,
+            "auto_install_supported": auto_supported,
+            "manual_install_supported": True,
+            "trust_level": "verified_installer" if auto_supported else "manual_only",
+        }
+
+    # MSI/MSP are handled by Windows Installer; APPX/MSIX by AppX deployment.
+    return {
+        "is_valid": True,
+        "validation_code": "ok",
+        "validation_error": None,
+        "auto_install_supported": True,
+        "manual_install_supported": True,
+        "trust_level": "windows_package",
+    }
+
+
+def _known_detection_key(*values: str) -> Optional[str]:
+    joined = " ".join(_normalize_identity(value) for value in values if value)
+    tokens = _identity_tokens(joined)
+    for key, rule in _KNOWN_PACKAGE_DETECTION.items():
+        if key in tokens:
+            return key
+        if any(_normalize_identity(alias) in joined for alias in rule.get("aliases", [])):
+            return key
+    return None
+
+
+def _resolve_known_executable(key: Optional[str]) -> Optional[str]:
+    if not key:
+        return None
+    rule = _KNOWN_PACKAGE_DETECTION.get(key) or {}
+    for app_name in rule.get("app_paths", []):
+        try:
+            candidate = get_app_path_from_registry(app_name)
+            if candidate and os.path.isfile(candidate):
+                return os.path.abspath(candidate)
+        except Exception:
+            pass
+    for candidate in rule.get("paths", []):
+        if os.path.isfile(candidate):
+            return os.path.abspath(candidate)
+    return None
+
+
+def _match_installed_application(
+    installed_apps: List[Dict[str, str]],
+    identities: List[str],
+    publisher: str = "",
+) -> Optional[Dict[str, str]]:
+    """Scores registry matches using whole tokens to avoid loose substrings."""
+    normalized_identities = [_normalize_identity(value) for value in identities if _normalize_identity(value)]
+    publisher_tokens = _identity_tokens(publisher)
+    best: Optional[Dict[str, str]] = None
+    best_score = 0
+
+    for app in installed_apps:
+        app_name = _normalize_identity(app.get("name", ""))
+        if not app_name:
+            continue
+        app_tokens = _identity_tokens(app_name)
+        score = 0
+        for identity in normalized_identities:
+            identity_tokens = _identity_tokens(identity)
+            if not identity_tokens:
+                continue
+            if identity == app_name:
+                score = max(score, 100)
+            elif len(identity_tokens) >= 2 and identity_tokens.issubset(app_tokens):
+                score = max(score, 85)
+            elif len(identity_tokens) == 1 and next(iter(identity_tokens)) in app_tokens:
+                token = next(iter(identity_tokens))
+                if len(token) >= 3:
+                    score = max(score, 75)
+
+        if score and publisher_tokens:
+            app_publisher_tokens = _identity_tokens(app.get("publisher", ""))
+            if publisher_tokens & app_publisher_tokens:
+                score += 10
+
+        if score > best_score:
+            best = app
+            best_score = score
+
+    return best if best_score >= 75 else None
+
+
+def _detect_installed_package(
+    installed_apps: List[Dict[str, str]],
+    display_name: str,
+    filename: str,
+    product_name: str,
+    publisher: str,
+    detection_id: Optional[str],
+) -> Dict[str, Any]:
+    known_key = _known_detection_key(detection_id or "", display_name, filename, product_name)
+    known_executable = _resolve_known_executable(known_key)
+
+    aliases: List[str] = [display_name, filename, product_name, detection_id or ""]
+    if known_key:
+        aliases.extend(_KNOWN_PACKAGE_DETECTION[known_key].get("aliases", []))
+
+    matched = _match_installed_application(installed_apps, aliases, publisher=publisher)
+    if not matched and not known_executable:
+        return {
+            "is_installed": False,
+            "installed_version": "",
+            "installed_exe_path": None,
+            "install_location": None,
+            "matched_app_name": None,
+            "detection_source": "none",
+        }
+
+    installed_exe_path = known_executable
+    install_location = None
+    installed_version = ""
+    matched_name = None
+    detection_source = "file_system" if known_executable else "registry"
+
+    if matched:
+        matched_name = matched.get("name")
+        version = matched.get("version")
+        if version and version != "Not available":
+            installed_version = version
+        icon_value = matched.get("icon", "")
+        if not installed_exe_path and icon_value:
+            candidate = icon_value.split(",")[0].strip('"').strip()
+            if candidate.lower().endswith(".exe") and os.path.isfile(candidate):
+                installed_exe_path = candidate
+        location = matched.get("location", "").strip('"').strip()
+        if location:
+            install_location = location
+        detection_source = "registry+file" if known_executable else "registry"
+
+    if not install_location and installed_exe_path:
+        install_location = os.path.dirname(installed_exe_path)
+
+    return {
+        "is_installed": True,
+        "installed_version": installed_version,
+        "installed_exe_path": installed_exe_path,
+        "install_location": install_location,
+        "matched_app_name": matched_name,
+        "detection_source": detection_source,
+    }
+
+
+
+def _normalize_package_identity(name: str, filename: str) -> str:
+    """
+    Cleans filename and software name to find the base identity for deduplication.
+    Removes copy patterns like (1), (2), [1], _1, - Copy, etc.
+    """
+    stem = os.path.splitext(filename)[0]
+    clean_stem = re.sub(r'[\s_\-\.\(\[]*(?:copy|\(?\d+\)?|نسخه|final|setup|installer|x64|x86|64bit|32bit|v\d+[\d\.]*)[\s_\-\.\)\]]*$', '', stem, flags=re.IGNORECASE).strip()
+    clean_name = re.sub(r'[\s_\-\.\(\[]*(?:copy|\(?\d+\)?|نسخه|version\s+[\d\.]+|v[\d\.]+)[\s_\-\.\)\]]*$', '', name, flags=re.IGNORECASE).strip()
+    
+    key = re.sub(r'[^a-zA-Z0-9]', '', (clean_name or clean_stem).lower())
+    return key or (clean_name or clean_stem).lower()
+
+
+def _resolve_best_brand_icon(app_name: str, filename: str, installed_exe_path: Optional[str] = None) -> Optional[str]:
+    """
+    Attempts to extract the official high-resolution brand icon from installed binaries
+    or standard program files locations for well-known software.
+    """
+    # 1. If installed_exe_path is known and valid, use it first
+    if installed_exe_path and os.path.isfile(installed_exe_path):
+        icon = _extract_single_icon_native(installed_exe_path)
+        if icon:
+            return icon
+
+    # 2. Check standard installation paths for popular software
+    combined = f"{app_name} {filename}".lower()
+    common_app_paths = []
+
+    if "chrome" in combined:
+        common_app_paths = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ]
+    elif "7z" in combined or "7-zip" in combined:
+        common_app_paths = [
+            r"C:\Program Files\7-Zip\7zFM.exe",
+            r"C:\Program Files (x86)\7-Zip\7zFM.exe",
+        ]
+    elif "winrar" in combined:
+        common_app_paths = [
+            r"C:\Program Files\WinRAR\WinRAR.exe",
+            r"C:\Program Files (x86)\WinRAR\WinRAR.exe",
+        ]
+    elif "vlc" in combined:
+        common_app_paths = [
+            r"C:\Program Files\VideoLAN\VLC\vlc.exe",
+            r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
+        ]
+    elif "firefox" in combined:
+        common_app_paths = [
+            r"C:\Program Files\Mozilla Firefox\firefox.exe",
+        ]
+    elif "telegram" in combined:
+        appdata = os.environ.get("APPDATA", "")
+        common_app_paths = [
+            os.path.join(appdata, "Telegram Desktop", "Telegram.exe"),
+            r"C:\Program Files\Telegram Desktop\Telegram.exe",
+        ]
+    elif "notepad++" in combined or "notepad" in combined:
+        common_app_paths = [
+            r"C:\Program Files\Notepad++\notepad++.exe",
+            r"C:\Program Files (x86)\Notepad++\notepad++.exe",
+        ]
+    elif "anydesk" in combined:
+        common_app_paths = [
+            r"C:\Program Files (x86)\AnyDesk\AnyDesk.exe",
+            r"C:\Program Files\AnyDesk\AnyDesk.exe",
+        ]
+
+    for p in common_app_paths:
+        if os.path.isfile(p):
+            icon = _extract_single_icon_native(p)
+            if icon:
+                return icon
+
+    return None
+
+
+IGNORED_SCAN_DIR_NAMES = {
+    "backend", "_internal", "build", "dist", "build_backend_out",
+    "node_modules", ".git", ".github", ".idea", ".vscode", "temp", "tmp",
+    "appdata", "windows", "$recycle.bin", "system volume information",
+    "flutter_assets", "runner", "logs", "__pycache__", "obj", "bin"
+}
+
+IGNORED_FILE_PATTERNS = {
+    "backend_server", "markazisystemchecker", "markazi_system_checker",
+    "iscc", "flutter", "python", "pythonw", "pip", "runner"
+}
+
+def _is_ignored_file_or_dir(root: str, filename: str) -> bool:
+    """Checks if a file or directory is an internal backend/system artifact that must not be scanned."""
+    fn_lower = filename.lower()
+    root_lower = root.lower().replace("\\", "/")
+
+    # Check root path components
+    path_parts = root_lower.split("/")
+    if any(part in IGNORED_SCAN_DIR_NAMES for part in path_parts):
+        return True
+
+    # Check file patterns
+    stem = os.path.splitext(fn_lower)[0]
+    for pat in IGNORED_FILE_PATTERNS:
+        if pat in fn_lower or pat in stem:
+            return True
+
+    return False
+
 def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
     """
-    Recursively scans the configured Packages directory for ALL .exe files.
-    Extracts metadata, icons, file size, and detects installed status & version.
+    Recursively scans supported Windows installer formats, validates that EXE
+    candidates are actual installers, and detects installed status & version.
     """
     pkg_dir = get_packages_directory(custom_dir)
     dir_exists = os.path.isdir(pkg_dir)
@@ -576,10 +1035,16 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
     discovered_files: List[Dict[str, Any]] = []
     seen_paths = set()
 
-    for root, _, files in os.walk(pkg_dir):
+    for root, dirs, files in os.walk(pkg_dir):
+        # Prune internal and temporary directories in-place
+        dirs[:] = [d for d in dirs if d.lower() not in IGNORED_SCAN_DIR_NAMES and not d.startswith(".")]
+
         for file in files:
-            # Case-insensitive .exe matching
-            if not file.lower().endswith(".exe"):
+            extension = os.path.splitext(file)[1].lower()
+            if extension not in SUPPORTED_PACKAGE_EXTENSIONS:
+                continue
+
+            if _is_ignored_file_or_dir(root, file):
                 continue
 
             full_path = os.path.abspath(os.path.join(root, file))
@@ -601,8 +1066,8 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
                 "file_size": file_size,
             })
 
-    # Batch extract icons
-    all_paths = [df["full_path"] for df in discovered_files]
+    # Only PE executables have embedded icons supported by the native extractor.
+    all_paths = [df["full_path"] for df in discovered_files if df["file"].lower().endswith(".exe")]
     icons_map = _extract_icons_batch(all_paths)
 
     packages: List[Dict[str, Any]] = []
@@ -614,86 +1079,75 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         rel_path = df["rel_path"]
         file_size = df["file_size"]
 
-        # Extract binary metadata
-        meta = _extract_exe_metadata(full_path)
+        extension = os.path.splitext(file)[1].lower()
+        meta = _extract_exe_metadata(full_path) if extension == ".exe" else {
+            "product_name": "",
+            "file_description": "",
+            "publisher": "",
+            "version": "",
+            "original_filename": "",
+            "display_name": os.path.splitext(file)[0].replace("_", " ").replace("-", " "),
+        }
         display_name = meta["display_name"]
         version = meta["version"] or ""
         publisher = meta["publisher"]
         product_name = meta["product_name"] or display_name
 
-        # Check for optional package.json overrides
-        manifest_path = os.path.join(root, "package.json")
+        # package.json is trusted only when its `installer` points to this file.
+        manifest = _load_matching_manifest(root, file)
         silent_args = ""
         detection_id = None
 
-        if os.path.isfile(manifest_path):
-            try:
-                with open(manifest_path, "r", encoding="utf-8") as mf:
-                    manifest = json.load(mf)
-                    if isinstance(manifest, dict):
-                        if manifest.get("name"):
-                            display_name = manifest["name"]
-                        if manifest.get("version"):
-                            version = manifest["version"]
-                        if manifest.get("publisher"):
-                            publisher = manifest["publisher"]
-                        if manifest.get("silentArguments"):
-                            silent_args = manifest["silentArguments"]
-                        if manifest.get("detectionId"):
-                            detection_id = manifest["detectionId"]
-            except Exception:
-                pass
+        if manifest:
+            display_name = str(manifest.get("name") or display_name)
+            version = str(manifest.get("version") or version)
+            publisher = str(manifest.get("publisher") or publisher)
+            silent_args = str(manifest.get("silentArguments") or "")
+            detection_id = manifest.get("detectionId") or manifest.get("id")
 
-        pkg_id = os.path.splitext(file)[0].lower().replace(" ", "_")
+        installer_type = _guess_installer_type(full_path)
+        validation = _validate_installer(full_path, meta, installer_type, manifest)
+        pkg_id = _stable_package_id(rel_path)
         icon_data = icons_map.get(full_path)
 
-        # Match against installed applications (Registry search)
-        is_installed = False
-        installed_version = ""
-        installed_exe_path = None
-        install_location = None
-        matched_app_name = None
-        search_terms = _clean_software_keywords(display_name) + _clean_software_keywords(file) + _clean_software_keywords(product_name)
-        if detection_id:
-            search_terms.insert(0, detection_id.lower())
-
-        for term in search_terms:
-            if not term:
-                continue
-            for app in installed_apps:
-                app_name_lower = app["name"].lower()
-                # Exact or substring match
-                if term == app_name_lower or term in app_name_lower or app_name_lower in term:
-                    is_installed = True
-                    matched_app_name = app["name"]
-                    if app.get("version") and app["version"] != "Not available":
-                        installed_version = app["version"]
-
-                    # Extract executable path
-                    icon_val = app.get("icon", "")
-                    if icon_val:
-                        clean_ico = icon_val.split(",")[0].strip('"').strip()
-                        if clean_ico.lower().endswith(".exe") and os.path.isfile(clean_ico):
-                            installed_exe_path = clean_ico
-
-                    loc = app.get("location", "").strip('"').strip()
-                    if loc:
-                        install_location = loc
-
-                    if not installed_exe_path and loc and os.path.isdir(loc):
-                        for f in os.listdir(loc):
-                            if f.lower().endswith(".exe"):
-                                cand = os.path.join(loc, f)
-                                if os.path.isfile(cand):
-                                    installed_exe_path = cand
-                                    break
-                    break
-            if is_installed:
-                break
+        detection = _detect_installed_package(
+            installed_apps,
+            display_name,
+            file,
+            product_name,
+            publisher,
+            detection_id,
+        )
+        is_installed = bool(detection["is_installed"])
+        installed_version = detection["installed_version"]
+        installed_exe_path = detection["installed_exe_path"]
+        install_location = detection["install_location"]
+        matched_app_name = detection["matched_app_name"]
 
         # Fallback version from installer metadata if not found in registry
         if not installed_version and version:
             installed_version = version
+
+        # 1. First try brand / installed icon resolution for accurate application icons
+        brand_icon = _resolve_best_brand_icon(display_name, file, installed_exe_path)
+        if brand_icon:
+            icon_data = brand_icon
+        elif not icon_data and installed_exe_path and os.path.isfile(installed_exe_path):
+            icon_data = _extract_single_icon_native(installed_exe_path)
+
+        # Fallback icon from manifest if specified
+        if not icon_data and manifest and manifest.get("icon"):
+            manifest_ico = os.path.join(root, str(manifest.get("icon")))
+            if os.path.isfile(manifest_ico):
+                try:
+                    import base64
+                    with open(manifest_ico, "rb") as f_ico:
+                        ico_bytes = f_ico.read()
+                    ext = os.path.splitext(manifest_ico)[1].lower().replace(".", "")
+                    mime = "image/x-icon" if ext == "ico" else f"image/{ext}"
+                    icon_data = f"data:{mime};base64,{base64.b64encode(ico_bytes).decode('utf-8')}"
+                except Exception:
+                    pass
 
         status = "Installed" if is_installed else "Not Installed"
 
@@ -717,27 +1171,90 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "full_path": full_path,
             "version": version or installed_version or "Unknown",
             "publisher": publisher,
+            "detection_id": detection_id,
             "file_size_bytes": file_size,
             "file_size_display": _format_file_size(file_size),
-            "is_valid": True,
-            "validation_error": None,
+            "package_format": extension.lstrip(".").upper(),
+            "installer_type": installer_type,
+            "is_valid": validation["is_valid"],
+            "validation_code": validation["validation_code"],
+            "validation_error": validation["validation_error"],
+            "trust_level": validation["trust_level"],
             "status": status,
             "is_installed": is_installed,
             "installed_version": installed_version if is_installed else "Not available",
             "installed_exe_path": installed_exe_path,
             "install_location": install_location or (os.path.dirname(installed_exe_path) if installed_exe_path else None),
-            "install_allowed": not is_installed,
+            "detection_source": detection["detection_source"],
+            "install_allowed": bool(validation["is_valid"] and validation["manual_install_supported"] and not is_installed),
+            "auto_install_supported": bool(validation["auto_install_supported"] and not is_installed),
+            "manual_install_supported": bool(validation["manual_install_supported"] and not is_installed),
             "has_icon": icon_data is not None,
             "icon_base64": icon_data,
             "silent_arguments": silent_args,
         })
 
+    # -------------------------------------------------------------
+    # Deduplication Cluster Engine
+    # -------------------------------------------------------------
+    clusters: Dict[str, List[Dict[str, Any]]] = {}
+    for p in packages:
+        key = _normalize_package_identity(p["name"], p["filename"])
+        p["clean_identity"] = key
+        clusters.setdefault(key, []).append(p)
+
+    for key, group in clusters.items():
+        if len(group) == 1:
+            group[0]["is_duplicate"] = False
+            group[0]["duplicate_of"] = None
+            group[0]["duplicate_count"] = 0
+            continue
+
+        # Score candidates to pick the single canonical package
+        def score_pkg(pkg: Dict[str, Any]) -> float:
+            score = 0.0
+            stem = os.path.splitext(pkg["filename"])[0]
+            has_copy_pattern = bool(re.search(r'[\s_\-\.\(\[]*(?:copy|\(?\d+\)?|نسخه)[\s_\-\.\)\]]*$', stem, re.IGNORECASE))
+            if not has_copy_pattern:
+                score += 50.0
+            if pkg.get("is_installed"):
+                score += 100.0
+            if pkg.get("is_valid"):
+                score += 20.0
+            if pkg.get("auto_install_supported"):
+                score += 10.0
+            # Higher size preference
+            score += min(pkg.get("file_size_bytes", 0) / (1024 * 1024), 20.0)
+            # Shallower path preference
+            depth = pkg.get("relative_path", "").count("/")
+            score -= depth * 2.0
+            return score
+
+        sorted_group = sorted(group, key=score_pkg, reverse=True)
+        canonical = sorted_group[0]
+        canonical["is_duplicate"] = False
+        canonical["duplicate_of"] = None
+        canonical["duplicate_count"] = len(group) - 1
+
+        for dup in sorted_group[1:]:
+            dup["is_duplicate"] = True
+            dup["duplicate_of"] = canonical["id"]
+            dup["duplicate_count"] = 0
+
     # Sort alphabetically by display name
-    packages.sort(key=lambda p: p["name"].lower())
+    packages.sort(key=lambda p: (p.get("is_duplicate", False), p["name"].lower()))
 
     total_packages = len(packages)
+    valid_packages = len([p for p in packages if p.get("is_valid")])
+    blocked_packages = total_packages - valid_packages
     installed_packages = len([p for p in packages if p.get("is_installed")])
     available_to_install = len([p for p in packages if p.get("install_allowed")])
+    auto_installable = len([p for p in packages if p.get("auto_install_supported")])
+    duplicate_packages = len([p for p in packages if p.get("is_duplicate")])
+    manual_only = len([
+        p for p in packages
+        if p.get("install_allowed") and not p.get("auto_install_supported")
+    ])
 
     return {
         "directory_exists": True,
@@ -745,17 +1262,77 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         "packages": packages,
         "summary": {
             "total_packages": total_packages,
-            "valid_packages": total_packages,
+            "valid_packages": valid_packages,
+            "blocked_packages": blocked_packages,
             "installed_packages": installed_packages,
             "available_to_install": available_to_install,
+            "auto_installable": auto_installable,
+            "manual_only": manual_only,
+            "duplicate_packages": duplicate_packages,
         }
     }
 
 
+def _find_package(data: Dict[str, Any], target_identifier: str) -> Optional[Dict[str, Any]]:
+    target = (target_identifier or "").strip().replace("\\", "/").lower()
+    if not target:
+        return None
+    for package in data.get("packages", []):
+        candidates = {
+            str(package.get("id") or "").lower(),
+            str(package.get("relative_path") or "").replace("\\", "/").lower(),
+            str(package.get("filename") or "").lower(),
+        }
+        if target in candidates:
+            return package
+    return None
+
+
+def _manual_install_command(package: Dict[str, Any]) -> tuple[str, str]:
+    path = os.path.abspath(package["full_path"])
+    extension = os.path.splitext(path)[1].lower()
+    if extension == ".msi":
+        return os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "msiexec.exe"), subprocess.list2cmdline([
+            "/i", path, "/norestart", "REBOOT=ReallySuppress"
+        ])
+    if extension == ".msp":
+        return os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "msiexec.exe"), subprocess.list2cmdline([
+            "/p", path, "/norestart", "REBOOT=ReallySuppress"
+        ])
+    if extension == ".msu":
+        return os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "wusa.exe"), subprocess.list2cmdline([
+            path, "/norestart"
+        ])
+    # App Installer provides the appropriate interactive UI for AppX/MSIX.
+    return path, ""
+
+
+def _launch_elevated(executable: str, parameters: str, working_dir: str) -> tuple[bool, int, str]:
+    """Launches one validated installer without invoking a command shell."""
+    try:
+        ctypes.set_last_error(0)
+        result = ctypes.windll.shell32.ShellExecuteW(
+            None,
+            "runas",
+            executable,
+            parameters or None,
+            working_dir,
+            1,
+        )
+        if result > 32:
+            return True, int(result), ""
+        last_error = ctypes.get_last_error()
+        if result == 5 or last_error == 1223:
+            return False, 1223, "User cancelled the elevation request."
+        return False, int(result), f"ShellExecute failed ({result}, Windows error {last_error})."
+    except Exception as exc:
+        return False, -1, str(exc)
+
+
 def install_package(target_identifier: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:
     """
-    Launches the selected .exe installer with Administrator privileges (Run as Administrator).
-    Returns immediately so the employee can interact with the installer wizard.
+    Launches a validated installer interactively. MSI/MSP packages always receive
+    Windows Installer's no-restart policy; EXE/AppX installers retain their UI.
     """
     data = scan_packages(custom_dir)
     if not data.get("directory_exists"):
@@ -765,22 +1342,21 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
             "exit_code": -1,
         }
 
-    target_pkg = None
-    target_id_clean = target_identifier.strip().replace("\\", "/").lower()
-
-    for pkg in data.get("packages", []):
-        p_id = pkg.get("id", "").lower()
-        p_rel = pkg.get("relative_path", "").lower()
-        p_file = pkg.get("filename", "").lower()
-        if target_id_clean in [p_id, p_rel, p_file]:
-            target_pkg = pkg
-            break
+    target_pkg = _find_package(data, target_identifier)
 
     if not target_pkg:
         return {
             "success": False,
-            "message": f"Executable '{target_identifier}' not found in Packages directory.",
+            "message": f"Installer '{target_identifier}' was not found in the selected folder.",
             "exit_code": -1,
+        }
+
+    if not target_pkg.get("is_valid") or not target_pkg.get("manual_install_supported"):
+        return {
+            "success": False,
+            "blocked": True,
+            "message": target_pkg.get("validation_error") or "This file is not a validated installer and was blocked.",
+            "exit_code": -2,
         }
 
     full_path = target_pkg.get("full_path")
@@ -796,36 +1372,9 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
 
     abs_path = os.path.abspath(full_path)
     working_dir = os.path.dirname(abs_path)
-    logger.info(f"Launching installer as Administrator: {abs_path} in {working_dir}")
-
-    launched = False
-    launch_err = ""
-
-    # Win32 ShellExecuteW with verb 'runas' (Triggers Windows UAC & Run as Administrator)
-    try:
-        ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", abs_path, "", working_dir, 1)
-        if ret > 32:
-            launched = True
-            logger.info(f"ShellExecuteW runas successful (code {ret}) for {abs_path}")
-        else:
-            last_err = ctypes.GetLastError()
-            logger.info(f"ShellExecuteW returned code {ret}, GetLastError: {last_err}")
-            # If user clicked "No" on UAC, Windows returns SE_ERR_ACCESSDENIED (5) or ERROR_CANCELLED (1223)
-            if ret == 5 or last_err == 1223:
-                logger.info(f"User cancelled UAC elevation prompt for {abs_path}")
-                return {
-                    "success": False,
-                    "cancelled": True,
-                    "launched": False,
-                    "package_id": target_pkg.get("id"),
-                    "name": target_pkg.get("name"),
-                    "message": "عملیات نصب توسط کاربر لغو شد.",
-                    "exit_code": 1223,
-                }
-            launch_err = f"ShellExecute error code: {ret} (GetLastError: {last_err})"
-    except Exception as e:
-        launch_err = str(e)
-        logger.warning(f"ShellExecuteW runas exception: {e}")
+    executable, parameters = _manual_install_command(target_pkg)
+    logger.info("Launching validated installer: %s %s", executable, parameters)
+    launched, launch_code, launch_error = _launch_elevated(executable, parameters, working_dir)
 
     if launched:
         return {
@@ -834,16 +1383,371 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
             "launched": True,
             "package_id": target_pkg.get("id"),
             "name": target_pkg.get("name"),
-            "message": f"پنجره نصب {target_pkg.get('name')} با دسترسی مدیر (Run as Administrator) باز شد.",
+            "message": f"پنجره نصب {target_pkg.get('name')} باز شد. برنامه هیچ ری‌استارتی را تأیید نمی‌کند.",
         }
-    else:
+
+    return {
+        "success": False,
+        "cancelled": launch_code == 1223,
+        "launched": False,
+        "message": "عملیات نصب توسط کاربر لغو شد." if launch_code == 1223 else f"خطا در اجرای نصاب: {launch_error}",
+        "exit_code": launch_code,
+    }
+
+
+# Switches that prevent automatic reboots
+_NORESTART_SWITCHES = ["/NORESTART", "REBOOT=ReallySuppress", "/norestart", "--norestart"]
+
+
+def _guess_installer_type(exe_path: str) -> str:
+    """Tries to detect installer type by examining the binary."""
+    ext = os.path.splitext(exe_path)[1].lower()
+    if ext in {".msi", ".msp", ".msu", ".msix", ".msixbundle", ".appx", ".appxbundle"}:
+        return ext.lstrip(".")
+    if ext != ".exe":
+        return "unknown"
+
+    fname = os.path.basename(exe_path).lower()
+
+    try:
+        with open(exe_path, "rb") as f:
+            data = f.read(1024 * 1024)  # Read first 1MB
+
+            # Inno Setup (check first - avoids Delphi AnsiString nsis substring false positive)
+            if (b"Inno Setup" in data or b"inno setup" in data.lower() or
+                b"JR.Inno.Setup" in data or b"TSetupLanguage" in data or
+                b"InnoCallback" in data or b"SetupLdr" in data or
+                (b"TApplication" in data and b"TFolderTreeView" in data)):
+                return "innosetup"
+
+            # NSIS (Nullsoft) - use specific signatures
+            if (b"NullsoftInst" in data or b"Nullsoft.NSIS" in data or
+                b"~nsexec" in data or b"NSIS.Library" in data or b"\\NSIS\\" in data):
+                return "nsis"
+
+            # InstallShield
+            if b"InstallShield" in data or b"InstallScript" in data or b"ISSetup" in data or b"ISBEW64" in data:
+                return "installshield"
+
+            # WiX / Burn
+            if b"WixBurn" in data or b"BurnPipe" in data:
+                return "wix"
+
+            # 7-Zip SFX
+            if b"7-Zip" in data or "7zip" in fname or "7-zip" in fname:
+                return "7zip"
+
+            # WinRAR SFX
+            if b"WinRAR" in data or "winrar" in fname:
+                return "winrar"
+
+            # Google Chrome / Google Update
+            if b"Google Update" in data or "chromesetup" in fname or "chrome" in fname:
+                return "chrome"
+
+            # VLC
+            if "vlc" in fname:
+                return "vlc"
+
+    except Exception:
+        pass
+
+    # Name-based fallbacks
+    if "7zip" in fname or "7-zip" in fname:
+        return "7zip"
+    if "winrar" in fname:
+        return "winrar"
+    if "chrome" in fname:
+        return "chrome"
+    if "vlc" in fname:
+        return "vlc"
+
+    return "unknown"
+
+
+def _get_silent_args(pkg: Dict[str, Any]) -> str:
+    """
+    Returns the best silent install arguments for a package.
+    Priority: package.json silentArguments > installer type detection > generic /S
+    Unknown executables deliberately return an empty value and stay manual-only.
+    """
+    # 1. If package.json defines silentArguments, use those
+    silent_args = pkg.get("silent_arguments", "").strip()
+    if silent_args:
+        args_lower = silent_args.lower()
+        has_norestart = any(sw.lower() in args_lower for sw in _NORESTART_SWITCHES)
+        installer_type = pkg.get("installer_type") or _guess_installer_type(pkg.get("full_path", ""))
+        if not has_norestart and installer_type == "innosetup":
+            silent_args += " /NORESTART"
+        return silent_args
+
+    # 2. Try to detect installer type
+    exe_path = pkg.get("full_path", "")
+    installer_type = _guess_installer_type(exe_path)
+
+    if installer_type == "innosetup":
+        return "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
+    elif installer_type in ("nsis", "7zip", "vlc"):
+        return "/S"
+    elif installer_type == "winrar":
+        return "/s"
+    elif installer_type == "chrome":
+        return "/silent /install"
+    elif installer_type == "wix":
+        return "/quiet /norestart"
+
+    return ""
+
+
+SEE_MASK_NOCLOSEPROCESS = 0x00000040
+ERROR_CANCELLED = 1223
+
+
+class _SHELLEXECUTEINFOW(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("fMask", wintypes.ULONG),
+        ("hwnd", wintypes.HWND),
+        ("lpVerb", wintypes.LPCWSTR),
+        ("lpFile", wintypes.LPCWSTR),
+        ("lpParameters", wintypes.LPCWSTR),
+        ("lpDirectory", wintypes.LPCWSTR),
+        ("nShow", ctypes.c_int),
+        ("hInstApp", wintypes.HINSTANCE),
+        ("lpIDList", wintypes.LPVOID),
+        ("lpClass", wintypes.LPCWSTR),
+        ("hkeyClass", wintypes.HKEY),
+        ("dwHotKey", wintypes.DWORD),
+        ("hIconOrMonitor", wintypes.HANDLE),
+        ("hProcess", wintypes.HANDLE),
+    ]
+
+
+def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds: int) -> int:
+    """Runs a command with elevation and returns its process exit code."""
+    if not command:
+        return -1
+    try:
+        is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        is_admin = False
+
+    if is_admin:
+        result = subprocess.run(
+            command,
+            cwd=working_dir,
+            timeout=timeout_seconds,
+            capture_output=True,
+            **get_hidden_subprocess_kwargs(),
+        )
+        return int(result.returncode)
+
+    info = _SHELLEXECUTEINFOW()
+    info.cbSize = ctypes.sizeof(_SHELLEXECUTEINFOW)
+    info.fMask = SEE_MASK_NOCLOSEPROCESS
+    info.lpVerb = "runas"
+    info.lpFile = command[0]
+    info.lpParameters = subprocess.list2cmdline(command[1:])
+    info.lpDirectory = working_dir
+    info.nShow = 0
+
+    ctypes.set_last_error(0)
+    if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(info)):
+        error = ctypes.get_last_error() or ctypes.windll.kernel32.GetLastError()
+        return ERROR_CANCELLED if error == ERROR_CANCELLED else -int(error or 1)
+    if not info.hProcess:
+        return 0
+    try:
+        wait_result = ctypes.windll.kernel32.WaitForSingleObject(info.hProcess, timeout_seconds * 1000)
+        if wait_result != 0:
+            return -2
+        exit_code = wintypes.DWORD()
+        if not ctypes.windll.kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(exit_code)):
+            return -3
+        return int(exit_code.value)
+    finally:
+        ctypes.windll.kernel32.CloseHandle(info.hProcess)
+
+
+def _silent_install_command(pkg: Dict[str, Any]) -> List[str]:
+    path = os.path.abspath(pkg.get("full_path", ""))
+    extension = os.path.splitext(path)[1].lower()
+    system_root = os.environ.get("SystemRoot", r"C:\Windows")
+    if extension == ".msi":
+        return [os.path.join(system_root, "System32", "msiexec.exe"), "/i", path, "/qn", "/norestart", "REBOOT=ReallySuppress"]
+    if extension == ".msp":
+        return [os.path.join(system_root, "System32", "msiexec.exe"), "/p", path, "/qn", "/norestart", "REBOOT=ReallySuppress"]
+    if extension == ".msu":
+        return [os.path.join(system_root, "System32", "wusa.exe"), path, "/quiet", "/norestart"]
+    if extension in {".msix", ".msixbundle", ".appx", ".appxbundle"}:
+        escaped_path = path.replace("'", "''")
+        script = f"$ErrorActionPreference='Stop'; Add-AppxPackage -LiteralPath '{escaped_path}'"
+        return ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "RemoteSigned", "-Command", script]
+    if extension == ".exe":
+        silent_args = _get_silent_args(pkg)
+        if not silent_args:
+            return []
+        try:
+            parsed = shlex.split(silent_args, posix=False)
+        except ValueError:
+            return []
+        return [path, *parsed]
+    return []
+
+
+def silent_install_package(target_identifier: str, custom_dir: Optional[str] = None, timeout_seconds: int = 300) -> Dict[str, Any]:
+    """
+    Installs a package SILENTLY (no GUI wizard), waits for completion, and verifies installation.
+    Used by the batch auto-install queue.
+
+    Args:
+        target_identifier: Package ID, relative path, or filename
+        custom_dir: Optional custom packages directory
+        timeout_seconds: Max seconds to wait for installer to finish (default 5 min)
+
+    Returns:
+        {success, exit_code, verified_installed, installed_version, message, ...}
+    """
+    data = scan_packages(custom_dir)
+    if not data.get("directory_exists"):
         return {
             "success": False,
-            "cancelled": False,
-            "launched": False,
-            "message": f"خطا در اجرای برنامه با دسترسی مدیر: {launch_err}",
-            "exit_code": -3,
+            "message": "فولدر نرم‌افزارها یافت نشد.",
+            "exit_code": -1,
+            "verified_installed": False,
         }
+
+    target_pkg = _find_package(data, target_identifier)
+
+    if not target_pkg:
+        return {
+            "success": False,
+            "message": f"بسته '{target_identifier}' یافت نشد.",
+            "exit_code": -1,
+            "verified_installed": False,
+        }
+
+    # Skip if already installed
+    if target_pkg.get("is_installed"):
+        return {
+            "success": True,
+            "skipped": True,
+            "message": f"{target_pkg.get('name')} قبلاً نصب شده است.",
+            "verified_installed": True,
+            "installed_version": target_pkg.get("installed_version", ""),
+            "package_id": target_pkg.get("id"),
+            "name": target_pkg.get("name"),
+        }
+
+    if not target_pkg.get("is_valid"):
+        return {
+            "success": False,
+            "blocked": True,
+            "message": target_pkg.get("validation_error") or "فایل مشکوک است و اجازه اجرا ندارد.",
+            "exit_code": -2,
+            "verified_installed": False,
+        }
+
+    if not target_pkg.get("auto_install_supported"):
+        return {
+            "success": False,
+            "manual_required": True,
+            "message": f"نوع نصب خودکار {target_pkg.get('name')} شناخته‌شده نیست؛ لطفاً نصب دستی را انتخاب کنید.",
+            "exit_code": -4,
+            "verified_installed": False,
+            "package_id": target_pkg.get("id"),
+            "name": target_pkg.get("name"),
+        }
+
+    full_path = target_pkg.get("full_path")
+    pkg_dir = data.get("packages_directory")
+
+    if not _is_safe_path(pkg_dir, full_path) or not os.path.isfile(full_path):
+        return {
+            "success": False,
+            "message": f"مسیر فایل نامعتبر: {full_path}",
+            "exit_code": -1,
+            "verified_installed": False,
+        }
+
+    abs_path = os.path.abspath(full_path)
+    working_dir = os.path.dirname(abs_path)
+    pkg_name = target_pkg.get("name", target_identifier)
+    command = _silent_install_command(target_pkg)
+    if not command:
+        return {
+            "success": False,
+            "manual_required": True,
+            "message": f"برای {pkg_name} سوییچ نصب خودکار امن پیدا نشد؛ نصب دستی لازم است.",
+            "exit_code": -4,
+            "verified_installed": False,
+            "package_id": target_pkg.get("id"),
+            "name": pkg_name,
+        }
+
+    logger.info("[BatchInstall] Installing validated package: %s | Command: %s", pkg_name, command[0])
+
+    exit_code = -1
+    install_error = ""
+
+    try:
+        exit_code = _run_elevated_and_wait(command, working_dir, timeout_seconds)
+
+    except subprocess.TimeoutExpired:
+        install_error = f"نصب {pkg_name} پس از {timeout_seconds} ثانیه تایم‌اوت شد."
+        logger.warning(f"[BatchInstall] Timeout for {pkg_name} after {timeout_seconds}s")
+    except Exception as e:
+        install_error = f"خطا در نصب {pkg_name}: {str(e)}"
+        logger.error(f"[BatchInstall] Error installing {pkg_name}: {e}")
+
+    # Verify installation by re-scanning registry
+    import time
+    time.sleep(2)  # Allow uninstall/app-path registration to settle.
+
+    verified = False
+    installed_version = ""
+
+    try:
+        detection = _detect_installed_package(
+            get_all_installed_registry_apps(),
+            pkg_name,
+            target_pkg.get("filename", ""),
+            pkg_name,
+            target_pkg.get("publisher", ""),
+            target_pkg.get("detection_id"),
+        )
+        verified = bool(detection["is_installed"])
+        installed_version = detection["installed_version"]
+    except Exception as e:
+        logger.debug(f"[BatchInstall] Verification error: {e}")
+
+    success_exit_codes = {0, 3010, 1638}
+    success = verified or exit_code in success_exit_codes
+    reboot_required = exit_code == 3010
+
+    if success and verified:
+        msg = f"✓ {pkg_name} با موفقیت نصب شد." + (f" (نسخه {installed_version})" if installed_version else "")
+    elif success and not verified:
+        msg = f"⚠ نصب {pkg_name} اجرا شد (کد خروج: {exit_code}) اما در رجیستری تأیید نشد."
+    elif install_error:
+        msg = install_error
+    else:
+        msg = f"✗ نصب {pkg_name} ناموفق بود (کد خروج: {exit_code})."
+
+    logger.info(f"[BatchInstall] Result for {pkg_name}: success={success}, verified={verified}, exit_code={exit_code}")
+
+    return {
+        "success": success,
+        "skipped": False,
+        "exit_code": exit_code,
+        "verified_installed": verified,
+        "installed_version": installed_version,
+        "reboot_required": reboot_required,
+        "verification_state": "verified" if verified else ("exit_code_only" if success else "failed"),
+        "package_id": target_pkg.get("id"),
+        "name": pkg_name,
+        "message": msg,
+    }
 
 
 def open_package(target_identifier: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:

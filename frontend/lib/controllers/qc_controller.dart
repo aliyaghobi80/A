@@ -5,7 +5,9 @@ import 'package:get/get.dart';
 import '../l10n/app_localizations.dart';
 import '../models/qc_report.dart';
 import '../services/api_service.dart';
+import '../widgets/dialogs/qc_results_dialog.dart';
 import 'activation_controller.dart';
+import 'driver_install_controller.dart';
 import 'software_controller.dart';
 import 'system_info_controller.dart';
 
@@ -115,35 +117,9 @@ class QcController extends GetxController {
         Navigator.of(context, rootNavigator: true).pop();
       }
 
-      // Show result snackbar
+      // Show comprehensive QC Results & Solutions Dialog
       if (context.mounted) {
-        if (report.isReady) {
-          scaffoldMessenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                l10n.isPersian
-                    ? '✓ بررسی کامل سیستم انجام شد: سیستم کاملاً آماده است.'
-                    : '✓ Full check completed: System is Ready.',
-              ),
-              backgroundColor: const Color(0xFF10B981),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        } else {
-          scaffoldMessenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                l10n.isPersian
-                    ? '⚠ بررسی کامل انجام شد: ${report.problemsCount} مورد نیاز به بررسی دارد.'
-                    : '⚠ Full check completed: ${report.problemsCount} item(s) need attention.',
-              ),
-              backgroundColor: const Color(0xFFD97706),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
+        QcResultsDialog.show(context, report);
       }
     } catch (e) {
       if (context.mounted && Navigator.of(context, rootNavigator: true).canPop()) {
@@ -308,7 +284,7 @@ class QcController extends GetxController {
           (p) => p.id == issue.actionTarget || p.filename == issue.packageFilename || p.name == issue.name,
         );
         if (pkg != null) {
-          await softCtrl.installPackageInteractive(context, pkg);
+          await softCtrl.installPackageSilent(context, pkg);
           // Auto re-check
           await Future.delayed(const Duration(seconds: 2));
           await fetchInitialQcStatus();
@@ -322,6 +298,13 @@ class QcController extends GetxController {
             );
           }
         }
+      }
+    } else if (issue.actionType == 'install_drivers') {
+      if (Get.isRegistered<DriverInstallController>()) {
+        final driverCtrl = Get.find<DriverInstallController>();
+        await driverCtrl.selectFolderAndScan(context);
+        await Future.delayed(const Duration(seconds: 2));
+        await fetchInitialQcStatus();
       }
     } else if (issue.actionType == 'activate_windows') {
       if (Get.isRegistered<ActivationController>()) {

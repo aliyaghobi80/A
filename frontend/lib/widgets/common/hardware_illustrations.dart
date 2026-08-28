@@ -55,10 +55,26 @@ class HardwareIllustrationBadge extends StatelessWidget {
 // -------------------------------------------------------------
 class CpuIllustration extends StatelessWidget {
   final Color color;
-  const CpuIllustration({super.key, this.color = const Color(0xFF3B82F6)});
+  final bool useAssetImage;
+  const CpuIllustration({
+    super.key,
+    this.color = const Color(0xFF3B82F6),
+    this.useAssetImage = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (useAssetImage) {
+      return Image.asset(
+        'assets/Parts/cpu.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (context, error, stackTrace) => CustomPaint(
+          painter: _CpuPainter(color: color),
+          child: const SizedBox.expand(),
+        ),
+      );
+    }
     return CustomPaint(
       painter: _CpuPainter(color: color),
       child: const SizedBox.expand(),
@@ -144,10 +160,26 @@ class _CpuPainter extends CustomPainter {
 // -------------------------------------------------------------
 class RamIllustration extends StatelessWidget {
   final Color color;
-  const RamIllustration({super.key, this.color = const Color(0xFFF59E0B)});
+  final bool useAssetImage;
+  const RamIllustration({
+    super.key,
+    this.color = const Color(0xFFF59E0B),
+    this.useAssetImage = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (useAssetImage) {
+      return Image.asset(
+        'assets/Parts/ram.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (context, error, stackTrace) => CustomPaint(
+          painter: _RamPainter(color: color),
+          child: const SizedBox.expand(),
+        ),
+      );
+    }
     return CustomPaint(
       painter: _RamPainter(color: color),
       child: const SizedBox.expand(),
@@ -223,10 +255,26 @@ class _RamPainter extends CustomPainter {
 // -------------------------------------------------------------
 class GpuIllustration extends StatelessWidget {
   final Color color;
-  const GpuIllustration({super.key, this.color = const Color(0xFF8B5CF6)});
+  final bool useAssetImage;
+  const GpuIllustration({
+    super.key,
+    this.color = const Color(0xFF8B5CF6),
+    this.useAssetImage = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (useAssetImage) {
+      return Image.asset(
+        'assets/Parts/graphic.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (context, error, stackTrace) => CustomPaint(
+          painter: _GpuPainter(color: color),
+          child: const SizedBox.expand(),
+        ),
+      );
+    }
     return CustomPaint(
       painter: _GpuPainter(color: color),
       child: const SizedBox.expand(),
@@ -321,10 +369,26 @@ class _GpuPainter extends CustomPainter {
 // -------------------------------------------------------------
 class MotherboardIllustration extends StatelessWidget {
   final Color color;
-  const MotherboardIllustration({super.key, this.color = const Color(0xFF10B981)});
+  final bool useAssetImage;
+  const MotherboardIllustration({
+    super.key,
+    this.color = const Color(0xFF10B981),
+    this.useAssetImage = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (useAssetImage) {
+      return Image.asset(
+        'assets/Parts/motherboard.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (context, error, stackTrace) => CustomPaint(
+          painter: _MotherboardPainter(color: color),
+          child: const SizedBox.expand(),
+        ),
+      );
+    }
     return CustomPaint(
       painter: _MotherboardPainter(color: color),
       child: const SizedBox.expand(),
@@ -396,17 +460,130 @@ class _MotherboardPainter extends CustomPainter {
 }
 
 // -------------------------------------------------------------
-// 5. Storage Illustration (NVMe M.2 SSD Stick + Controller)
+// 5. Storage Illustration (NVMe M.2 SSD / SATA SSD / HDD)
 // -------------------------------------------------------------
 class StorageIllustration extends StatelessWidget {
   final Color color;
-  const StorageIllustration({super.key, this.color = const Color(0xFF06B6D4)});
+  final String? storageType;
+  final String? busType;
+  final String? model;
+  final bool? isM2;
+  final bool? isSata;
+  final bool? isHdd;
+  final bool useAssetImage;
+
+  const StorageIllustration({
+    super.key,
+    this.color = const Color(0xFF06B6D4),
+    this.storageType,
+    this.busType,
+    this.model,
+    this.isM2,
+    this.isSata,
+    this.isHdd,
+    this.useAssetImage = true,
+  });
+
+  String get assetPath {
+    if (isM2 == true) return 'assets/Parts/ssd_m2.png';
+    if (isHdd == true) return 'assets/Parts/hdd.png';
+    if (isSata == true) return 'assets/Parts/ssd_sata.png';
+
+    final st = (storageType ?? '').toLowerCase();
+    final bt = (busType ?? '').toLowerCase();
+    final md = (model ?? '').toLowerCase();
+
+    // 1. Check for NVMe / M.2
+    if (st.contains('nvme') || bt.contains('nvme') || md.contains('nvme') || md.contains('m.2') || md.contains('m2') || md.contains('pcie')) {
+      return 'assets/Parts/ssd_m2.png';
+    }
+
+    // 2. Check for HDD
+    if (st.contains('hdd') || st.contains('hard') || md.contains('wd') || md.contains('seagate') || md.contains('toshiba') || md.contains('barracuda') || md.contains('caviar')) {
+      if (!md.contains('ssd') && !st.contains('ssd')) {
+        return 'assets/Parts/hdd.png';
+      }
+    }
+
+    // 3. Check for SATA SSD / Generic SSD
+    if (st.contains('ssd') || md.contains('ssd') || md.contains('sata') || md.contains('evo') || md.contains('crucial')) {
+      return 'assets/Parts/ssd_sata.png';
+    }
+
+    if (st == 'hdd') return 'assets/Parts/hdd.png';
+    return 'assets/Parts/ssd_sata.png';
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (useAssetImage) {
+      return Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (context, error, stackTrace) => CustomPaint(
+          painter: _StoragePainter(color: color),
+          child: const SizedBox.expand(),
+        ),
+      );
+    }
     return CustomPaint(
       painter: _StoragePainter(color: color),
       child: const SizedBox.expand(),
+    );
+  }
+}
+
+class SsdM2Illustration extends StatelessWidget {
+  final Color color;
+  const SsdM2Illustration({super.key, this.color = const Color(0xFF06B6D4)});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/Parts/ssd_m2.png',
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (context, error, stackTrace) => CustomPaint(
+        painter: _StoragePainter(color: color),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+class SsdSataIllustration extends StatelessWidget {
+  final Color color;
+  const SsdSataIllustration({super.key, this.color = const Color(0xFF06B6D4)});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/Parts/ssd_sata.png',
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (context, error, stackTrace) => CustomPaint(
+        painter: _StoragePainter(color: color),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+class HddIllustration extends StatelessWidget {
+  final Color color;
+  const HddIllustration({super.key, this.color = const Color(0xFF06B6D4)});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/Parts/hdd.png',
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (context, error, stackTrace) => CustomPaint(
+        painter: _StoragePainter(color: color),
+        child: const SizedBox.expand(),
+      ),
     );
   }
 }

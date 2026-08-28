@@ -1,7 +1,8 @@
 # backend/build_backend.py
 """
-Builds the standalone, frozen Python backend executable (backend_server.exe)
-using PyInstaller. Guarantees 100% zero external runtime dependencies on destination machines.
+Builds the standalone Python backend as a PyInstaller one-directory bundle.
+Unlike one-file mode, startup does not unpack native DLLs into the user's Temp
+directory, which avoids antivirus, disk-space, and concurrent-extraction errors.
 """
 
 import os
@@ -38,6 +39,7 @@ def build_backend(output_dir: str = None):
         "datetime",
         "collector",
         "server",
+        "api_server",
         "qc.qc_engine",
         "hardware.cpu",
         "hardware.ram",
@@ -60,19 +62,24 @@ def build_backend(output_dir: str = None):
         "activation.office_activation",
         "activation.activation_tools",
         "packages.manager",
+        "packages.batch_installer",
+        "drivers.driver_installer",
     ]
 
     cmd = [
         sys.executable,
         "-m", "PyInstaller",
         "--name=backend_server",
-        "--onefile",
+        "--onedir",
         "--noconsole",
+        "--noconfirm",
         "--clean",
         f"--paths={backend_dir}",
+        f"--paths={root_dir}",
         f"--distpath={dist_path}",
         f"--workpath={work_path}",
         f"--specpath={output_dir}",
+        "--collect-all=backend",
     ]
 
     ico_path = os.path.join(root_dir, "installer", "app_icon.ico")
@@ -81,6 +88,11 @@ def build_backend(output_dir: str = None):
 
     for imp in hidden_imports:
         cmd.extend(["--hidden-import", imp])
+
+    # Pillow's hook can discover NumPy even though this application only uses
+    # Image.frombytes. Excluding it removes an unused OpenBLAS DLL and keeps the
+    # backend bundle smaller and independent from NumPy's native runtime.
+    cmd.extend(["--exclude-module", "numpy", "--exclude-module", "scipy"])
 
     cmd.append(main_py)
 
@@ -91,11 +103,11 @@ def build_backend(output_dir: str = None):
     if res.returncode != 0:
         raise RuntimeError(f"PyInstaller build failed with exit code {res.returncode}")
 
-    exe_path = os.path.join(dist_path, "backend_server.exe")
+    exe_path = os.path.join(dist_path, "backend_server", "backend_server.exe")
     if not os.path.exists(exe_path):
         raise FileNotFoundError(f"Expected backend_server.exe at {exe_path}, but not found.")
 
-    print(f"[OK] Backend successfully packaged into standalone binary: {exe_path} ({os.path.getsize(exe_path)} bytes)")
+    print(f"[OK] Backend successfully packaged into one-directory bundle: {exe_path} ({os.path.getsize(exe_path)} bytes launcher)")
     return exe_path
 
 if __name__ == "__main__":

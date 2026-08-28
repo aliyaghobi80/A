@@ -6,7 +6,7 @@ import winreg
 from typing import Dict, Any
 
 from utils.powershell import run_powershell_json
-from utils.formatters import clean_string
+from utils.formatters import clean_serial_number, clean_string
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,12 @@ def get_windows_and_system_info() -> Dict[str, Any]:
         "manufacturer": "Not available",
         "model": "Not available",
         "serial": "Not available",
+        "uuid": "Not available",
+        "sku": "Not available",
+        "asset_tag": "Not available",
+        "chassis_type": "Unknown",
     }
+    os_data: Dict[str, Any] = {}
 
     reg_info = _get_registry_windows_version()
 
@@ -63,14 +68,18 @@ def get_windows_and_system_info() -> Dict[str, Any]:
         script = (
             "$os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture, CSName; "
             "$sys = Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model, CSName; "
-            "$csp = Get-CimInstance Win32_ComputerSystemProduct | Select-Object IdentifyingNumber, UUID; "
-            "[PSCustomObject]@{ OS = $os; System = $sys; Product = $csp } | ConvertTo-Json"
+            "$csp = Get-CimInstance Win32_ComputerSystemProduct | Select-Object IdentifyingNumber, UUID, SKUNumber, Name, Vendor, Version; "
+            "$enc = Get-CimInstance Win32_SystemEnclosure | Select-Object SerialNumber, SMBIOSAssetTag, ChassisTypes; "
+            "$bios = Get-CimInstance Win32_BIOS | Select-Object SerialNumber; "
+            "[PSCustomObject]@{ OS = $os; System = $sys; Product = $csp; Enclosure = $enc; BIOS = $bios } | ConvertTo-Json"
         )
         data = run_powershell_json(script)
         if isinstance(data, dict):
             os_data = data.get("OS") or {}
             sys_data = data.get("System") or {}
             csp_data = data.get("Product") or {}
+            enclosure_data = data.get("Enclosure") or {}
+            bios_data = data.get("BIOS") or {}
 
             # OS Edition
             caption = os_data.get("Caption")
@@ -99,8 +108,29 @@ def get_windows_and_system_info() -> Dict[str, Any]:
                 system_res["manufacturer"] = clean_string(sys_data["Manufacturer"])
             if sys_data.get("Model"):
                 system_res["model"] = clean_string(sys_data["Model"])
-            if csp_data.get("IdentifyingNumber"):
-                system_res["serial"] = clean_string(csp_data["IdentifyingNumber"])
+            raw_serial = (
+                csp_data.get("IdentifyingNumber")
+                or enclosure_data.get("SerialNumber")
+                or bios_data.get("SerialNumber")
+            )
+            system_res["serial"] = clean_serial_number(raw_serial, default="Not available")
+            system_res["uuid"] = clean_serial_number(csp_data.get("UUID"), default="Not available")
+            system_res["sku"] = clean_string(csp_data.get("SKUNumber"), default="Not available")
+            system_res["asset_tag"] = clean_serial_number(
+                enclosure_data.get("SMBIOSAssetTag"),
+                default="Not available",
+            )
+
+            chassis_values = enclosure_data.get("ChassisTypes") or []
+            if not isinstance(chassis_values, list):
+                chassis_values = [chassis_values]
+            chassis_codes = {int(value) for value in chassis_values if str(value).isdigit()}
+            portable_codes = {8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32}
+            desktop_codes = {3, 4, 5, 6, 7, 13, 15, 16, 24, 35, 36}
+            if chassis_codes & portable_codes:
+                system_res["chassis_type"] = "Laptop"
+            elif chassis_codes & desktop_codes:
+                system_res["chassis_type"] = "Desktop"
 
     except Exception as e:
         logger.error(f"Error querying Windows and System info: {e}")

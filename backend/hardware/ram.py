@@ -3,7 +3,7 @@ import ctypes
 from typing import Dict, Any, List
 
 from utils.powershell import run_powershell_json
-from utils.formatters import clean_string, format_bytes_to_gb
+from utils.formatters import clean_string, clean_serial_number, clean_part_number, format_bytes_to_gb
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +113,8 @@ def get_ram_info() -> Dict[str, Any]:
 
             slot_locator = clean_string(mod.get("DeviceLocator"), default=f"Slot {idx + 1}")
             manufacturer = clean_string(mod.get("Manufacturer"), default="Not available")
-            part_number = clean_string(mod.get("PartNumber"), default="Not available")
-            serial_number = clean_string(mod.get("SerialNumber"), default="Not available")
+            part_number = clean_part_number(mod.get("PartNumber"), default="-")
+            serial_number = clean_serial_number(mod.get("SerialNumber"), default="-")
 
             modules_list.append({
                 "slot": slot_locator,

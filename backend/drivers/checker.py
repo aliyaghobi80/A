@@ -206,29 +206,8 @@ def check_important_drivers() -> Dict[str, Any]:
                 "pnp_class": pnp_class,
             })
 
-    # Add Bluetooth placeholder if physical Bluetooth adapter is absent on motherboard
-    has_bt = any(d["category"] == "Bluetooth" for d in driver_items)
-    if not has_bt:
-        driver_items.append({
-            "id": "drv_bt_not_present",
-            "name": "Bluetooth Adapter",
-            "display_name": "Bluetooth Adapter",
-            "device_name": "سخت‌افزار بلوتوث بر روی مادربورد موجود نیست",
-            "category": "Bluetooth",
-            "category_fa": "بلوتوث (Bluetooth)",
-            "status": "Not Present",
-            "is_healthy": True,
-            "is_present": False,
-            "problem_code": 0,
-            "status_description": "سخت‌افزار بلوتوث بر روی این مادربورد موجود نیست",
-            "status_description_en": "Bluetooth hardware is not present on this motherboard",
-            "instance_id": "Not available",
-            "manufacturer": "N/A",
-            "pnp_class": "Bluetooth",
-        })
-
     # Summary
-    present_items = [d for d in driver_items if d["is_present"]]
+    present_items = [d for d in driver_items if d.get("is_present", True)]
     healthy_items = [d for d in present_items if d["is_healthy"]]
     problem_items = [d for d in present_items if not d["is_healthy"]]
 

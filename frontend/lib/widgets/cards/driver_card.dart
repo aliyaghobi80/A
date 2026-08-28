@@ -10,6 +10,10 @@ class DriverCard extends StatefulWidget {
   final DriverSummary summary;
   final RebootInfo? reboot;
   final VoidCallback? onRestart;
+  final VoidCallback? onAutoInstallDrivers;
+  final bool isBatchInstalling;
+  final DriverBatchStatus? batchStatus;
+  final VoidCallback? onCancelBatch;
 
   const DriverCard({
     super.key,
@@ -17,6 +21,10 @@ class DriverCard extends StatefulWidget {
     required this.summary,
     this.reboot,
     this.onRestart,
+    this.onAutoInstallDrivers,
+    this.isBatchInstalling = false,
+    this.batchStatus,
+    this.onCancelBatch,
   });
 
   @override
@@ -70,40 +78,75 @@ class _DriverCardState extends State<DriverCard> {
           : (l10n.isPersian ? '${summary.problemCount} درایور نیازمند نصب / بررسی' : '${summary.problemCount} Drivers Need Attention'),
       illustration: const MotherboardIllustration(color: Color(0xFF0D9488)),
       iconColor: const Color(0xFF0D9488),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: badgeColor.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isAllHealthy ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
-              size: 14,
-              color: badgeColor,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              isAllHealthy
-                  ? (l10n.isPersian ? '${summary.healthyCount} سالم' : '${summary.healthyCount} OK')
-                  : (l10n.isPersian ? '${summary.problemCount} ناقص' : '${summary.problemCount} Issues'),
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: badgeColor,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.onAutoInstallDrivers != null) ...[
+            ElevatedButton.icon(
+              onPressed: widget.isBatchInstalling ? null : widget.onAutoInstallDrivers,
+              icon: widget.isBatchInstalling
+                  ? const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.drive_file_rename_outline_rounded, size: 13),
+              label: Text(
+                widget.isBatchInstalling
+                    ? (l10n.isPersian ? 'در حال نصب...' : 'Installing...')
+                    : (l10n.isPersian ? 'نصب خودکار از پوشه' : 'Auto Install Drivers'),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0D9488),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
               ),
             ),
+            const SizedBox(width: 6),
           ],
-        ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: badgeColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isAllHealthy ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                  size: 14,
+                  color: badgeColor,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isAllHealthy
+                      ? (l10n.isPersian ? '${summary.healthyCount} سالم' : '${summary.healthyCount} OK')
+                      : (l10n.isPersian ? '${summary.problemCount} ناقص' : '${summary.problemCount} Issues'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: badgeColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 0. Pending Reboot Suggestion Banner
-          if (widget.reboot?.rebootRequired == true || widget.onRestart != null) ...[
+          // Driver Batch Progress Card
+          if (widget.batchStatus != null && (widget.batchStatus!.isRunning || (widget.isBatchInstalling && widget.batchStatus!.items.isNotEmpty))) ...[
+            _buildDriverBatchProgress(context, isDark, l10n),
+            const SizedBox(height: 14),
+          ],
+          // 0. Pending Reboot Suggestion Banner (Only shown after driver install in this session)
+          if (widget.batchStatus?.rebootRequired == true || (widget.batchStatus != null && !widget.batchStatus!.isRunning && widget.batchStatus!.completed > 0)) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 14),
               padding: const EdgeInsets.all(12),
@@ -629,6 +672,218 @@ class _DriverCardState extends State<DriverCard> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDriverBatchProgress(BuildContext context, bool isDark, AppLocalizations l10n) {
+    final b = widget.batchStatus!;
+    final isRunning = b.isRunning;
+    final total = b.total;
+    final percent = b.progressPercent;
+    final currentFile = b.currentFile;
+    final failed = b.failed;
+
+    Color color = isRunning ? const Color(0xFF0D9488) : (failed == 0 ? const Color(0xFF0D9488) : const Color(0xFFF59E0B));
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF081C1B) : const Color(0xFFF0FDFA),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: color.withValues(alpha: isDark ? 0.6 : 0.4),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              isRunning
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0D9488)),
+                    )
+                  : Icon(
+                      failed == 0 ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                      color: color,
+                      size: 18,
+                    ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isRunning
+                      ? (currentFile != null
+                          ? 'نصب خودکار: $currentFile (${b.currentIndex + 1} از $total)'
+                          : 'در حال نصب خودکار درایورها...')
+                      : b.summaryMessage,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              Text(
+                '${percent.toStringAsFixed(0)}%',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+              if (isRunning && widget.onCancelBatch != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: widget.onCancelBatch,
+                  tooltip: 'لغو',
+                  icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFFEF4444)),
+                  style: IconButton.styleFrom(
+                    padding: const EdgeInsets.all(4),
+                    minimumSize: Size.zero,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: total > 0 ? (percent / 100.0).clamp(0.0, 1.0) : null,
+              minHeight: 5,
+              backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+          if (b.items.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 180),
+              decoration: BoxDecoration(
+                color: (isDark ? const Color(0xFF0F172A) : Colors.white),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                ),
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                itemCount: b.items.length,
+                separatorBuilder: (context, index) => Divider(
+                  height: 1,
+                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                ),
+                itemBuilder: (context, index) {
+                  final item = b.items[index];
+                  final isItemRunning = item.status == 'installing';
+                  final isItemDone = item.status == 'completed';
+                  final isItemFailed = item.status == 'failed';
+                  final isItemSkipped = item.status == 'skipped';
+
+                  Color itemColor = isItemDone
+                      ? const Color(0xFF10B981)
+                      : (isItemFailed
+                          ? const Color(0xFFEF4444)
+                          : (isItemRunning
+                              ? const Color(0xFF0D9488)
+                              : const Color(0xFF94A3B8)));
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (isItemRunning)
+                              const SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF0D9488)),
+                              )
+                            else
+                              Icon(
+                                isItemDone
+                                    ? Icons.check_circle_rounded
+                                    : (isItemFailed
+                                        ? Icons.cancel_rounded
+                                        : (isItemSkipped ? Icons.skip_next_rounded : Icons.schedule_rounded)),
+                                size: 14,
+                                color: itemColor,
+                              ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: itemColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                item.type.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w800,
+                                  color: itemColor,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: Text(
+                                  item.filename,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: isItemRunning ? FontWeight.w700 : FontWeight.w500,
+                                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            if (item.fileSizeDisplay.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                item.fileSizeDisplay,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (item.message.isNotEmpty && (isItemFailed || isItemDone)) ...[
+                          const SizedBox(height: 2),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 20, left: 6),
+                            child: Text(
+                              item.message,
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: isItemFailed ? FontWeight.w600 : FontWeight.w500,
+                                color: isItemFailed
+                                    ? const Color(0xFFEF4444)
+                                    : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ],

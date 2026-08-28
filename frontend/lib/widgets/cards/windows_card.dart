@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../controllers/activation_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import '../common/hardware_illustrations.dart';
@@ -24,17 +22,18 @@ class WindowsCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
-    final activationCtrl = Get.find<ActivationController>();
-
     final act = activation ?? WindowsActivationInfo.empty();
     final isActivated = act.activated;
-    final statusColor = isActivated ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final statusColor = isActivated
+        ? const Color(0xFF10B981)
+        : const Color(0xFFEF4444);
     final statusLabel = isActivated ? l10n.activated : l10n.notActivated;
 
     return CardWrapper(
       icon: Icons.window_rounded,
       title: l10n.windowsInformation,
-      summarySubtitle: '${windows.edition} (${windows.architecture}) • $statusLabel',
+      summarySubtitle:
+          '${windows.edition} (${windows.architecture}) • $statusLabel',
       illustration: const WindowsIllustration(),
       iconColor: const Color(0xFF0284C7),
       trailing: Container(
@@ -75,7 +74,9 @@ class WindowsCard extends StatelessWidget {
               color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(9),
               border: Border.all(
-                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                color: isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFE2E8F0),
               ),
             ),
             child: Row(
@@ -88,7 +89,9 @@ class WindowsCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        color: isDark
+                            ? const Color(0xFFF8FAFC)
+                            : const Color(0xFF0F172A),
                         letterSpacing: -0.2,
                       ),
                     ),
@@ -96,7 +99,10 @@ class WindowsCard extends StatelessWidget {
                 ),
                 if (windows.version != 'Not available')
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0284C7).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(5),
@@ -108,7 +114,9 @@ class WindowsCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1),
+                          color: isDark
+                              ? const Color(0xFF7DD3FC)
+                              : const Color(0xFF0369A1),
                         ),
                       ),
                     ),
@@ -158,34 +166,12 @@ class WindowsCard extends StatelessWidget {
             ),
           InfoRow(
             label: l10n.licenseExpiration,
-            value: act.expiration ?? (isActivated ? l10n.permanentLicense : l10n.notAvailable),
+            value:
+                act.expiration ??
+                (isActivated ? l10n.permanentLicense : l10n.notAvailable),
             icon: Icons.event_available_rounded,
             forceLtrValue: true,
           ),
-          InfoRow(
-            label: l10n.activationTool,
-            value: act.toolAvailable ? l10n.toolAvailable : l10n.toolNotFound,
-            icon: Icons.build_circle_rounded,
-          ),
-          if (!act.toolAvailable) ...[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => activationCtrl.changeToolsDirectory(context),
-                icon: const Icon(Icons.folder_open_rounded, size: 14),
-                label: Text(
-                  l10n.isPersian ? 'انتخاب پوشه فعال‌سازها (KMS)' : 'Select KMS Tools Folder',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                ),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF0284C7),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ),
-          ],
           InfoRow(
             label: l10n.computerName,
             value: system.computerName,
@@ -206,37 +192,37 @@ class WindowsCard extends StatelessWidget {
               value: system.manufacturer,
               icon: Icons.business_rounded,
             ),
-
-          // Activation Action Button (Only if not activated & tool is available)
-          if (!isActivated && act.toolAvailable) ...[
-            const SizedBox(height: 12),
-            Obx(() {
-              final isRunning = activationCtrl.isActivatingWindows.value;
-              return SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: isRunning ? null : () => activationCtrl.activateWindows(context),
-                  icon: isRunning
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.verified_user_rounded, size: 16),
-                  label: Text(
-                    isRunning ? l10n.activatingWindows : l10n.activateWindows,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0284C7),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              );
-            }),
-          ],
+          if (system.serial != 'Not available')
+            InfoRow(
+              label: l10n.isPersian ? 'سریال دستگاه' : 'Device serial',
+              value: system.serial,
+              icon: Icons.qr_code_2_rounded,
+              isMonospace: true,
+              copyable: true,
+            ),
+          if (system.assetTag != 'Not available')
+            InfoRow(
+              label: l10n.isPersian ? 'برچسب دارایی' : 'Asset tag',
+              value: system.assetTag,
+              icon: Icons.sell_outlined,
+              isMonospace: true,
+              copyable: true,
+            ),
+          if (system.uuid != 'Not available')
+            InfoRow(
+              label: 'UUID',
+              value: system.uuid,
+              icon: Icons.fingerprint_rounded,
+              isMonospace: true,
+              copyable: true,
+            ),
+          if (system.sku != 'Not available')
+            InfoRow(
+              label: 'SKU',
+              value: system.sku,
+              icon: Icons.inventory_2_outlined,
+              forceLtrValue: true,
+            ),
         ],
       ),
     );

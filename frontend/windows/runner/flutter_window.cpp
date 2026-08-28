@@ -40,6 +40,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  // Ensure child backend processes are terminated immediately upon window close
+  system("taskkill.exe /F /IM backend_server.exe /T >nul 2>&1");
+
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

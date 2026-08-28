@@ -17,13 +17,13 @@ class ExitDialog {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: const Color(0xFFEF4444).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.power_settings_new_rounded, color: Color(0xFFEF4444), size: 22),
             ),
             const SizedBox(width: 12),
             Text(
-              'خروج از برنامه',
+              'خروج و بستن برنامه',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -33,42 +33,37 @@ class ExitDialog {
           ],
         ),
         content: Text(
-          'آیا مایل به خروج کامل از نرم‌افزار (بستن پروسه بک‌اند و End Task) هستید یا مایلید در پس‌زمینه فعال بماند؟',
+          'با خروج از برنامه، تمامی سرویس‌ها و پردازش‌های پس‌زمینه (Backend Engine) به صورت کامل متوقف و بسته می‌شوند.',
           style: TextStyle(
-            fontSize: 14,
-            height: 1.5,
+            fontSize: 13.5,
+            height: 1.6,
             color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
           ),
         ),
         actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(dialogCtx).pop(),
-            child: const Text('انصراف'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () {
-              Navigator.of(dialogCtx).pop();
-            },
-            icon: const Icon(Icons.minimize_rounded, size: 16),
-            label: const Text('پس‌زمینه'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF3B82F6),
-              side: const BorderSide(color: Color(0xFF3B82F6)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
+            child: const Text('انصراف'),
           ),
           ElevatedButton.icon(
             onPressed: () async {
               Navigator.of(dialogCtx).pop();
-              // Complete Exit (End Task)
+              // Complete Exit (End Task all background services)
               await BackendProcessManager.terminateAll();
               exit(0);
             },
-            icon: const Icon(Icons.close_rounded, size: 16),
-            label: const Text('خروج کامل (End Task)'),
+            icon: const Icon(Icons.power_settings_new_rounded, size: 16),
+            label: const Text('بستن و خروج کامل'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEF4444),
               foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ],

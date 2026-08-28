@@ -10,30 +10,77 @@ enum DisplayMode {
 class AppSettings {
   final String languageCode; // 'fa' or 'en'
   final DisplayMode displayMode;
-  final bool isDarkMode;
+  final String themeMode; // 'light' (default), 'dark', 'system'
+  final String accentColorName; // 'blue' (default), 'purple', 'green', 'orange', 'red', 'teal', 'neutral'
+  final String? customLogoPath;
+  final String uiDensity; // 'comfortable', 'medium' (default), 'compact'
+  final String temperatureUnit; // 'C' (default) or 'F'
+  final bool autoScanOnStartup;
+  final bool notificationsEnabled;
+  final String? softwareDirectory;
+  final String? driverDirectory;
+  final String? toolsDirectory;
 
   const AppSettings({
     this.languageCode = 'fa',
     this.displayMode = DisplayMode.simple,
-    this.isDarkMode = true,
+    this.themeMode = 'light',
+    this.accentColorName = 'blue',
+    this.customLogoPath,
+    this.uiDensity = 'medium',
+    this.temperatureUnit = 'C',
+    this.autoScanOnStartup = true,
+    this.notificationsEnabled = true,
+    this.softwareDirectory,
+    this.driverDirectory,
+    this.toolsDirectory,
   });
+
+  bool get isDarkMode => themeMode == 'dark';
 
   AppSettings copyWith({
     String? languageCode,
     DisplayMode? displayMode,
-    bool? isDarkMode,
+    String? themeMode,
+    String? accentColorName,
+    String? customLogoPath,
+    String? uiDensity,
+    String? temperatureUnit,
+    bool? autoScanOnStartup,
+    bool? notificationsEnabled,
+    String? softwareDirectory,
+    String? driverDirectory,
+    String? toolsDirectory,
   }) {
     return AppSettings(
       languageCode: languageCode ?? this.languageCode,
       displayMode: displayMode ?? this.displayMode,
-      isDarkMode: isDarkMode ?? this.isDarkMode,
+      themeMode: themeMode ?? this.themeMode,
+      accentColorName: accentColorName ?? this.accentColorName,
+      customLogoPath: customLogoPath ?? this.customLogoPath,
+      uiDensity: uiDensity ?? this.uiDensity,
+      temperatureUnit: temperatureUnit ?? this.temperatureUnit,
+      autoScanOnStartup: autoScanOnStartup ?? this.autoScanOnStartup,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      softwareDirectory: softwareDirectory ?? this.softwareDirectory,
+      driverDirectory: driverDirectory ?? this.driverDirectory,
+      toolsDirectory: toolsDirectory ?? this.toolsDirectory,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'languageCode': languageCode,
         'displayMode': displayMode.name,
-        'isDarkMode': isDarkMode,
+        'themeMode': themeMode,
+        'accentColorName': accentColorName,
+        'customLogoPath': customLogoPath,
+        'uiDensity': uiDensity,
+        'temperatureUnit': temperatureUnit,
+        'autoScanOnStartup': autoScanOnStartup,
+        'notificationsEnabled': notificationsEnabled,
+        'softwareDirectory': softwareDirectory,
+        'driverDirectory': driverDirectory,
+        'toolsDirectory': toolsDirectory,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -42,7 +89,17 @@ class AppSettings {
       displayMode: (json['displayMode'] == 'advanced')
           ? DisplayMode.advanced
           : DisplayMode.simple,
-      isDarkMode: json['isDarkMode'] as bool? ?? true,
+      themeMode: json['themeMode'] as String? ??
+          ((json['isDarkMode'] as bool? ?? false) ? 'dark' : 'light'),
+      accentColorName: json['accentColorName'] as String? ?? 'blue',
+      customLogoPath: json['customLogoPath'] as String?,
+      uiDensity: json['uiDensity'] as String? ?? 'medium',
+      temperatureUnit: json['temperatureUnit'] as String? ?? 'C',
+      autoScanOnStartup: json['autoScanOnStartup'] as bool? ?? true,
+      notificationsEnabled: json['notificationsEnabled'] as bool? ?? true,
+      softwareDirectory: json['softwareDirectory'] as String?,
+      driverDirectory: json['driverDirectory'] as String?,
+      toolsDirectory: json['toolsDirectory'] as String?,
     );
   }
 }

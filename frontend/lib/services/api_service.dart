@@ -366,6 +366,24 @@ class ApiService {
     }
   }
 
+  Future<ToolsDirectoryStatus> getToolsStatus() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return ToolsDirectoryStatus.empty();
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/tools/status');
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return ToolsDirectoryStatus.fromJson(data);
+      }
+      return ToolsDirectoryStatus.empty();
+    } catch (e) {
+      debugPrint('[ApiService] getToolsStatus error: $e');
+      return ToolsDirectoryStatus.empty();
+    }
+  }
+
   Future<bool> setToolsDirectory(String dir) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) return false;
@@ -445,5 +463,160 @@ class ApiService {
       return BatteryInfo.empty();
     }
   }
-}
 
+  // -------------------------------------------------------------
+  // Batch Software Installation APIs
+  // -------------------------------------------------------------
+
+  Future<Map<String, dynamic>> startBatchInstall({List<String>? packageIds, String? customDir}) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/packages/batch-install');
+      final body = <String, dynamic>{};
+      if (packageIds != null && packageIds.isNotEmpty) {
+        body['package_ids'] = packageIds;
+      }
+      if (customDir != null && customDir.isNotEmpty) {
+        body['custom_dir'] = customDir;
+      }
+
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: json.encode(body),
+      ).timeout(const Duration(seconds: 15));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] startBatchInstall error: $e');
+      return {'success': false, 'message': 'خطا در شروع نصب خودکار: $e'};
+    }
+  }
+
+  Future<BatchInstallStatus> getBatchInstallStatus() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return BatchInstallStatus.empty();
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/packages/batch-status');
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return BatchInstallStatus.fromJson(data);
+      }
+      return BatchInstallStatus.empty();
+    } catch (e) {
+      debugPrint('[ApiService] getBatchInstallStatus error: $e');
+      return BatchInstallStatus.empty();
+    }
+  }
+
+  Future<Map<String, dynamic>> cancelBatchInstall() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/packages/batch-cancel');
+      final response = await http.post(uri).timeout(const Duration(seconds: 10));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] cancelBatchInstall error: $e');
+      return {'success': false, 'message': 'خطا در لغو نصب خودکار: $e'};
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Driver Folder Batch Installation APIs
+  // -------------------------------------------------------------
+
+  Future<Map<String, dynamic>> scanDriverFolder(String folderPath) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.', 'files': []};
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/drivers/scan-folder');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: json.encode({'folder_path': folderPath}),
+      ).timeout(const Duration(seconds: 30));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] scanDriverFolder error: $e');
+      return {'success': false, 'message': 'خطا در اسکن فولدر درایورها: $e', 'files': []};
+    }
+  }
+
+  Future<Map<String, dynamic>> startDriverBatchInstall(String folderPath) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/drivers/batch-install');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: json.encode({'folder_path': folderPath}),
+      ).timeout(const Duration(seconds: 15));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] startDriverBatchInstall error: $e');
+      return {'success': false, 'message': 'خطا در شروع نصب خودکار درایورها: $e'};
+    }
+  }
+
+  Future<DriverBatchStatus> getDriverBatchStatus() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return DriverBatchStatus.empty();
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/drivers/batch-status');
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return DriverBatchStatus.fromJson(data);
+      }
+      return DriverBatchStatus.empty();
+    } catch (e) {
+      debugPrint('[ApiService] getDriverBatchStatus error: $e');
+      return DriverBatchStatus.empty();
+    }
+  }
+
+  Future<Map<String, dynamic>> cancelDriverBatchInstall() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/drivers/batch-cancel');
+      final response = await http.post(uri).timeout(const Duration(seconds: 10));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] cancelDriverBatchInstall error: $e');
+      return {'success': false, 'message': 'خطا در لغو نصب درایورها: $e'};
+    }
+  }
+}

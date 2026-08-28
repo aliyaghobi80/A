@@ -2,7 +2,7 @@
 ; Production Installer Generation for Windows 64-bit
 
 #define MyAppName "Markazi System Checker"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.2"
 #define MyAppPublisher "Markazi System"
 #define MyAppExeName "MarkaziSystemChecker.exe"
 
@@ -12,6 +12,9 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\MarkaziSystemChecker
+DisableDirPage=no
+UsePreviousAppDir=no
+AlwaysShowDirOnReadyPage=yes
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\dist
@@ -25,11 +28,12 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=6.1
+MinVersion=6.1sp1
 PrivilegesRequired=admin
-DisableProgramGroupPage=auto
+DisableProgramGroupPage=no
 CloseApplications=no
 RestartApplications=no
+RestartIfNeededByRun=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -41,24 +45,18 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; Main Flutter Windows Release Binaries
 Source: "..\frontend\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Standalone Compiled Python Backend
-Source: "..\build_backend_out\dist\backend_server.exe"; DestDir: "{app}\backend"; Flags: ignoreversion
-Source: "..\build_backend_out\dist\backend_server.exe"; DestDir: "{app}"; Flags: ignoreversion
-
 ; Configuration and Corporate Presets
 Source: "..\config\*"; DestDir: "{app}\config"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Tools and Activation Utilities
-Source: "..\Tools\*"; DestDir: "{app}\Tools"; Flags: ignoreversion recursesubdirs createallsubdirs
-
-; Software Package Installers Directory
-Source: "..\Packages\*"; DestDir: "{app}\Packages"; Flags: ignoreversion recursesubdirs createallsubdirs
+[InstallDelete]
+; Remove the obsolete one-file backend and any stale native runtime from 1.1.0.
+Type: files; Name: "{app}\backend_server.exe"
+Type: filesandordirs; Name: "{app}\backend"
 
 [Dirs]
 Name: "{app}\logs"; Permissions: users-full
 Name: "{app}\data"; Permissions: users-full
 Name: "{app}\config"; Permissions: users-full
-Name: "{app}\Tools"; Permissions: users-full
 Name: "{app}\Packages"; Permissions: users-full
 
 [Icons]
@@ -67,7 +65,7 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runascurrentuser
 
 [Code]
 function KillAppProcesses(): Boolean;

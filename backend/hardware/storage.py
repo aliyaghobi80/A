@@ -2,34 +2,27 @@ import logging
 from typing import List, Dict, Any
 
 from utils.powershell import run_powershell_json
-from utils.formatters import clean_string, format_bytes_to_gb, format_bytes_display
+from utils.formatters import clean_string, clean_serial_number, clean_part_number, format_bytes_to_gb, format_bytes_display
+from hardware.normalizer import normalize_storage_info
+from hardware.storage_health import query_physical_drive_health
 
 logger = logging.getLogger(__name__)
 
 def get_storage_info() -> List[Dict[str, Any]]:
     """
-    Detects all physical storage devices installed in the system.
-    Returns a list of disk objects:
-        model: str
-        type: str (SSD, HDD, SCM, Unspecified)
-        bus_type: str (NVMe, SATA, USB, etc.)
-        capacity_bytes: int or None
-        capacity_gb: float or None
-        capacity_display: str (e.g. '500 GB' or '1.0 TB (931 GB)')
-        serial: str
-        health_status: str
+    Detects all physical storage devices and calculates health via the Storage Health Engine.
     """
     drives: List[Dict[str, Any]] = []
 
     try:
-        # Strategy 1: Modern Windows Storage Management API (Get-PhysicalDisk)
+        # Query Get-PhysicalDisk
         script_msft = (
             "Get-PhysicalDisk | "
-            "Select-Object FriendlyName, MediaType, BusType, Size, SerialNumber, HealthStatus | "
+            "Select-Object DeviceId, FriendlyName, MediaType, BusType, Size, SerialNumber, HealthStatus, OperationalStatus, Model, PartNumber | "
             "ConvertTo-Json"
         )
         data_msft = run_powershell_json(script_msft)
-        
+
         if isinstance(data_msft, dict):
             raw_msft = [data_msft]
         elif isinstance(data_msft, list):
@@ -37,36 +30,29 @@ def get_storage_info() -> List[Dict[str, Any]]:
         else:
             raw_msft = []
 
-        # Strategy 2: Win32_DiskDrive fallback / supplementary query
-        script_wmi = (
-            "Get-CimInstance Win32_DiskDrive | "
-            "Select-Object Model, MediaType, Size, InterfaceType, SerialNumber, DeviceID | "
-            "ConvertTo-Json"
-        )
-        data_wmi = run_powershell_json(script_wmi)
-        if isinstance(data_wmi, dict):
-            raw_wmi = [data_wmi]
-        elif isinstance(data_wmi, list):
-            raw_wmi = data_wmi
-        else:
-            raw_wmi = []
+        # Fallback to Win32_DiskDrive if Get-PhysicalDisk is empty
+        if not raw_msft:
+            script_wmi = (
+                "Get-CimInstance Win32_DiskDrive | "
+                "Select-Object DeviceID, Index, Model, MediaType, Size, InterfaceType, SerialNumber, PartNumber | "
+                "ConvertTo-Json"
+            )
+            data_wmi = run_powershell_json(script_wmi)
+            if isinstance(data_wmi, dict):
+                raw_wmi = [data_wmi]
+            elif isinstance(data_wmi, list):
+                raw_wmi = data_wmi
+            else:
+                raw_wmi = []
 
-        if raw_msft:
-            for disk in raw_msft:
-                if not isinstance(disk, dict):
-                    continue
+            for i, disk in enumerate(raw_wmi):
+                idx = disk.get("Index") or i
+                try:
+                    idx_int = int(idx)
+                except (ValueError, TypeError):
+                    idx_int = i
 
-                model = clean_string(disk.get("FriendlyName"))
-                media_type = clean_string(disk.get("MediaType"), default="Unknown")
-                bus_type = clean_string(disk.get("BusType"), default="Not available")
-                
-                # If bus type is NVMe or model mentions NVMe, enrich media type
-                if "nvme" in bus_type.lower() or "nvme" in model.lower():
-                    if media_type in ("Unknown", "Unspecified"):
-                        media_type = "NVMe SSD"
-                    elif "SSD" in media_type and "NVMe" not in media_type:
-                        media_type = f"NVMe {media_type}"
-
+                friendly = clean_string(disk.get("Model"), default=f"Disk #{idx_int}")
                 size_bytes = disk.get("Size")
                 try:
                     size_int = int(size_bytes) if size_bytes else None
@@ -75,72 +61,110 @@ def get_storage_info() -> List[Dict[str, Any]]:
 
                 cap_gb = format_bytes_to_gb(size_int)
                 cap_display = format_bytes_display(size_int)
-                serial = clean_string(disk.get("SerialNumber"))
-                health = clean_string(disk.get("HealthStatus"), default="Healthy")
+                serial = clean_serial_number(disk.get("SerialNumber"), default="-")
+                bus_type = clean_string(disk.get("InterfaceType"), default="SATA")
+                media_type = clean_string(disk.get("MediaType"), default="Fixed hard disk media")
+
+                norm = normalize_storage_info(friendly, friendly, bus_type, media_type)
+                health_data = query_physical_drive_health(idx_int, bus_type, media_type, friendly)
 
                 drives.append({
-                    "model": model,
+                    "device_id": str(idx_int),
+                    "model": norm["display_name"],
+                    "raw_model": friendly,
+                    "type_description": norm["type_description"],
+                    "part_number": clean_part_number(disk.get("PartNumber"), default="-"),
                     "type": media_type,
                     "bus_type": bus_type,
                     "capacity_bytes": size_int,
                     "capacity_gb": cap_gb,
                     "capacity_display": cap_display,
                     "serial": serial,
-                    "health_status": health
+                    "health_status": health_data["health_grade_fa"],
+                    "health_percent": health_data["health_percent"],
+                    "health_type": health_data["health_type"],
+                    "health_grade": health_data["health_grade"],
+                    "health_grade_fa": health_data["health_grade_fa"],
+                    "health_source": health_data["health_source"],
+                    "source": health_data["source"],
+                    "wear_percent": health_data["wear_percent"],
+                    "temperature_c": health_data["temperature_c"],
+                    "power_on_hours": health_data["power_on_hours"],
+                    "power_cycles": health_data["power_cycles"],
+                    "unsafe_shutdowns": health_data["unsafe_shutdowns"],
+                    "media_errors": health_data["media_errors"],
+                    "available_spare_percent": health_data["available_spare_percent"],
+                    "reallocated_sectors": health_data["reallocated_sectors"],
+                    "pending_sectors": health_data["pending_sectors"],
+                    "smart_status": health_data["smart_status"],
+                    "diagnostic_error": health_data["diagnostic_error"]
                 })
+            return drives
 
-        elif raw_wmi:
-            # Fallback to WMI
-            for disk in raw_wmi:
-                if not isinstance(disk, dict):
-                    continue
+        # Process MSFT_PhysicalDisk results
+        for disk in raw_msft:
+            if not isinstance(disk, dict):
+                continue
 
-                model = clean_string(disk.get("Model"))
-                size_bytes = disk.get("Size")
-                try:
-                    size_int = int(size_bytes) if size_bytes else None
-                except (ValueError, TypeError):
-                    size_int = None
+            dev_id_raw = disk.get("DeviceId") or "0"
+            try:
+                dev_idx = int(dev_id_raw)
+            except (ValueError, TypeError):
+                dev_idx = 0
 
-                cap_gb = format_bytes_to_gb(size_int)
-                cap_display = format_bytes_display(size_int)
-                
-                # Guess SSD / HDD if model hints it
-                media_hint = clean_string(disk.get("MediaType"), default="Disk Drive")
-                if "ssd" in model.lower() or "nvme" in model.lower():
-                    media_type = "SSD"
-                elif "hdd" in model.lower():
-                    media_type = "HDD"
-                else:
-                    media_type = media_hint
+            friendly_name = clean_string(disk.get("FriendlyName"))
+            disk_model = clean_string(disk.get("Model"), default=friendly_name)
+            part_no = clean_part_number(disk.get("PartNumber"), default="-")
 
-                interface_type = clean_string(disk.get("InterfaceType"), default="Not available")
-                serial = clean_string(disk.get("SerialNumber"))
+            media_type = clean_string(disk.get("MediaType"), default="Unknown")
+            bus_type = clean_string(disk.get("BusType"), default="Not available")
 
-                drives.append({
-                    "model": model,
-                    "type": media_type,
-                    "bus_type": interface_type,
-                    "capacity_bytes": size_int,
-                    "capacity_gb": cap_gb,
-                    "capacity_display": cap_display,
-                    "serial": serial,
-                    "health_status": "Healthy"
-                })
+            size_bytes = disk.get("Size")
+            try:
+                size_int = int(size_bytes) if size_bytes else None
+            except (ValueError, TypeError):
+                size_int = None
+
+            cap_gb = format_bytes_to_gb(size_int)
+            cap_display = format_bytes_display(size_int)
+            serial = clean_serial_number(disk.get("SerialNumber"), default="-")
+
+            norm = normalize_storage_info(disk_model, friendly_name, bus_type, media_type)
+            health_data = query_physical_drive_health(dev_idx, bus_type, media_type, friendly_name)
+
+            drives.append({
+                "device_id": str(dev_idx),
+                "model": norm["display_name"],
+                "raw_model": disk_model,
+                "type_description": norm["type_description"],
+                "part_number": part_no if part_no != "-" else (disk_model if disk_model != friendly_name else "-"),
+                "type": media_type,
+                "bus_type": bus_type,
+                "capacity_bytes": size_int,
+                "capacity_gb": cap_gb,
+                "capacity_display": cap_display,
+                "serial": serial,
+                "health_status": health_data["health_grade_fa"],
+                "health_percent": health_data["health_percent"],
+                "health_type": health_data["health_type"],
+                "health_grade": health_data["health_grade"],
+                "health_grade_fa": health_data["health_grade_fa"],
+                "health_source": health_data["health_source"],
+                "source": health_data["source"],
+                "wear_percent": health_data["wear_percent"],
+                "temperature_c": health_data["temperature_c"],
+                "power_on_hours": health_data["power_on_hours"],
+                "power_cycles": health_data["power_cycles"],
+                "unsafe_shutdowns": health_data["unsafe_shutdowns"],
+                "media_errors": health_data["media_errors"],
+                "available_spare_percent": health_data["available_spare_percent"],
+                "reallocated_sectors": health_data["reallocated_sectors"],
+                "pending_sectors": health_data["pending_sectors"],
+                "smart_status": health_data["smart_status"],
+                "diagnostic_error": health_data["diagnostic_error"]
+            })
 
     except Exception as e:
-        logger.error(f"Error detecting storage devices: {e}")
-
-    if not drives:
-        drives.append({
-            "model": "Not available",
-            "type": "Not available",
-            "bus_type": "Not available",
-            "capacity_bytes": None,
-            "capacity_gb": None,
-            "capacity_display": "Not available",
-            "serial": "Not available",
-            "health_status": "Not available"
-        })
+        logger.error(f"Failed to detect storage devices: {e}")
 
     return drives

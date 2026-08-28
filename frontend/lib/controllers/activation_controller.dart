@@ -15,6 +15,29 @@ class ActivationController extends GetxController {
   final Rx<ActivationResult?> lastWindowsResult = Rx<ActivationResult?>(null);
   final Rx<ActivationResult?> lastOfficeResult = Rx<ActivationResult?>(null);
 
+  final RxString toolsDirectory = ''.obs;
+  final RxBool isConfigured = false.obs;
+  final RxList<ActivationToolItem> tools = <ActivationToolItem>[].obs;
+  final RxBool isScanningTools = false.obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+    fetchToolsStatus();
+  }
+
+  Future<void> fetchToolsStatus() async {
+    isScanningTools.value = true;
+    try {
+      final status = await _apiService.getToolsStatus();
+      toolsDirectory.value = status.toolsDirectory;
+      isConfigured.value = status.isConfigured;
+      tools.assignAll(status.tools);
+    } catch (_) {} finally {
+      isScanningTools.value = false;
+    }
+  }
+
   Future<void> changeToolsDirectory(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
     final scaffoldMessenger = ScaffoldMessenger.of(context);
@@ -24,9 +47,13 @@ class ActivationController extends GetxController {
     );
 
     if (selectedPath != null && selectedPath.isNotEmpty) {
+      isScanningTools.value = true;
       try {
         final success = await _apiService.setToolsDirectory(selectedPath);
         if (success) {
+          toolsDirectory.value = selectedPath;
+          await fetchToolsStatus();
+
           if (Get.isRegistered<SystemInfoController>()) {
             Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
           }
@@ -35,7 +62,7 @@ class ActivationController extends GetxController {
               SnackBar(
                 content: Text(
                   l10n.isPersian
-                      ? '✓ پوشه فعالسازها به $selectedPath تغییر یافت.'
+                      ? '✓ پوشه فعالسازها به $selectedPath تغییر یافت (${tools.length} ابزار شناسایی شد).'
                       : '✓ Activation tools folder updated: $selectedPath',
                 ),
                 backgroundColor: const Color(0xFF10B981),
@@ -54,6 +81,8 @@ class ActivationController extends GetxController {
             ),
           );
         }
+      } finally {
+        isScanningTools.value = false;
       }
     }
   }

@@ -4,13 +4,25 @@ import logging
 import os
 import sys
 
-# Ensure backend root is in sys.path
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
+# Ensure backend root, internal dir, and PyInstaller bundle directories are in sys.path
+if getattr(sys, 'frozen', False):
+    bundle_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(sys.executable)))
+    internal_dir = os.path.join(bundle_dir, '_internal')
+    for p in [internal_dir, os.path.join(internal_dir, 'backend'), bundle_dir, os.path.join(bundle_dir, 'backend')]:
+        if os.path.isdir(p) and p not in sys.path:
+            sys.path.insert(0, p)
+    BASE_DIR = bundle_dir
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    if BASE_DIR not in sys.path:
+        sys.path.insert(0, BASE_DIR)
 
-from collector import collect_all_system_info
-from server import run_server
+try:
+    from api_server import run_server
+    from collector import collect_all_system_info
+except (ImportError, ModuleNotFoundError):
+    from backend.api_server import run_server
+    from backend.collector import collect_all_system_info
 
 DEFAULT_PORT = 18088
 
@@ -50,10 +62,51 @@ def setup_logging(verbose: bool = False):
     )
 
 
+def start_parent_watchdog(parent_pid: int = None):
+    """Monitors the parent process (Flutter frontend).
+    If the parent process exits or crashes, this backend terminates immediately."""
+    import threading
+    if parent_pid is None or parent_pid <= 0:
+        try:
+            parent_pid = os.getppid()
+        except Exception:
+            return
+    if parent_pid <= 1:
+        return
+
+    def _watch():
+        import ctypes
+        import time
+        SYNCHRONIZE = 0x00100000
+        INFINITE = 0xFFFFFFFF
+        try:
+            handle = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, int(parent_pid))
+            if handle:
+                ctypes.windll.kernel32.WaitForSingleObject(handle, INFINITE)
+                ctypes.windll.kernel32.CloseHandle(handle)
+                os._exit(0)
+        except Exception:
+            pass
+
+        while True:
+            time.sleep(1.5)
+            try:
+                h = ctypes.windll.kernel32.OpenProcess(0x0400, False, int(parent_pid))
+                if not h:
+                    os._exit(0)
+                ctypes.windll.kernel32.CloseHandle(h)
+            except Exception:
+                os._exit(0)
+
+    t = threading.Thread(target=_watch, daemon=True, name="ParentProcessWatchdog")
+    t.start()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Central System Checker - Windows Hardware Detection Backend")
     parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"Port to bind (default: {DEFAULT_PORT})")
+    parser.add_argument("--parent-pid", type=int, default=None, help="Parent process PID to monitor for automatic termination")
     parser.add_argument("--test", action="store_true", help="Run system inspection once, print JSON to stdout, and exit")
     parser.add_argument("--save", type=str, help="Save system inspection output to specified JSON file and exit")
     parser.add_argument("--verbose", action="store_true", help="Enable debug logging")
@@ -79,6 +132,9 @@ def main():
         except Exception:
             pass
         return 0
+
+    # Start watchdog to guarantee backend kills itself when frontend exits
+    start_parent_watchdog(args.parent_pid)
 
     try:
         logging.info(f"Central System Checker Local Backend Service starting at http://{args.host}:{args.port}/")

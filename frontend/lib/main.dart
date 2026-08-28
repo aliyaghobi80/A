@@ -1,20 +1,28 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
 import 'controllers/activation_controller.dart';
+import 'controllers/driver_install_controller.dart';
 import 'controllers/qc_controller.dart';
 import 'controllers/software_controller.dart';
 import 'controllers/system_info_controller.dart';
 import 'controllers/theme_language_controller.dart';
 import 'l10n/app_localizations.dart';
+import 'services/backend_process_manager.dart';
 import 'services/settings_service.dart';
 import 'theme/app_theme.dart';
-import 'widgets/advanced_mode_view.dart';
-import 'widgets/app_header.dart';
+import 'widgets/common/app_sidebar.dart';
+import 'widgets/common/global_app_header.dart';
 import 'widgets/dialogs/exit_dialog.dart';
 import 'widgets/error_view.dart';
 import 'widgets/loading_view.dart';
-import 'widgets/simple_mode_view.dart';
+import 'widgets/pages/driver_install_page.dart';
+import 'widgets/pages/license_status_page.dart';
+import 'widgets/pages/settings_page.dart';
+import 'widgets/pages/software_install_page.dart';
+import 'widgets/pages/system_specs_page.dart';
+import 'widgets/pages/tools_source_folders_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,12 +30,11 @@ void main() async {
 
   // Initialize GetX Controllers
   final themeLanguageCtrl = Get.put(ThemeLanguageController());
-  themeLanguageCtrl.setLocale(Locale(settings.languageCode));
-  themeLanguageCtrl.setThemeMode(settings.isDarkMode ? ThemeMode.dark : ThemeMode.light);
-  themeLanguageCtrl.setSimpleMode(settings.displayMode == DisplayMode.simple);
+  themeLanguageCtrl.loadFromSettings(settings);
 
   Get.put(SystemInfoController());
   Get.put(SoftwareController());
+  Get.put(DriverInstallController());
   Get.put(ActivationController());
   Get.put(QcController());
 
@@ -42,14 +49,15 @@ class CentralSystemCheckerApp extends StatelessWidget {
     final themeLanguageCtrl = Get.find<ThemeLanguageController>();
 
     return Obx(() {
-      final isDarkMode = themeLanguageCtrl.isDarkMode;
+      final themeMode = themeLanguageCtrl.themeMode.value;
       final locale = themeLanguageCtrl.currentLocale.value;
       final languageCode = locale.languageCode;
       final isPersian = languageCode == 'fa';
+      final accentName = themeLanguageCtrl.accentColorName.value;
       final textDirection = isPersian ? TextDirection.rtl : TextDirection.ltr;
 
       return GetMaterialApp(
-        title: isPersian ? 'مرکزی سیستم چکر' : 'Central System Checker',
+        title: isPersian ? 'مرکزی سیستم چکر' : 'Markazi System Checker',
         debugShowCheckedModeBanner: false,
         locale: locale,
         supportedLocales: AppLocalizations.supportedLocales,
@@ -59,9 +67,15 @@ class CentralSystemCheckerApp extends StatelessWidget {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        theme: AppTheme.getLightTheme(languageCode: languageCode),
-        darkTheme: AppTheme.getDarkTheme(languageCode: languageCode),
-        themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
+        theme: AppTheme.getLightTheme(
+          languageCode: languageCode,
+          accentColorName: accentName,
+        ),
+        darkTheme: AppTheme.getDarkTheme(
+          languageCode: languageCode,
+          accentColorName: accentName,
+        ),
+        themeMode: themeMode,
         builder: (context, child) {
           return Directionality(
             textDirection: textDirection,
@@ -74,16 +88,37 @@ class CentralSystemCheckerApp extends StatelessWidget {
   }
 }
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    BackendProcessManager.terminateAll();
+    super.dispose();
+  }
+
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    await BackendProcessManager.terminateAll();
+    return AppExitResponse.exit;
+  }
 
   @override
   Widget build(BuildContext context) {
     final themeLanguageCtrl = Get.find<ThemeLanguageController>();
     final systemCtrl = Get.find<SystemInfoController>();
-
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
 
     return PopScope(
@@ -95,97 +130,77 @@ class DashboardScreen extends StatelessWidget {
       },
       child: Scaffold(
         body: SafeArea(
-          child: Obx(() {
-          final isLoading = systemCtrl.isLoading.value;
-          final isRefreshing = systemCtrl.isRefreshing.value;
-          final error = systemCtrl.errorMessage.value;
-          final info = systemCtrl.systemInfo.value;
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isCompactScreen = constraints.maxWidth < 850;
 
-          if (isLoading && info == null) {
-            return LoadingView(message: l10n.loadingMessage);
-          }
+              return Obx(() {
+                final isLoading = systemCtrl.isLoading.value;
+                final error = systemCtrl.errorMessage.value;
+                final info = systemCtrl.systemInfo.value;
+                final navIndex = themeLanguageCtrl.activeNavIndex.value;
 
-          if (error.isNotEmpty && info == null) {
-            return ErrorView(
-              errorMessage: error,
-              onRetry: () => systemCtrl.fetchSystemInfo(forceRefresh: true),
-            );
-          }
+                if (isLoading && info == null) {
+                  return LoadingView(message: l10n.loadingMessage);
+                }
 
-          if (info == null) {
-            return LoadingView(message: l10n.initializingMessage);
-          }
+                if (error.isNotEmpty && info == null) {
+                  return ErrorView(
+                    errorMessage: error,
+                    onRetry: () => systemCtrl.fetchSystemInfo(forceRefresh: true),
+                  );
+                }
 
-          final isSimple = themeLanguageCtrl.isSimpleMode.value;
-          final isDarkMode = themeLanguageCtrl.isDarkMode;
-          final currentLanguage = themeLanguageCtrl.currentLocale.value.languageCode;
+                if (info == null) {
+                  return LoadingView(message: l10n.initializingMessage);
+                }
 
-          return Column(
-            children: [
-              // Top App Header
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF101728) : Colors.white,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isDark ? const Color(0xFF1E2C4A) : const Color(0xFFE2E8F0),
+                return Row(
+                  children: [
+                    // Adaptive Responsive Sidebar (220px desktop, 70px compact rail for tablet / small screens)
+                    AppSidebar(
+                      selectedIndex: navIndex,
+                      onItemSelected: (idx) => themeLanguageCtrl.setNavIndex(idx),
+                      isCompact: isCompactScreen,
                     ),
-                  ),
-                ),
-                child: AppHeader(
-                  isRefreshing: isRefreshing,
-                  onRefresh: () => systemCtrl.fetchSystemInfo(forceRefresh: true),
-                  isDarkMode: isDarkMode,
-                  onToggleTheme: () => themeLanguageCtrl.toggleTheme(),
-                  displayMode: isSimple ? DisplayMode.simple : DisplayMode.advanced,
-                  onModeChanged: (mode) => themeLanguageCtrl.setSimpleMode(mode == DisplayMode.simple),
-                  currentLanguage: currentLanguage,
-                  onLanguageChanged: (lang) => themeLanguageCtrl.setLocale(Locale(lang)),
-                  lastUpdated: info.timestamp,
-                ),
-              ),
 
-              // Main Scrollable Dashboard Content
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (isSimple)
-                        SimpleModeView(info: info)
-                      else
-                        AdvancedModeView(info: info),
+                    // Main Content Workspace
+                    Expanded(
+                      child: Column(
+                        children: [
+                          // Global AppHeader (Sticky on top)
+                          const GlobalAppHeader(),
 
-                      const SizedBox(height: 24),
-
-                      // Footer Status Bar
-                      Center(
-                        child: Directionality(
-                          textDirection: currentLanguage == 'fa'
-                              ? TextDirection.rtl
-                              : TextDirection.ltr,
-                          child: Text(
-                            l10n.scanCompleted(info.scanDurationMs, info.system.computerName),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                          // 6-Page Navigation Content Stack
+                          Expanded(
+                            child: IndexedStack(
+                              index: navIndex,
+                              children: [
+                                // Page 0: مشخصات سیستم
+                                SystemSpecsPage(info: info),
+                                // Page 1: نصب درایورها
+                                const DriverInstallPage(),
+                                // Page 2: نصب نرم‌افزارها
+                                const SoftwareInstallPage(),
+                                // Page 3: وضعیت لایسنس
+                                const LicenseStatusPage(),
+                                // Page 4: ابزارها
+                                const ToolsSourceFoldersPage(),
+                                // Page 5: تنظیمات
+                                const SettingsPage(),
+                              ],
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        }),
+                    ),
+                  ],
+                );
+              });
+            },
+          ),
+        ),
       ),
-    ),
     );
   }
 }

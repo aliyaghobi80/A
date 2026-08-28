@@ -93,3 +93,36 @@ def parse_wmi_date(date_val: Any, default: str = "Not available") -> str:
             continue
 
     return clean_string(val_str, default=default)
+
+def clean_serial_number(val: Any, default: str = "-") -> str:
+    """
+    Cleans and validates hardware serial numbers.
+    Filters out OEM defaults, dummy zeroes, and placeholder strings.
+    Returns the real serial number or default ('-').
+    """
+    if val is None:
+        return default
+    text = str(val).strip()
+    text_clean = text.strip("'\" \t\r\n")
+    if not text_clean:
+        return default
+    lowered = text_clean.lower()
+    if lowered in GENERIC_PLACEHOLDERS:
+        return default
+    if re.fullmatch(r"^[0_\.\-\s]+$", text_clean) or re.fullmatch(r"^[fF_\.\-\s]+$", text_clean):
+        return default
+    if lowered in ("to be filled by o.e.m.", "default string", "none", "null", "unknown", "system serial number", "chassis serial number", "na", "n/a", "not specified"):
+        return default
+    return text_clean
+
+def clean_part_number(val: Any, default: str = "-") -> str:
+    """Cleans hardware part numbers and model identifiers."""
+    if val is None:
+        return default
+    text = str(val).strip()
+    text_clean = text.strip("'\" \t\r\n")
+    if not text_clean or text_clean.lower() in GENERIC_PLACEHOLDERS:
+        return default
+    if re.fullmatch(r"^[0_\.\-\s]+$", text_clean):
+        return default
+    return text_clean

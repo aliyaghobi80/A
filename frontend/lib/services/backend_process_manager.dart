@@ -6,8 +6,10 @@ import 'package:http/http.dart' as http;
 
 class BackendProcessManager {
   static Process? _process;
+  static Future<bool>? _startupFuture;
   static int activePort = 18088;
-  static const List<int> candidatePorts = [18088, 18080, 18089];
+  static const List<int> candidatePorts = [18088, 18080, 18089, 18090, 18091];
+  static const int requiredApiContractVersion = 2;
 
   static String get baseUrl => 'http://127.0.0.1:$activePort';
 
@@ -18,12 +20,34 @@ class BackendProcessManager {
           .timeout(const Duration(milliseconds: 1500));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['status'] == 'ok') {
+        final contractVersion = data['api_contract_version'];
+        if (data['status'] == 'ok' &&
+            contractVersion is num &&
+            contractVersion.toInt() >= requiredApiContractVersion) {
           return true;
+        }
+        if (data['status'] == 'ok') {
+          debugPrint(
+            '[BackendProcessManager] Ignoring incompatible backend on port $port.',
+          );
         }
       }
     } catch (_) {}
     return false;
+  }
+
+  static Future<bool> isPortAvailable(int port) async {
+    try {
+      final socket = await ServerSocket.bind(
+        InternetAddress.loopbackIPv4,
+        port,
+        shared: false,
+      );
+      await socket.close();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   static String? findStandaloneBackendExe() {
@@ -56,6 +80,7 @@ class BackendProcessManager {
       final candidates = [
         '$root/backend/backend_server.exe',
         '$root/backend_server.exe',
+        '$root/build_backend_out/dist/backend_server/backend_server.exe',
         '$root/build_backend_out/dist/backend_server.exe',
         '$root/dist/backend_server.exe',
       ];
@@ -116,16 +141,46 @@ class BackendProcessManager {
   }
 
   static Future<bool> ensureBackendRunning() async {
+    final activeStartup = _startupFuture;
+    if (activeStartup != null) {
+      return activeStartup;
+    }
+
+    final startup = _ensureBackendRunning();
+    _startupFuture = startup;
+    try {
+      return await startup;
+    } finally {
+      if (identical(_startupFuture, startup)) {
+        _startupFuture = null;
+      }
+    }
+  }
+
+  static Future<bool> _ensureBackendRunning() async {
     // 1. Check if backend is already running on any candidate port
     for (final port in candidatePorts) {
       if (await isBackendRunningOnPort(port)) {
         activePort = port;
-        debugPrint('[BackendProcessManager] Connected to active backend on port $activePort.');
+        debugPrint(
+          '[BackendProcessManager] Connected to active backend on port $activePort.',
+        );
         return true;
       }
     }
 
-    final targetPort = activePort;
+    int? targetPort;
+    for (final port in candidatePorts) {
+      if (await isPortAvailable(port)) {
+        targetPort = port;
+        break;
+      }
+    }
+    if (targetPort == null) {
+      debugPrint('[BackendProcessManager] No available backend port found.');
+      return false;
+    }
+    activePort = targetPort;
     bool started = false;
 
     // 2. Production: Try starting standalone packaged backend_server.exe
@@ -137,16 +192,20 @@ class BackendProcessManager {
             ? exeFile.parent.parent.path
             : exeFile.parent.path;
 
-        debugPrint('[BackendProcessManager] Launching standalone backend: $standaloneExe on port $targetPort with workingDir: $workDir');
+        debugPrint(
+          '[BackendProcessManager] Launching standalone backend: $standaloneExe on port $targetPort with workingDir: $workDir',
+        );
         _process = await Process.start(
           standaloneExe,
-          ['--port', '$targetPort'],
+          ['--port', '$targetPort', '--parent-pid', '$pid'],
           workingDirectory: workDir,
           mode: ProcessStartMode.detached,
         );
         started = true;
       } catch (e) {
-        debugPrint('[BackendProcessManager] Failed to launch standalone backend binary: $e');
+        debugPrint(
+          '[BackendProcessManager] Failed to launch standalone backend binary: $e',
+        );
       }
     }
 
@@ -156,15 +215,19 @@ class BackendProcessManager {
       if (scriptPath != null) {
         final scriptFile = File(scriptPath);
         final workDir = scriptFile.parent.parent.path;
-        debugPrint('[BackendProcessManager] Launching development backend script: $scriptPath with workingDir: $workDir');
+        debugPrint(
+          '[BackendProcessManager] Launching development backend script: $scriptPath with workingDir: $workDir',
+        );
 
         final pythonCommands = ['pythonw', 'python', 'py'];
         for (final cmd in pythonCommands) {
           try {
-            debugPrint('[BackendProcessManager] Attempting python start with "$cmd" on port $targetPort...');
+            debugPrint(
+              '[BackendProcessManager] Attempting python start with "$cmd" on port $targetPort...',
+            );
             _process = await Process.start(
               cmd,
-              [scriptFile.path, '--port', '$targetPort'],
+              [scriptFile.path, '--port', '$targetPort', '--parent-pid', '$pid'],
               workingDirectory: workDir,
               mode: ProcessStartMode.detached,
             );
@@ -180,28 +243,47 @@ class BackendProcessManager {
       return false;
     }
 
-    // 4. Wait up to 10 seconds for backend to respond to health checks
-    for (int i = 0; i < 20; i++) {
+    // 4. Wait up to 35 seconds for backend to respond to health checks (crucial for older laptops with HDDs)
+    for (int i = 0; i < 70; i++) {
       await Future.delayed(const Duration(milliseconds: 500));
-      if (await isBackendRunningOnPort(targetPort)) {
-        activePort = targetPort;
-        debugPrint('[BackendProcessManager] Backend is UP and healthy on port $activePort.');
-        return true;
+      // Check candidate ports in case backend auto-selected a fallback port
+      for (final port in candidatePorts) {
+        if (await isBackendRunningOnPort(port)) {
+          activePort = port;
+          debugPrint(
+            '[BackendProcessManager] Backend is UP and healthy on port $activePort (iteration $i).',
+          );
+          return true;
+        }
       }
     }
 
     return false;
   }
 
-  static void dispose() {
+  static Future<void> shutdownBackend() async {
+    for (final port in candidatePorts) {
+      try {
+        await http
+            .get(Uri.parse('http://127.0.0.1:$port/api/shutdown'))
+            .timeout(const Duration(milliseconds: 600));
+      } catch (_) {}
+    }
     try {
-      _process?.kill();
+      _process?.kill(ProcessSignal.sigkill);
     } catch (_) {}
+    if (Platform.isWindows) {
+      try {
+        Process.runSync('taskkill.exe', ['/F', '/IM', 'backend_server.exe', '/T'], runInShell: true);
+      } catch (_) {}
+    }
+  }
+
+  static void dispose() {
+    shutdownBackend();
   }
 
   static Future<void> terminateAll() async {
-    try {
-      _process?.kill();
-    } catch (_) {}
+    await shutdownBackend();
   }
 }
