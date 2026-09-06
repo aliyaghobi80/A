@@ -13,7 +13,7 @@ if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
 from collector import collect_all_system_info
-from packages.manager import scan_packages, install_package, open_package, get_package_icon_path, set_packages_directory, get_current_packages_directory
+from packages.manager import scan_packages, install_package, open_package, open_office_folder, get_package_icon_path, set_packages_directory, get_current_packages_directory
 from packages.batch_installer import start_batch_install, get_batch_status, cancel_batch_install
 from drivers.driver_installer import scan_driver_folder, start_batch_driver_install, get_driver_batch_status, cancel_driver_batch_install
 from activation.windows_activation import get_windows_activation_info
@@ -354,6 +354,24 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
 
             logger.info(f"Opening installed package: {pkg_id}")
             result = open_package(pkg_id)
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path in ("/api/packages/open-office", "/api/packages/open-office-folder"):
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+
+            custom_dir = payload.get("directory") or payload.get("custom_dir")
+            logger.info(f"Opening office folder for directory: {custom_dir}")
+            result = open_office_folder(custom_dir)
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()

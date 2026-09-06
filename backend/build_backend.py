@@ -63,6 +63,8 @@ def build_backend(output_dir: str = None):
         "activation.activation_tools",
         "packages.manager",
         "packages.batch_installer",
+        "packages.auto_wizard",
+        "packages.brand_icons",
         "drivers.driver_installer",
     ]
 

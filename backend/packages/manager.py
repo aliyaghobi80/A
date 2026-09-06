@@ -71,6 +71,7 @@ _AUTO_EXE_INSTALLER_TYPES = {
     "winrar",
     "chrome",
     "vlc",
+    "adobe",
 }
 
 _SYSTEM_BINARIES = {
@@ -120,6 +121,48 @@ _KNOWN_PACKAGE_DETECTION: Dict[str, Dict[str, List[str]]] = {
         "paths": [
             r"C:\Program Files\7-Zip\7zFM.exe",
             r"C:\Program Files (x86)\7-Zip\7zFM.exe",
+        ],
+    },
+    "acrobat": {
+        "aliases": ["adobe acrobat", "adobe acrobat reader", "acrobat reader", "adobe reader", "acrobat", "adobe reader dc", "adobe acrobat dc", "adobe acrobat reader dc"],
+        "app_paths": ["AcroRd32.exe", "Acrobat.exe"],
+        "paths": [
+            r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
+            r"C:\Program Files (x86)\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
+            r"C:\Program Files\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
+            r"C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
+            r"C:\Program Files\Adobe\Acrobat Reader 2024\Reader\AcroRd32.exe",
+            r"C:\Program Files\Adobe\Acrobat Reader 2020\Reader\AcroRd32.exe",
+            r"C:\Program Files (x86)\Adobe\Acrobat Reader 2020\Reader\AcroRd32.exe",
+            r"C:\Program Files\Adobe\Acrobat Reader\Reader\AcroRd32.exe",
+            r"C:\Program Files (x86)\Adobe\Acrobat Reader\Reader\AcroRd32.exe",
+        ],
+    },
+    "kmplayer": {
+        "aliases": ["kmplayer", "kmplayer 64x", "kmp64"],
+        "app_paths": ["KMPlayer.exe", "KMPlayer64.exe"],
+        "paths": [
+            r"C:\Program Files\KMPlayer\KMPlayer.exe",
+            r"C:\Program Files\KMPlayer 64X\KMPlayer64.exe",
+            r"C:\Program Files (x86)\KMPlayer 64X\KMPlayer64.exe",
+            r"C:\Program Files (x86)\The KMPlayer\KMPlayer.exe",
+        ],
+    },
+    "fdm": {
+        "aliases": ["free download manager", "fdm"],
+        "app_paths": ["fdm.exe"],
+        "paths": [
+            r"C:\Program Files\FreeDownloadManager.ORG\Free Download Manager\fdm.exe",
+            r"C:\Program Files (x86)\FreeDownloadManager.ORG\Free Download Manager\fdm.exe",
+            r"C:\Program Files\SoftDeluxe\Free Download Manager\fdm.exe",
+        ],
+    },
+    "firefox": {
+        "aliases": ["mozilla firefox", "firefox"],
+        "app_paths": ["firefox.exe"],
+        "paths": [
+            r"C:\Program Files\Mozilla Firefox\firefox.exe",
+            r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe",
         ],
     },
 }
@@ -739,12 +782,14 @@ def _validate_installer(
         )
         if not has_installer_signal:
             return {
-                "is_valid": False,
-                "validation_code": "not_an_installer",
-                "validation_error": "The executable does not contain recognizable installer metadata.",
+                "is_valid": True,
+                "is_portable_tool": True,
+                "can_open_tool": True,
+                "validation_code": "portable_tool",
+                "validation_error": None,
                 "auto_install_supported": False,
                 "manual_install_supported": False,
-                "trust_level": "blocked",
+                "trust_level": "portable_tool",
             }
 
         has_declared_silent_args = bool(str(manifest.get("silentArguments") or "").strip())
@@ -846,11 +891,12 @@ def _detect_installed_package(
     product_name: str,
     publisher: str,
     detection_id: Optional[str],
+    folder_name: Optional[str] = None,
 ) -> Dict[str, Any]:
-    known_key = _known_detection_key(detection_id or "", display_name, filename, product_name)
+    known_key = _known_detection_key(detection_id or "", display_name, filename, product_name, folder_name or "")
     known_executable = _resolve_known_executable(known_key)
 
-    aliases: List[str] = [display_name, filename, product_name, detection_id or ""]
+    aliases: List[str] = [display_name, filename, product_name, folder_name or "", detection_id or ""]
     if known_key:
         aliases.extend(_KNOWN_PACKAGE_DETECTION[known_key].get("aliases", []))
 
@@ -924,8 +970,18 @@ def _resolve_best_brand_icon(app_name: str, filename: str, installed_exe_path: O
         if icon:
             return icon
 
-    # 2. Check standard installation paths for popular software
     combined = f"{app_name} {filename}".lower()
+
+    # 2. Check standalone embedded brand icons (Chrome, VLC, Firefox, WinRAR, KMPlayer, FDM, Acrobat, etc.)
+    try:
+        from packages.brand_icons import get_embedded_brand_icon
+        embedded = get_embedded_brand_icon(combined)
+        if embedded:
+            return embedded
+    except Exception:
+        pass
+
+    # 3. Check standard installation paths for popular software
     common_app_paths = []
 
     if "chrome" in combined:
@@ -951,6 +1007,32 @@ def _resolve_best_brand_icon(app_name: str, filename: str, installed_exe_path: O
     elif "firefox" in combined:
         common_app_paths = [
             r"C:\Program Files\Mozilla Firefox\firefox.exe",
+            r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe",
+        ]
+    elif "acrobat" in combined or "adobe" in combined:
+        common_app_paths = [
+            r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
+            r"C:\Program Files (x86)\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
+            r"C:\Program Files\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
+            r"C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
+            r"C:\Program Files\Adobe\Acrobat Reader 2024\Reader\AcroRd32.exe",
+            r"C:\Program Files\Adobe\Acrobat Reader 2020\Reader\AcroRd32.exe",
+            r"C:\Program Files (x86)\Adobe\Acrobat Reader 2020\Reader\AcroRd32.exe",
+            r"C:\Program Files\Adobe\Acrobat Reader\Reader\AcroRd32.exe",
+            r"C:\Program Files (x86)\Adobe\Acrobat Reader\Reader\AcroRd32.exe",
+        ]
+    elif "kmplayer" in combined or "kmp" in combined:
+        common_app_paths = [
+            r"C:\Program Files\KMPlayer 64X\KMPlayer64.exe",
+            r"C:\Program Files (x86)\KMPlayer 64X\KMPlayer64.exe",
+            r"C:\Program Files\KMPlayer\KMPlayer.exe",
+            r"C:\Program Files (x86)\The KMPlayer\KMPlayer.exe",
+        ]
+    elif "fdm" in combined or "download manager" in combined:
+        common_app_paths = [
+            r"C:\Program Files\FreeDownloadManager.ORG\Free Download Manager\fdm.exe",
+            r"C:\Program Files (x86)\FreeDownloadManager.ORG\Free Download Manager\fdm.exe",
+            r"C:\Program Files\SoftDeluxe\Free Download Manager\fdm.exe",
         ]
     elif "telegram" in combined:
         appdata = os.environ.get("APPDATA", "")
@@ -989,6 +1071,38 @@ IGNORED_FILE_PATTERNS = {
     "backend_server", "markazisystemchecker", "markazi_system_checker",
     "iscc", "flutter", "python", "pythonw", "pip", "runner"
 }
+
+# Filenames that are too generic to use as display names on their own.
+# When one of these is the installer filename, the parent folder name is used instead.
+_GENERIC_INSTALLER_STEMS = {
+    "setup", "install", "installer", "autorun", "launch", "start",
+    "run", "execute", "uninst", "uninstall"
+}
+
+# Root-level folder names that should NOT be used as a display name fallback
+# (they are too generic or are the packages root itself).
+_GENERIC_FOLDER_NAMES = {
+    "packages", "program", "programs", "software", "install", "installer",
+    "setup", "tools", "apps", "applications", "temp", "tmp", "downloads"
+}
+
+# Maximum file size in bytes for icon extraction (skip very large files for performance)
+_MAX_ICON_EXTRACT_BYTES = 160 * 1024 * 1024  # 160 MB
+
+
+def _folder_display_name(root: str, pkg_dir: str) -> Optional[str]:
+    """
+    Returns the parent folder name as a clean display name, or None if the
+    folder is too generic or is the packages root itself.
+    """
+    abs_root = os.path.abspath(root)
+    abs_pkg = os.path.abspath(pkg_dir)
+    if abs_root == abs_pkg:
+        return None
+    folder_name = os.path.basename(abs_root)
+    if not folder_name or folder_name.lower() in _GENERIC_FOLDER_NAMES:
+        return None
+    return folder_name.replace("_", " ").replace("-", " ").strip()
 
 def _is_ignored_file_or_dir(root: str, filename: str) -> bool:
     """Checks if a file or directory is an internal backend/system artifact that must not be scanned."""
@@ -1064,10 +1178,18 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
                 "root": root,
                 "rel_path": rel_path,
                 "file_size": file_size,
+                "parent_folder": os.path.basename(root),
             })
 
     # Only PE executables have embedded icons supported by the native extractor.
-    all_paths = [df["full_path"] for df in discovered_files if df["file"].lower().endswith(".exe")]
+    # Skip very large files (> 160 MB) for performance — they are typically offline
+    # full installers whose icon can often be resolved from the installed binary.
+    all_paths = [
+        df["full_path"]
+        for df in discovered_files
+        if df["file"].lower().endswith(".exe")
+        and df["file_size"] <= _MAX_ICON_EXTRACT_BYTES
+    ]
     icons_map = _extract_icons_batch(all_paths)
 
     packages: List[Dict[str, Any]] = []
@@ -1078,6 +1200,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         root = df["root"]
         rel_path = df["rel_path"]
         file_size = df["file_size"]
+        parent_folder = df.get("parent_folder", "")
 
         extension = os.path.splitext(file)[1].lower()
         meta = _extract_exe_metadata(full_path) if extension == ".exe" else {
@@ -1092,6 +1215,14 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         version = meta["version"] or ""
         publisher = meta["publisher"]
         product_name = meta["product_name"] or display_name
+
+        # Determine if the installer filename is too generic to be a display name.
+        # e.g. setup.exe, installer.exe, install.exe inside a named sub-folder.
+        file_stem_lower = os.path.splitext(file)[0].lower()
+        # Strip version suffixes and platform tags before checking genericness
+        _bare_stem = re.sub(r'[_\-\.\s]*(x64|x86|64bit|32bit|v?[\d]+[\d\.]*)[_\-\.\s]*$', '', file_stem_lower)
+        is_generic_filename = _bare_stem in _GENERIC_INSTALLER_STEMS
+        folder_fallback_name = _folder_display_name(root, pkg_dir) if is_generic_filename else None
 
         # package.json is trusted only when its `installer` points to this file.
         manifest = _load_matching_manifest(root, file)
@@ -1110,13 +1241,18 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         pkg_id = _stable_package_id(rel_path)
         icon_data = icons_map.get(full_path)
 
+        # Resolve detection name
+        effective_detect_name = folder_fallback_name if (folder_fallback_name and is_generic_filename) else display_name
+        effective_product_name = folder_fallback_name if (folder_fallback_name and is_generic_filename) else product_name
+
         detection = _detect_installed_package(
             installed_apps,
-            display_name,
+            effective_detect_name,
             file,
-            product_name,
+            effective_product_name,
             publisher,
             detection_id,
+            folder_name=parent_folder or folder_fallback_name,
         )
         is_installed = bool(detection["is_installed"])
         installed_version = detection["installed_version"]
@@ -1129,7 +1265,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             installed_version = version
 
         # 1. First try brand / installed icon resolution for accurate application icons
-        brand_icon = _resolve_best_brand_icon(display_name, file, installed_exe_path)
+        brand_icon = _resolve_best_brand_icon(effective_detect_name or display_name, file, installed_exe_path)
         if brand_icon:
             icon_data = brand_icon
         elif not icon_data and installed_exe_path and os.path.isfile(installed_exe_path):
@@ -1156,10 +1292,24 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         is_generic_pe = "operating system" in prod_meta or "windows" in prod_meta
         clean_file_title = os.path.splitext(file)[0].replace("_", " ").replace("-", " ").replace(".", " ").strip().title()
 
+        # Priority:
+        # 1. Matched registry app name (if installed) - always most accurate
+        # 2. Folder fallback name (if filename is generic like setup.exe) - user-visible folder name
+        #    is more meaningful than internal branding like "Adobe Self Extractor"
+        # 3. display_name from metadata/manifest (if not generic OS binary)
+        # 4. Folder fallback name as secondary fallback
+        # 5. Cleaned filename as last resort
         if is_installed and matched_app_name:
             final_name = matched_app_name
+        elif folder_fallback_name and is_generic_filename:
+            # Folder name takes priority for generic installers (setup.exe, install.exe)
+            # The parent folder name (e.g. "Acrobat Reader") is more meaningful to the user
+            # than internal metadata like "Adobe Self Extractor".
+            final_name = folder_fallback_name
         elif display_name and not is_generic_pe:
             final_name = display_name
+        elif folder_fallback_name:
+            final_name = folder_fallback_name
         else:
             final_name = clean_file_title or display_name
 
@@ -1167,6 +1317,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "id": pkg_id,
             "name": final_name,
             "filename": file,
+            "folder_name": parent_folder,
             "relative_path": rel_path,
             "full_path": full_path,
             "version": version or installed_version or "Unknown",
@@ -1186,6 +1337,8 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "installed_exe_path": installed_exe_path,
             "install_location": install_location or (os.path.dirname(installed_exe_path) if installed_exe_path else None),
             "detection_source": detection["detection_source"],
+            "is_portable_tool": bool(validation.get("is_portable_tool", False)),
+            "can_open_tool": bool(validation.get("can_open_tool", False)),
             "install_allowed": bool(validation["is_valid"] and validation["manual_install_supported"] and not is_installed),
             "auto_install_supported": bool(validation["auto_install_supported"] and not is_installed),
             "manual_install_supported": bool(validation["manual_install_supported"] and not is_installed),
@@ -1199,7 +1352,18 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
     # -------------------------------------------------------------
     clusters: Dict[str, List[Dict[str, Any]]] = {}
     for p in packages:
-        key = _normalize_package_identity(p["name"], p["filename"])
+        # For generic filenames (setup.exe), use folder name in deduplication key
+        # so that e.g. "Acrobat Reader/setup.exe" and "VLC Player/setup.exe" are
+        # treated as separate packages and NOT collapsed into one.
+        file_stem_lower = os.path.splitext(p["filename"])[0].lower()
+        _bare = re.sub(r'[_\-\.\s]*(x64|x86|64bit|32bit|v?[\d]+[\d\.]*)[_\-\.\s]*$', '', file_stem_lower)
+        if _bare in _GENERIC_INSTALLER_STEMS and p.get("folder_name"):
+            key = _normalize_package_identity(
+                p["name"],
+                p["folder_name"] + "_" + p["filename"]
+            )
+        else:
+            key = _normalize_package_identity(p["name"], p["filename"])
         p["clean_identity"] = key
         clusters.setdefault(key, []).append(p)
 
@@ -1282,8 +1446,11 @@ def _find_package(data: Dict[str, Any], target_identifier: str) -> Optional[Dict
             str(package.get("id") or "").lower(),
             str(package.get("relative_path") or "").replace("\\", "/").lower(),
             str(package.get("filename") or "").lower(),
+            str(package.get("name") or "").lower(),
+            str(package.get("folder_name") or "").lower(),
+            str(package.get("clean_identity") or "").lower(),
         }
-        if target in candidates:
+        if target in candidates or any(target == c or (len(target) >= 3 and target in c) for c in candidates if c):
             return package
     return None
 
@@ -1377,6 +1544,17 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
     launched, launch_code, launch_error = _launch_elevated(executable, parameters, working_dir)
 
     if launched:
+        # Launch auto-pilot assistant in background to automatically handle Language/OK/Next dialogs if they pop up
+        try:
+            from packages.auto_wizard import InstallerAutoPilot
+            autopilot = InstallerAutoPilot(
+                target_title_keywords=[target_pkg.get("name", ""), target_pkg.get("filename", ""), target_pkg.get("folder_name", "")],
+                timeout_seconds=90,
+            )
+            autopilot.run_in_background()
+        except Exception:
+            pass
+
         return {
             "success": True,
             "cancelled": False,
@@ -1396,7 +1574,7 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
 
 
 # Switches that prevent automatic reboots
-_NORESTART_SWITCHES = ["/NORESTART", "REBOOT=ReallySuppress", "/norestart", "--norestart"]
+_NORESTART_SWITCHES = ["/NORESTART", "REBOOT=ReallySuppress", "/norestart", "--norestart", "/rs"]
 
 
 def _guess_installer_type(exe_path: str) -> str:
@@ -1408,10 +1586,17 @@ def _guess_installer_type(exe_path: str) -> str:
         return "unknown"
 
     fname = os.path.basename(exe_path).lower()
+    parent = os.path.basename(os.path.dirname(exe_path)).lower()
 
     try:
         with open(exe_path, "rb") as f:
             data = f.read(1024 * 1024)  # Read first 1MB
+
+            # Adobe / Acrobat (check early)
+            if (b"Adobe Systems" in data or b"Adobe Setup" in data or
+                b"Adobe Self Extractor" in data or b"AcroRead" in data or
+                b"Acrobat" in data or "acrobat" in parent or "adobe" in parent):
+                return "adobe"
 
             # Inno Setup (check first - avoids Delphi AnsiString nsis substring false positive)
             if (b"Inno Setup" in data or b"inno setup" in data.lower() or
@@ -1446,20 +1631,22 @@ def _guess_installer_type(exe_path: str) -> str:
                 return "chrome"
 
             # VLC
-            if "vlc" in fname:
+            if "vlc" in fname or "vlc" in parent:
                 return "vlc"
 
     except Exception:
         pass
 
     # Name-based fallbacks
+    if "adobe" in fname or "acrobat" in fname or "acrobat" in parent or "adobe" in parent:
+        return "adobe"
     if "7zip" in fname or "7-zip" in fname:
         return "7zip"
     if "winrar" in fname:
         return "winrar"
     if "chrome" in fname:
         return "chrome"
-    if "vlc" in fname:
+    if "vlc" in fname or "vlc" in parent:
         return "vlc"
 
     return "unknown"
@@ -1477,13 +1664,13 @@ def _get_silent_args(pkg: Dict[str, Any]) -> str:
         args_lower = silent_args.lower()
         has_norestart = any(sw.lower() in args_lower for sw in _NORESTART_SWITCHES)
         installer_type = pkg.get("installer_type") or _guess_installer_type(pkg.get("full_path", ""))
-        if not has_norestart and installer_type == "innosetup":
+        if not has_norestart and installer_type in ("innosetup", "adobe", "wix"):
             silent_args += " /NORESTART"
         return silent_args
 
     # 2. Try to detect installer type
     exe_path = pkg.get("full_path", "")
-    installer_type = _guess_installer_type(exe_path)
+    installer_type = pkg.get("installer_type") or _guess_installer_type(exe_path)
 
     if installer_type == "innosetup":
         return "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
@@ -1495,6 +1682,8 @@ def _get_silent_args(pkg: Dict[str, Any]) -> str:
         return "/silent /install"
     elif installer_type == "wix":
         return "/quiet /norestart"
+    elif installer_type == "adobe":
+        return "/sAll /rs /msi /norestart /quiet ALLUSERS=1 EULA_ACCEPT=YES"
 
     return ""
 
@@ -1523,24 +1712,33 @@ class _SHELLEXECUTEINFOW(ctypes.Structure):
     ]
 
 
-def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds: int) -> int:
-    """Runs a command with elevation and returns its process exit code."""
+def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds: int, keywords: Optional[List[str]] = None) -> int:
+    """Runs a command with elevation, launches auto-wizard autopilot, and returns its process exit code."""
     if not command:
         return -1
+
+    # Start auto-pilot in background to automatically advance wizard dialogs (OK, Next, Agree, Finish, Reboot Later)
+    from packages.auto_wizard import InstallerAutoPilot
+    autopilot = InstallerAutoPilot(target_title_keywords=keywords or [], timeout_seconds=timeout_seconds)
+    autopilot.run_in_background()
+
     try:
         is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
     except Exception:
         is_admin = False
 
     if is_admin:
-        result = subprocess.run(
-            command,
-            cwd=working_dir,
-            timeout=timeout_seconds,
-            capture_output=True,
-            **get_hidden_subprocess_kwargs(),
-        )
-        return int(result.returncode)
+        try:
+            result = subprocess.run(
+                command,
+                cwd=working_dir,
+                timeout=timeout_seconds,
+                capture_output=True,
+                **get_hidden_subprocess_kwargs(),
+            )
+            return int(result.returncode)
+        finally:
+            autopilot.stop()
 
     info = _SHELLEXECUTEINFOW()
     info.cbSize = ctypes.sizeof(_SHELLEXECUTEINFOW)
@@ -1549,15 +1747,25 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
     info.lpFile = command[0]
     info.lpParameters = subprocess.list2cmdline(command[1:])
     info.lpDirectory = working_dir
-    info.nShow = 0
+    info.nShow = 1
 
     ctypes.set_last_error(0)
     if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(info)):
+        autopilot.stop()
         error = ctypes.get_last_error() or ctypes.windll.kernel32.GetLastError()
         return ERROR_CANCELLED if error == ERROR_CANCELLED else -int(error or 1)
     if not info.hProcess:
+        autopilot.stop()
         return 0
+
     try:
+        try:
+            pid = kernel32.GetProcessId(info.hProcess)
+            if pid:
+                autopilot.add_pid(pid)
+        except Exception:
+            pass
+
         wait_result = ctypes.windll.kernel32.WaitForSingleObject(info.hProcess, timeout_seconds * 1000)
         if wait_result != 0:
             return -2
@@ -1566,6 +1774,7 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
             return -3
         return int(exit_code.value)
     finally:
+        autopilot.stop()
         ctypes.windll.kernel32.CloseHandle(info.hProcess)
 
 
@@ -1690,8 +1899,10 @@ def silent_install_package(target_identifier: str, custom_dir: Optional[str] = N
     exit_code = -1
     install_error = ""
 
+    keywords = [pkg_name, target_pkg.get("filename", ""), target_pkg.get("folder_name", "")]
+
     try:
-        exit_code = _run_elevated_and_wait(command, working_dir, timeout_seconds)
+        exit_code = _run_elevated_and_wait(command, working_dir, timeout_seconds, keywords=keywords)
 
     except subprocess.TimeoutExpired:
         install_error = f"نصب {pkg_name} پس از {timeout_seconds} ثانیه تایم‌اوت شد."
@@ -1771,10 +1982,15 @@ def open_package(target_identifier: str, custom_dir: Optional[str] = None) -> Di
         return {"success": False, "message": f"برنامه {target_identifier} یافت نشد."}
 
     exe_path = target_pkg.get("installed_exe_path")
+    if not exe_path or not os.path.isfile(exe_path):
+        full_path = target_pkg.get("full_path")
+        if full_path and os.path.isfile(full_path):
+            exe_path = full_path
+
     if exe_path and os.path.isfile(exe_path):
         work_dir = os.path.dirname(exe_path)
         try:
-            ret = ctypes.windll.shell32.ShellExecuteW(None, "open", exe_path, "", work_dir, 1)
+            ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", exe_path, "", work_dir, 1)
             if ret > 32:
                 return {"success": True, "message": f"برنامه {target_pkg.get('name')} با موفقیت باز شد."}
         except Exception:
@@ -1787,6 +2003,118 @@ def open_package(target_identifier: str, custom_dir: Optional[str] = None) -> Di
             pass
 
     return {"success": False, "message": "مسیر فایل اجرایی نرم‌افزار نصب‌شده یافت نشد."}
+
+
+def open_office_folder(custom_dir: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Finds and opens the Microsoft Office folder inside the configured/selected packages directory
+    or common disk locations in Windows Explorer.
+    Matches variations such as 'office', 'microsoft office', 'office 2024', 'office 2021', 'آفیس', etc.
+    """
+    pkg_dir = get_packages_directory(custom_dir)
+    if not pkg_dir or not os.path.isdir(pkg_dir):
+        return {
+            "success": False,
+            "message": "فولدر نرم‌افزارها مشخص یا موجود نیست.",
+        }
+
+    office_keywords = [
+        "office",
+        "آفیس",
+        "microsoft office",
+        "office 2024",
+        "office2024",
+        "office 2021",
+        "office2021",
+        "office 2019",
+        "office2019",
+        "office 2016",
+        "office2016",
+        "msoffice",
+        "ms office",
+        "مایکروسافت آفیس",
+    ]
+
+    matched_folder = None
+
+    # 1. Search directly inside pkg_dir
+    try:
+        for entry in os.listdir(pkg_dir):
+            full_entry = os.path.join(pkg_dir, entry)
+            if os.path.isdir(full_entry):
+                entry_lower = entry.lower()
+                if any(kw in entry_lower for kw in office_keywords):
+                    matched_folder = full_entry
+                    break
+    except Exception as e:
+        logger.warning(f"Error scanning directories in {pkg_dir}: {e}")
+
+    # 2. Search 1 level deeper inside subdirectories if not found
+    if not matched_folder:
+        try:
+            for root, dirs, _ in os.walk(pkg_dir):
+                rel = os.path.relpath(root, pkg_dir)
+                depth = len(rel.split(os.sep)) if rel != "." else 0
+                if depth > 2:
+                    continue
+                for d in dirs:
+                    d_lower = d.lower()
+                    if any(kw in d_lower for kw in office_keywords):
+                        matched_folder = os.path.join(root, d)
+                        break
+                if matched_folder:
+                    break
+        except Exception as e:
+            logger.warning(f"Error recursive scanning for office in {pkg_dir}: {e}")
+
+    # 3. Check parent directory of pkg_dir
+    if not matched_folder:
+        try:
+            parent_dir = os.path.dirname(pkg_dir)
+            if parent_dir and os.path.isdir(parent_dir):
+                for entry in os.listdir(parent_dir):
+                    full_entry = os.path.join(parent_dir, entry)
+                    if os.path.isdir(full_entry):
+                        entry_lower = entry.lower()
+                        if any(kw in entry_lower for kw in office_keywords):
+                            matched_folder = full_entry
+                            break
+        except Exception:
+            pass
+
+    target_to_open = matched_folder if matched_folder else pkg_dir
+    is_direct_match = matched_folder is not None
+
+    try:
+        os.startfile(target_to_open)
+        if is_direct_match:
+            return {
+                "success": True,
+                "found": True,
+                "path": target_to_open,
+                "message": f"پوشه آفیس ({os.path.basename(target_to_open)}) باز شد.",
+            }
+        else:
+            return {
+                "success": True,
+                "found": False,
+                "path": target_to_open,
+                "message": "پوشه اختصاصی آفیس یافت نشد؛ پوشه اصلی نرم‌افزارها باز شد.",
+            }
+    except Exception as e:
+        try:
+            subprocess.Popen(["explorer.exe", target_to_open])
+            return {
+                "success": True,
+                "found": is_direct_match,
+                "path": target_to_open,
+                "message": f"پوشه {os.path.basename(target_to_open)} باز شد.",
+            }
+        except Exception as e2:
+            return {
+                "success": False,
+                "message": f"خطا در باز کردن پوشه: {str(e2)}",
+            }
 
 
 def uninstall_package(target_identifier: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:

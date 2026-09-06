@@ -38,8 +38,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::DispatchMessage(&msg);
   }
 
-  // Terminate backend processes on exit
-  system("taskkill.exe /F /IM backend_server.exe /T >nul 2>&1");
+  // Terminate backend processes on exit completely silently without console window
+  WinExec("taskkill.exe /F /IM backend_server.exe /T", SW_HIDE);
 
   ::CoUninitialize();
   return EXIT_SUCCESS;

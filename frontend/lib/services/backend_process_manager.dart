@@ -274,7 +274,7 @@ class BackendProcessManager {
     } catch (_) {}
     if (Platform.isWindows) {
       try {
-        Process.runSync('taskkill.exe', ['/F', '/IM', 'backend_server.exe', '/T'], runInShell: true);
+        Process.runSync('taskkill.exe', ['/F', '/IM', 'backend_server.exe', '/T'], runInShell: false);
       } catch (_) {}
     }
   }

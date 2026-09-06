@@ -1172,7 +1172,7 @@ class SimpleModeView extends StatelessWidget {
                 ],
 
                 // Discovered .exe installers list with upgraded UI/UX
-                if (packages.isNotEmpty) ...[
+                if (packages.isNotEmpty && directoryExists) ...[
                   ...packages.map(
                     (pkg) => _buildUpgradedPackageCard(
                       context,
@@ -1181,6 +1181,12 @@ class SimpleModeView extends StatelessWidget {
                       l10n,
                       softwareCtrl,
                     ),
+                  ),
+                  _buildOfficeReminderSection(
+                    context,
+                    isDark,
+                    l10n,
+                    softwareCtrl,
                   ),
                 ] else if (info.software.isNotEmpty) ...[
                   // Fallback to configured required software checklist
@@ -3136,9 +3142,25 @@ class SimpleModeView extends StatelessWidget {
                       child: Directionality(
                         textDirection: TextDirection.ltr,
                         child: Text(
-                          pkg.filename.isNotEmpty
-                              ? pkg.filename
-                              : pkg.relativePath,
+                          () {
+                            // For generic installer names (setup.exe), show "FolderName / filename"
+                            final fname = pkg.filename.toLowerCase();
+                            final stem = fname.contains('.')
+                                ? fname.substring(0, fname.lastIndexOf('.'))
+                                : fname;
+                            const genericStems = {
+                              'setup', 'install', 'installer', 'autorun',
+                              'launch', 'run', 'execute',
+                            };
+                            final isGeneric = genericStems.contains(stem) ||
+                                genericStems.any((s) => stem == '${s}64' || stem == '${s}32' || stem.startsWith('${s}_'));
+                            if (isGeneric && pkg.folderName.isNotEmpty) {
+                              return '${pkg.folderName}  /  ${pkg.filename}';
+                            }
+                            return pkg.filename.isNotEmpty
+                                ? pkg.filename
+                                : pkg.relativePath;
+                          }(),
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -3205,7 +3227,7 @@ class SimpleModeView extends StatelessWidget {
           const SizedBox(width: 14),
 
           // Status Badge + Action Buttons (Auto Install & Manual Install)
-          if (!pkg.isValid)
+          if (!pkg.isValid && !pkg.isPortableTool && !pkg.canOpenTool)
             Tooltip(
               message:
                   pkg.validationError ??
@@ -3249,6 +3271,30 @@ class SimpleModeView extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+            )
+          else if (pkg.isPortableTool || pkg.canOpenTool)
+            ElevatedButton.icon(
+              onPressed: () => softwareCtrl.openInstalledApp(context, pkg),
+              icon: const Icon(Icons.play_arrow_rounded, size: 16),
+              label: Text(
+                l10n.isPersian ? 'باز کردن ابزار' : 'Open Tool',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 9,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 1.5,
               ),
             )
           else if (installAllowed)
@@ -3478,6 +3524,201 @@ class SimpleModeView extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildOfficeReminderSection(
+    BuildContext context,
+    bool isDark,
+    AppLocalizations l10n,
+    SoftwareController softwareCtrl,
+  ) {
+    const officeColor = Color(0xFFEA580C);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 14),
+        // Stylish Divider
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.dashboard_customize_rounded,
+                    size: 14,
+                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.isPersian ? 'بخش اختصاصی آفیس' : 'Office Suite',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Office Reminder Banner Card
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isDark
+                ? const Color(0xFF1E140A).withValues(alpha: 0.75)
+                : const Color(0xFFFFF7ED),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: officeColor.withValues(alpha: isDark ? 0.35 : 0.4),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: officeColor.withValues(alpha: isDark ? 0.15 : 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Office Icon Box
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEA580C), Color(0xFFC2410C)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFEA580C).withValues(alpha: 0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.description_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+
+              // Reminder Text
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          l10n.isPersian
+                              ? 'یادت نره آفیس رو نصب کنی !'
+                              : "Don't forget to install Office!",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: isDark
+                                ? const Color(0xFFFDBA74)
+                                : const Color(0xFFC2410C),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Text(
+                          '📝',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      l10n.isPersian
+                          ? 'پوشه Microsoft Office را از روی هارد/فلش باز کنید و مراحل نصب آفیس را انجام دهید.'
+                          : 'Open the Microsoft Office folder and complete the setup.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Open Office Folder Button
+              ElevatedButton.icon(
+                onPressed: () => softwareCtrl.openOfficeFolder(context),
+                icon: const Icon(Icons.folder_open_rounded, size: 16),
+                label: Text(
+                  l10n.isPersian ? 'باز کردن پوشه آفیس' : 'Open Office Folder',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: officeColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

@@ -147,6 +147,36 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> openOfficeFolder([String? customDir]) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {
+        'success': false,
+        'message': 'Backend service is not running.',
+      };
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/packages/open-office');
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'directory': customDir ?? ''}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data;
+    } catch (e) {
+      debugPrint('[ApiService] openOfficeFolder error: $e');
+      return {
+        'success': false,
+        'message': 'Error opening Office folder: $e',
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> uninstallPackage(String packageId) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {

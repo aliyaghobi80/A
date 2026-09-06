@@ -383,6 +383,9 @@ class SoftwarePackage {
   final bool isDuplicate;
   final String? duplicateOf;
   final int duplicateCount;
+  final String folderName;
+  final bool isPortableTool;
+  final bool canOpenTool;
 
   SoftwarePackage({
     required this.id,
@@ -416,6 +419,9 @@ class SoftwarePackage {
     this.isDuplicate = false,
     this.duplicateOf,
     this.duplicateCount = 0,
+    this.folderName = '',
+    this.isPortableTool = false,
+    this.canOpenTool = false,
   });
 
   String get installPathTooltip {
@@ -455,26 +461,24 @@ class SoftwarePackage {
       validationError: json['validation_error'],
       validationCode: json['validation_code'] ?? 'ok',
       trustLevel: json['trust_level'] ?? 'unknown',
-      status:
-          json['status'] ??
-          (json['is_installed'] == true ? 'Installed' : 'Not Installed'),
+      status: json['status'] ?? 'Not Installed',
       isInstalled: json['is_installed'] as bool? ?? false,
       installedVersion: json['installed_version'] ?? 'Not available',
-      installAllowed:
-          json['install_allowed'] as bool? ??
-          (!((json['is_installed'] as bool?) ?? false)),
+      installAllowed: json['install_allowed'] as bool? ?? true,
       autoInstallSupported: json['auto_install_supported'] as bool? ?? false,
       manualInstallSupported: json['manual_install_supported'] as bool? ?? true,
       detectionSource: json['detection_source'] ?? 'none',
-      hasIcon:
-          (json['has_icon'] as bool? ?? false) || json['icon_base64'] != null,
+      hasIcon: json['has_icon'] as bool? ?? false,
       iconBase64: json['icon_base64'],
       iconUrl: json['icon_url'],
       installedExePath: json['installed_exe_path'],
       installLocation: json['install_location'],
       isDuplicate: json['is_duplicate'] as bool? ?? false,
-      duplicateOf: json['duplicate_of'] as String?,
-      duplicateCount: json['duplicate_count'] as int? ?? 0,
+      duplicateOf: json['duplicate_of'],
+      duplicateCount: (json['duplicate_count'] as int?) ?? 0,
+      folderName: json['folder_name'] ?? '',
+      isPortableTool: json['is_portable_tool'] as bool? ?? false,
+      canOpenTool: json['can_open_tool'] as bool? ?? false,
     );
   }
 }

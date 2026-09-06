@@ -21,6 +21,7 @@ class PackagesCard extends StatelessWidget {
   final bool isBatchInstalling;
   final BatchInstallStatus? batchStatus;
   final VoidCallback? onCancelBatch;
+  final VoidCallback? onOpenOfficeFolder;
 
   const PackagesCard({
     super.key,
@@ -39,6 +40,7 @@ class PackagesCard extends StatelessWidget {
     this.isBatchInstalling = false,
     this.batchStatus,
     this.onCancelBatch,
+    this.onOpenOfficeFolder,
   });
 
   Widget _buildIcon(SoftwarePackage pkg, bool isDark) {
@@ -328,12 +330,185 @@ class PackagesCard extends StatelessWidget {
                 ),
               ),
             )
-          else
+          else ...[
             ...packages.map(
               (pkg) => _buildPackageRow(context, pkg, isDark, l10n),
             ),
+            if (onOpenOfficeFolder != null && packages.isNotEmpty && directoryExists)
+              _buildOfficeReminderBanner(context, isDark, l10n),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildOfficeReminderBanner(
+    BuildContext context,
+    bool isDark,
+    AppLocalizations l10n,
+  ) {
+    const officeColor = Color(0xFFEA580C);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.dashboard_customize_rounded,
+                    size: 14,
+                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.isPersian ? 'بخش اختصاصی آفیس' : 'Office Suite',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isDark
+                ? const Color(0xFF1E140A).withValues(alpha: 0.75)
+                : const Color(0xFFFFF7ED),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: officeColor.withValues(alpha: isDark ? 0.35 : 0.4),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: officeColor.withValues(alpha: isDark ? 0.15 : 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEA580C), Color(0xFFC2410C)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.description_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.isPersian
+                          ? 'یادت نره آفیس رو نصب کنی !'
+                          : "Don't forget to install Office!",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: isDark
+                            ? const Color(0xFFFDBA74)
+                            : const Color(0xFFC2410C),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      l10n.isPersian
+                          ? 'پوشه Microsoft Office را از روی هارد/فلش باز کنید و مراحل نصب آفیس را انجام دهید.'
+                          : 'Open the Microsoft Office folder and complete the setup.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: onOpenOfficeFolder,
+                icon: const Icon(Icons.folder_open_rounded, size: 15),
+                label: Text(
+                  l10n.isPersian ? 'باز کردن پوشه آفیس' : 'Open Office Folder',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: officeColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -499,7 +674,7 @@ class PackagesCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          if (!pkg.isValid)
+          if (!pkg.isValid && !pkg.isPortableTool && !pkg.canOpenTool)
             Tooltip(
               message: pkg.validationError ?? statusText,
               child: Container(
@@ -524,6 +699,19 @@ class PackagesCard extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+            )
+          else if (pkg.isPortableTool || pkg.canOpenTool)
+            ElevatedButton.icon(
+              onPressed: onOpen != null ? () => onOpen!(pkg) : null,
+              icon: const Icon(Icons.play_arrow_rounded, size: 14),
+              label: Text(l10n.isPersian ? 'باز کردن ابزار' : 'Open Tool'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
               ),
             )
           else if (installAllowed)

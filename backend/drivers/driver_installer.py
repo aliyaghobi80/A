@@ -114,25 +114,50 @@ def scan_driver_folder(folder_path: str) -> Dict[str, Any]:
                     size = os.path.getsize(full_path) if os.path.isfile(full_path) else 0
 
                     type_label = ext.replace(".", "").upper()
-                    if ext == ".inf":
+                    entrypoint_desc = ""
+                    if ext in (".zip", ".cab"):
+                        install_method = "archive_installer"
+                        is_valid = True
+                        validation_error = None
+                        auto_supported = True
+                        if ext == ".zip":
+                            try:
+                                with zipfile.ZipFile(full_path, "r") as zf:
+                                    names = [n.replace("\\", "/").lower() for n in zf.namelist()]
+                                    if any(n.endswith("asussetup.exe") for n in names):
+                                        entrypoint_desc = "AsusSetup.exe (نصاب رسمی ایسوس)"
+                                    elif any(n.endswith(s) for n in names for s in ("silentinstall.cmd", "silentinstall.bat", "install.cmd", "install.bat")):
+                                        entrypoint_desc = "اسکریپت نصب خودکار (Vendor Script)"
+                                    elif any(n.endswith(s) for n in names for s in ("setup.exe", "installer.exe", "setuprst.exe", "igxpin.exe")):
+                                        entrypoint_desc = "برنامه ستاپ درایور (Setup Executable)"
+                                    elif any(n.endswith(".inf") for n in names):
+                                        entrypoint_desc = "بسته راه‌انداز INF (PnPUtil)"
+                                    elif any(n.endswith(".exe") for n in names):
+                                        entrypoint_desc = "فایل اجرایی درایور"
+                            except Exception:
+                                pass
+                    elif ext == ".inf":
                         install_method = "pnputil"
+                        is_valid = True
+                        validation_error = None
+                        auto_supported = True
+                        entrypoint_desc = "درایور سخت‌افزار INF"
                     elif ext == ".msi":
                         install_method = "msiexec"
-                    elif ext in (".zip", ".cab"):
-                        install_method = "extract_pnputil"
+                        is_valid = True
+                        validation_error = None
+                        auto_supported = True
+                        entrypoint_desc = "بسته نصبی MSI"
                     else:
                         install_method = "executable"
+                        installer_type = _guess_installer_type(full_path)
+                        validation = _validate_installer(full_path, _extract_exe_metadata(full_path), installer_type, {})
+                        is_valid = bool(validation["is_valid"])
+                        validation_error = validation.get("validation_error")
+                        auto_supported = bool(is_valid and _driver_exe_silent_args(full_path, installer_type) is not None)
+                        entrypoint_desc = f"برنامه نصبی {installer_type.upper()}"
 
                     installer_type = _guess_installer_type(full_path) if ext == ".exe" else ext.lstrip(".")
-                    validation = (
-                        _validate_installer(full_path, _extract_exe_metadata(full_path), installer_type, {})
-                        if ext == ".exe"
-                        else {"is_valid": True, "validation_error": None}
-                    )
-                    auto_supported = bool(
-                        validation["is_valid"]
-                        and (ext != ".exe" or _driver_exe_silent_args(full_path, installer_type) is not None)
-                    )
 
                     discovered.append({
                         "filename": file,
@@ -142,9 +167,10 @@ def scan_driver_folder(folder_path: str) -> Dict[str, Any]:
                         "type_label": type_label,
                         "install_method": install_method,
                         "installer_type": installer_type,
+                        "entrypoint_description": entrypoint_desc,
                         "auto_install_supported": auto_supported,
-                        "is_valid": bool(validation["is_valid"]),
-                        "validation_error": validation.get("validation_error"),
+                        "is_valid": is_valid,
+                        "validation_error": validation_error,
                         "file_size": size,
                         "file_size_display": _format_size(size),
                     })
@@ -270,10 +296,71 @@ def _safe_extract_zip(archive_path: str, destination: str) -> None:
         archive.extractall(destination_abs)
 
 
+def _find_best_installer_in_extracted_tree(temp_dir: str) -> tuple[str, str, str]:
+    """
+    Finds the best installer entrypoint inside an extracted driver archive:
+    Returns (kind, target_path, friendly_description)
+    kind is one of: 'asus_setup', 'script', 'setup_exe', 'exe', 'msi', 'inf', 'unknown'
+    """
+    all_files: List[str] = []
+    for root, _, files in os.walk(temp_dir):
+        for f in files:
+            all_files.append(os.path.join(root, f))
+
+    # Priority 1: AsusSetup.exe (Unified ASUS motherboard driver installer)
+    for full_p in all_files:
+        if os.path.basename(full_p).lower() == "asussetup.exe":
+            return "asus_setup", full_p, "AsusSetup.exe (نصاب رسمی ایسوس)"
+
+    # Priority 2: Vendor Silent Scripts (SilentInstall.cmd / Install.cmd / Install.bat / run.bat)
+    script_candidates = ("silentinstall.cmd", "silentinstall.bat", "install.cmd", "install.bat", "setup.cmd", "setup.bat", "run.bat")
+    for full_p in all_files:
+        if os.path.basename(full_p).lower() in script_candidates:
+            return "script", full_p, f"{os.path.basename(full_p)} (اسکریپت خودکار)"
+
+    # Priority 3: Setup.exe / Installer.exe / SetupRST.exe / igxpin.exe
+    known_setups = (
+        "setup.exe",
+        "installer.exe",
+        "setuprst.exe",
+        "setupchipset.exe",
+        "igxpin.exe",
+        "platformperformancepackageinstaller.exe",
+        "armourycrateinstaller.exe",
+    )
+    for full_p in all_files:
+        if os.path.basename(full_p).lower() in known_setups:
+            return "setup_exe", full_p, f"{os.path.basename(full_p)} (برنامه ستاپ)"
+
+    # Priority 4: Any root or near-root .exe (depth <= 2 from temp_dir)
+    for full_p in all_files:
+        if full_p.lower().endswith(".exe"):
+            rel = os.path.relpath(full_p, temp_dir)
+            depth = len(rel.replace("\\", "/").split("/"))
+            if depth <= 2:
+                return "exe", full_p, f"{os.path.basename(full_p)} (فایل اجرایی)"
+
+    # Priority 5: MSI Installer
+    for full_p in all_files:
+        if full_p.lower().endswith(".msi"):
+            return "msi", full_p, f"{os.path.basename(full_p)} (نصاب MSI)"
+
+    # Priority 6: INF Driver Tree
+    has_inf = any(full_p.lower().endswith(".inf") for full_p in all_files)
+    if has_inf:
+        return "inf", temp_dir, "بسته‌های راه‌انداز INF (PnPUtil)"
+
+    return "unknown", "", "فایل نصبی شناخته‌شده‌ای یافت نشد"
+
+
 def _install_driver_archive(full_path: str, install_type: str, timeout: int) -> tuple[int, str]:
+    archive_name = os.path.basename(full_path)
     with tempfile.TemporaryDirectory(prefix="markazi_driver_") as temp_dir:
         if install_type == "zip":
-            _safe_extract_zip(full_path, temp_dir)
+            try:
+                _safe_extract_zip(full_path, temp_dir)
+            except Exception as e:
+                return -1, f"خطا در استخراج فایل زیپ: {str(e)}"
         else:
             expand_exe = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "expand.exe")
             expanded = subprocess.run(
@@ -286,10 +373,56 @@ def _install_driver_archive(full_path: str, install_type: str, timeout: int) -> 
             if expanded.returncode != 0:
                 return int(expanded.returncode), (expanded.stderr or expanded.stdout or "CAB extraction failed").strip()
 
-        has_inf = any(name.lower().endswith(".inf") for _, _, files in os.walk(temp_dir) for name in files)
-        if not has_inf:
-            return -5, "No INF driver package was found inside the archive."
-        return _install_inf_tree(temp_dir, timeout)
+        kind, target_path, desc = _find_best_installer_in_extracted_tree(temp_dir)
+        logger.info(f"[DriverBatch] Archive {archive_name} -> Resolved entrypoint: {desc} ({target_path})")
+
+        if kind in ("asus_setup", "setup_exe", "exe"):
+            work_dir = os.path.dirname(target_path)
+            exe_name = os.path.basename(target_path).lower()
+            if kind == "asus_setup" or "asus" in exe_name:
+                cmd = [target_path, "-s", "-norestart"]
+            else:
+                silent_args = _driver_exe_silent_args(target_path) or ["/s", "/norestart"]
+                cmd = [target_path] + silent_args
+
+            exit_code = _run_elevated_and_wait(
+                cmd,
+                work_dir,
+                timeout,
+                keywords=[archive_name, os.path.basename(target_path), "driver", "setup", "asus", "installer"],
+            )
+            return exit_code, f"اجرای {desc}"
+
+        elif kind == "script":
+            work_dir = os.path.dirname(target_path)
+            cmd = ["cmd.exe", "/c", target_path]
+            exit_code = _run_elevated_and_wait(
+                cmd,
+                work_dir,
+                timeout,
+                keywords=[archive_name, os.path.basename(target_path), "driver", "setup", "install"],
+            )
+            return exit_code, f"اجرای اسکریپت {desc}"
+
+        elif kind == "msi":
+            work_dir = os.path.dirname(target_path)
+            system_root = os.environ.get("SystemRoot", r"C:\Windows")
+            cmd = [
+                os.path.join(system_root, "System32", "msiexec.exe"),
+                "/i",
+                target_path,
+                "/qn",
+                "/norestart",
+                "REBOOT=ReallySuppress",
+            ]
+            exit_code = _run_elevated_and_wait(cmd, work_dir, timeout)
+            return exit_code, f"نصب بسته MSI {desc}"
+
+        elif kind == "inf":
+            return _install_inf_tree(temp_dir, timeout)
+
+        else:
+            return -5, "هیچ فایل نصبی یا درایور معتبری در فایل زیپ یافت نشد."
 
 
 def _install_single_driver(driver_file: Dict[str, Any], timeout: int = 180) -> Dict[str, Any]:

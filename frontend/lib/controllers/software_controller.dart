@@ -542,6 +542,39 @@ class SoftwareController extends GetxController {
     }
   }
 
+  Future<void> openOfficeFolder(BuildContext context) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    try {
+      final customDir = packagesDirectory;
+      final res = await _apiService.openOfficeFolder(
+        customDir.isNotEmpty ? customDir : null,
+      );
+      final success = res['success'] == true;
+      final msg =
+          res['message'] as String? ??
+          (success ? '✓ پوشه آفیس باز شد.' : 'خطا در باز کردن پوشه آفیس.');
+
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: success
+              ? const Color(0xFF10B981)
+              : const Color(0xFFEF4444),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('خطا در باز کردن پوشه آفیس: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> uninstallPackageInteractive(
     BuildContext context,
     SoftwarePackage pkg,
