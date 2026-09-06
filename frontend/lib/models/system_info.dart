@@ -1687,3 +1687,202 @@ class ToolsDirectoryStatus {
     );
   }
 }
+
+// -------------------------------------------------------------
+// Intelligent Driver Manager Models (Phase 5)
+// -------------------------------------------------------------
+
+class DriverHardwareMatch {
+  final bool isMatched;
+  final String confidence; // HIGH, MEDIUM, LOW, NOT_APPLICABLE
+  final String status; // needs_install, update_available, up_to_date, not_applicable
+  final String statusFa;
+  final String statusEn;
+  final String matchedDeviceName;
+  final String matchedDeviceId;
+  final String installedVersion;
+  final String packageVersion;
+  final String recommendation; // recommended, optional, skip
+  final List<String> reasons;
+
+  DriverHardwareMatch({
+    required this.isMatched,
+    required this.confidence,
+    required this.status,
+    required this.statusFa,
+    required this.statusEn,
+    required this.matchedDeviceName,
+    required this.matchedDeviceId,
+    required this.installedVersion,
+    required this.packageVersion,
+    required this.recommendation,
+    required this.reasons,
+  });
+
+  factory DriverHardwareMatch.fromJson(Map<String, dynamic> json) {
+    return DriverHardwareMatch(
+      isMatched: json['is_matched'] as bool? ?? false,
+      confidence: json['confidence'] ?? 'NOT_APPLICABLE',
+      status: json['status'] ?? 'not_applicable',
+      statusFa: json['status_fa'] ?? '',
+      statusEn: json['status_en'] ?? '',
+      matchedDeviceName: json['matched_device_name'] ?? '',
+      matchedDeviceId: json['matched_device_id'] ?? '',
+      installedVersion: json['installed_version'] ?? '',
+      packageVersion: json['package_version'] ?? '',
+      recommendation: json['recommendation'] ?? 'skip',
+      reasons: (json['reasons'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+    );
+  }
+}
+
+class IntelligentDriverPackage {
+  final String packageId;
+  final String displayName;
+  final String category;
+  final String categoryFa;
+  final int categoryOrder;
+  final String packageType; // zip, folder, self_extracting_exe, inf
+  final String sourcePath;
+  final String relativePath;
+  final String installerFile;
+  final String installMethod;
+  final String fileSizeDisplay;
+  final int sizeBytes;
+  final String fingerprint;
+  final List<String> hardwareIds;
+  final String driverVersion;
+  final String driverDate;
+  final String provider;
+  final List<String> alternativeInstallers;
+  final DriverHardwareMatch? match;
+  final bool isDuplicate;
+
+  IntelligentDriverPackage({
+    required this.packageId,
+    required this.displayName,
+    required this.category,
+    required this.categoryFa,
+    this.categoryOrder = 99,
+    required this.packageType,
+    required this.sourcePath,
+    required this.relativePath,
+    required this.installerFile,
+    required this.installMethod,
+    this.fileSizeDisplay = '',
+    this.sizeBytes = 0,
+    required this.fingerprint,
+    this.hardwareIds = const [],
+    this.driverVersion = '',
+    this.driverDate = '',
+    this.provider = '',
+    this.alternativeInstallers = const [],
+    this.match,
+    this.isDuplicate = false,
+  });
+
+  factory IntelligentDriverPackage.fromJson(Map<String, dynamic> json) {
+    return IntelligentDriverPackage(
+      packageId: json['package_id'] ?? '',
+      displayName: json['display_name'] ?? '',
+      category: json['category'] ?? 'other',
+      categoryFa: json['category_fa'] ?? 'سایر دستگاه‌ها',
+      categoryOrder: json['category_order'] as int? ?? 99,
+      packageType: json['package_type'] ?? 'folder',
+      sourcePath: json['source_path'] ?? '',
+      relativePath: json['relative_path'] ?? '',
+      installerFile: json['installer_file'] ?? '',
+      installMethod: json['install_method'] ?? 'setup_exe',
+      fileSizeDisplay: json['file_size_display'] ?? '',
+      sizeBytes: json['size_bytes'] as int? ?? 0,
+      fingerprint: json['fingerprint'] ?? '',
+      hardwareIds: (json['hardware_ids'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      driverVersion: json['driver_version'] ?? '',
+      driverDate: json['driver_date'] ?? '',
+      provider: json['provider'] ?? '',
+      alternativeInstallers: (json['alternative_installers'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      match: json['match'] != null ? DriverHardwareMatch.fromJson(json['match'] as Map<String, dynamic>) : null,
+      isDuplicate: json['is_duplicate'] as bool? ?? false,
+    );
+  }
+}
+
+class RemovableDriverSource {
+  final String driveLetter;
+  final String volumeName;
+  final String driverPath;
+  final String displayName;
+
+  RemovableDriverSource({
+    required this.driveLetter,
+    required this.volumeName,
+    required this.driverPath,
+    required this.displayName,
+  });
+
+  factory RemovableDriverSource.fromJson(Map<String, dynamic> json) {
+    return RemovableDriverSource(
+      driveLetter: json['drive_letter'] ?? '',
+      volumeName: json['volume_name'] ?? '',
+      driverPath: json['driver_path'] ?? '',
+      displayName: json['display_name'] ?? '',
+    );
+  }
+}
+
+class DriverScanResult {
+  final bool success;
+  final String message;
+  final String driverDirectory;
+  final int totalPackages;
+  final List<IntelligentDriverPackage> packages;
+  final List<RemovableDriverSource> removableSources;
+  final int matchingCount;
+  final int needsInstallCount;
+  final int updateAvailableCount;
+  final int upToDateCount;
+  final int notApplicableCount;
+  final int duplicateCount;
+
+  DriverScanResult({
+    required this.success,
+    required this.message,
+    required this.driverDirectory,
+    this.totalPackages = 0,
+    this.packages = const [],
+    this.removableSources = const [],
+    this.matchingCount = 0,
+    this.needsInstallCount = 0,
+    this.updateAvailableCount = 0,
+    this.upToDateCount = 0,
+    this.notApplicableCount = 0,
+    this.duplicateCount = 0,
+  });
+
+  factory DriverScanResult.empty() => DriverScanResult(
+    success: false,
+    message: '',
+    driverDirectory: '',
+  );
+
+  factory DriverScanResult.fromJson(Map<String, dynamic> json) {
+    final summary = json['summary'] as Map<String, dynamic>? ?? {};
+    final rawPkgs = json['packages'] as List<dynamic>? ?? [];
+    final rawRemovables = json['removable_sources'] as List<dynamic>? ?? [];
+
+    return DriverScanResult(
+      success: json['success'] as bool? ?? false,
+      message: json['message'] ?? '',
+      driverDirectory: json['driver_directory'] ?? '',
+      totalPackages: json['total_packages'] as int? ?? rawPkgs.length,
+      packages: rawPkgs.map((e) => IntelligentDriverPackage.fromJson(e as Map<String, dynamic>)).toList(),
+      removableSources: rawRemovables.map((e) => RemovableDriverSource.fromJson(e as Map<String, dynamic>)).toList(),
+      matchingCount: summary['matching'] as int? ?? 0,
+      needsInstallCount: summary['needs_install'] as int? ?? 0,
+      updateAvailableCount: summary['update_available'] as int? ?? 0,
+      upToDateCount: summary['up_to_date'] as int? ?? 0,
+      notApplicableCount: summary['not_applicable'] as int? ?? 0,
+      duplicateCount: summary['duplicates'] as int? ?? 0,
+    );
+  }
+}

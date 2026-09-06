@@ -15,7 +15,17 @@ if _backend_dir not in sys.path:
 from collector import collect_all_system_info
 from packages.manager import scan_packages, install_package, open_package, open_office_folder, get_package_icon_path, set_packages_directory, get_current_packages_directory
 from packages.batch_installer import start_batch_install, get_batch_status, cancel_batch_install
-from drivers.driver_installer import scan_driver_folder, start_batch_driver_install, get_driver_batch_status, cancel_driver_batch_install
+from drivers.driver_installer import (
+    scan_driver_folder,
+    start_batch_driver_install,
+    get_driver_batch_status,
+    cancel_driver_batch_install,
+    intelligent_scan_drivers,
+    start_intelligent_driver_install,
+    get_driver_directory_config,
+    set_driver_directory_config,
+    load_driver_history,
+)
 from activation.windows_activation import get_windows_activation_info
 from activation.office_activation import get_office_activation_info
 from activation.activation_tools import execute_activation_tool, set_tools_directory, get_tool_status, get_tools_directory_status
@@ -215,8 +225,26 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
             return
 
-        elif path == "/api/drivers/batch-status":
+        elif path in ("/api/drivers/batch-status", "/api/drivers/queue/status"):
             resp = get_driver_batch_status()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
+            return
+
+        elif path in ("/api/drivers/config", "/api/drivers/directory"):
+            resp = get_driver_directory_config()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/drivers/history":
+            resp = load_driver_history()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
@@ -523,22 +551,15 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
             return
 
-        elif path == "/api/drivers/scan-folder":
+        elif path in ("/api/drivers/scan", "/api/drivers/scan-folder"):
             content_len = int(self.headers.get("Content-Length", 0))
             body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
             try:
                 payload = json.loads(body_raw.decode("utf-8"))
             except Exception:
                 payload = {}
-            folder_path = payload.get("folder_path", "").strip()
-            if not folder_path:
-                self.send_response(400)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self._send_cors_headers()
-                self.end_headers()
-                self.wfile.write(json.dumps({"success": False, "message": "folder_path is required"}).encode("utf-8"))
-                return
-            result = scan_driver_folder(folder_path)
+            folder_path = (payload.get("folder_path") or payload.get("directory") or "").strip()
+            result = intelligent_scan_drivers(custom_dir=folder_path if folder_path else None)
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
@@ -546,22 +567,16 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
             return
 
-        elif path == "/api/drivers/batch-install":
+        elif path in ("/api/drivers/queue/install", "/api/drivers/batch-install"):
             content_len = int(self.headers.get("Content-Length", 0))
             body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
             try:
                 payload = json.loads(body_raw.decode("utf-8"))
             except Exception:
                 payload = {}
-            folder_path = payload.get("folder_path", "").strip()
-            if not folder_path:
-                self.send_response(400)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self._send_cors_headers()
-                self.end_headers()
-                self.wfile.write(json.dumps({"success": False, "message": "folder_path is required"}).encode("utf-8"))
-                return
-            result = start_batch_driver_install(folder_path)
+            folder_path = (payload.get("folder_path") or payload.get("directory") or "").strip()
+            package_ids = payload.get("package_ids", None)
+            result = start_intelligent_driver_install(package_ids=package_ids, custom_dir=folder_path if folder_path else None)
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
@@ -569,8 +584,24 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
             return
 
-        elif path == "/api/drivers/batch-cancel":
+        elif path in ("/api/drivers/queue/cancel", "/api/drivers/batch-cancel"):
             result = cancel_driver_batch_install()
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path in ("/api/drivers/config", "/api/drivers/directory"):
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+            new_path = (payload.get("folder_path") or payload.get("directory") or "").strip()
+            result = set_driver_directory_config(new_path)
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()

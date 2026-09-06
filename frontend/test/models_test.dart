@@ -298,4 +298,89 @@ void main() {
     expect(actResult.message, 'Windows activation tool launched successfully');
     expect(actResult.exitCode, 0);
   });
+
+  test('IntelligentDriverPackage & DriverScanResult parse correctly from json', () {
+    final mockScanJson = {
+      'success': true,
+      'message': '2 packages discovered',
+      'driver_directory': 'C:\\Drivers',
+      'total_packages': 2,
+      'summary': {
+        'total': 2,
+        'matching': 1,
+        'needs_install': 1,
+        'update_available': 0,
+        'up_to_date': 0,
+        'not_applicable': 1,
+        'duplicates': 0,
+      },
+      'removable_sources': [
+        {
+          'drive_letter': 'E:',
+          'volume_name': 'FlashDrive',
+          'driver_path': 'E:\\Drivers',
+          'display_name': 'FlashDrive (E:) - Drivers',
+        }
+      ],
+      'packages': [
+        {
+          'package_id': 'drv_pkg_abc123',
+          'display_name': 'Realtek PCIe GbE Family Controller',
+          'category': 'lan',
+          'category_fa': 'کارت شبکه کابلی (LAN)',
+          'category_order': 4,
+          'package_type': 'folder',
+          'source_path': 'C:\\Drivers\\ASUS_LAN',
+          'relative_path': 'ASUS_LAN',
+          'installer_file': 'ASUSSetup.exe',
+          'install_method': 'asus_setup',
+          'file_size_display': '15.4 MB',
+          'size_bytes': 16148070,
+          'fingerprint': 'abc123456789',
+          'hardware_ids': ['PCI\\VEN_10EC&DEV_8168'],
+          'driver_version': '11.18.0.0',
+          'driver_date': '03/15/2024',
+          'provider': 'Realtek',
+          'alternative_installers': ['setup.exe'],
+          'is_duplicate': false,
+          'match': {
+            'is_matched': true,
+            'confidence': 'HIGH',
+            'status': 'needs_install',
+            'status_fa': 'نیاز فوری به نصب درایور',
+            'status_en': 'Driver Missing (Code 28)',
+            'matched_device_name': 'Ethernet Controller',
+            'matched_device_id': 'PCI\\VEN_10EC&DEV_8168',
+            'installed_version': '',
+            'package_version': '11.18.0.0',
+            'recommendation': 'recommended',
+            'reasons': ['دستگاه دارای خطای کد ۲۸ در ویندوز است.'],
+          }
+        }
+      ],
+    };
+
+    final scanResult = DriverScanResult.fromJson(mockScanJson);
+    expect(scanResult.success, true);
+    expect(scanResult.totalPackages, 2);
+    expect(scanResult.packages.length, 1);
+    expect(scanResult.removableSources.length, 1);
+    expect(scanResult.removableSources.first.driveLetter, 'E:');
+
+    final pkg = scanResult.packages.first;
+    expect(pkg.packageId, 'drv_pkg_abc123');
+    expect(pkg.displayName, 'Realtek PCIe GbE Family Controller');
+    expect(pkg.category, 'lan');
+    expect(pkg.installMethod, 'asus_setup');
+    expect(pkg.installerFile, 'ASUSSetup.exe');
+    expect(pkg.alternativeInstallers, ['setup.exe']);
+
+    final match = pkg.match;
+    expect(match, isNotNull);
+    expect(match!.isMatched, true);
+    expect(match.confidence, 'HIGH');
+    expect(match.status, 'needs_install');
+    expect(match.recommendation, 'recommended');
+  });
 }
+

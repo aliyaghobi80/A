@@ -1,0 +1,4 @@
+{
+  "driverRoot": "Drivers",
+  "description": "Relative or absolute directory path to scan for local driver packages"
+}

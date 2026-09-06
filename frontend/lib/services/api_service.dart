@@ -649,4 +649,115 @@ class ApiService {
       return {'success': false, 'message': 'خطا در لغو نصب درایورها: $e'};
     }
   }
+
+  // -------------------------------------------------------------
+  // Intelligent Driver Manager Endpoints (Phase 5)
+  // -------------------------------------------------------------
+
+  Future<Map<String, dynamic>> getDriverDirectoryConfig() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return {'exists': false, 'configured_path': 'Drivers', 'removable_sources': []};
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/drivers/config');
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      }
+      return {'exists': false, 'configured_path': 'Drivers', 'removable_sources': []};
+    } catch (e) {
+      debugPrint('[ApiService] getDriverDirectoryConfig error: $e');
+      return {'exists': false, 'configured_path': 'Drivers', 'removable_sources': []};
+    }
+  }
+
+  Future<Map<String, dynamic>> setDriverDirectoryConfig(String newPath) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/drivers/config');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: json.encode({'folder_path': newPath}),
+      ).timeout(const Duration(seconds: 10));
+
+      return json.decode(utf8.decode(response.bodyBytes));
+    } catch (e) {
+      debugPrint('[ApiService] setDriverDirectoryConfig error: $e');
+      return {'success': false, 'message': 'خطا در ذخیره پوشه درایور: $e'};
+    }
+  }
+
+  Future<DriverScanResult> intelligentScanDrivers({String? folderPath}) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return DriverScanResult(success: false, message: 'سرویس بک‌اند در حال اجرا نیست.', driverDirectory: folderPath ?? '');
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/drivers/scan');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: json.encode({'folder_path': folderPath ?? ''}),
+      ).timeout(const Duration(seconds: 45));
+
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return DriverScanResult.fromJson(data);
+    } catch (e) {
+      debugPrint('[ApiService] intelligentScanDrivers error: $e');
+      return DriverScanResult(success: false, message: 'خطا در اسکن هوشمند درایورها: $e', driverDirectory: folderPath ?? '');
+    }
+  }
+
+  Future<Map<String, dynamic>> startDriverQueueInstall({List<String>? packageIds, String? folderPath}) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/drivers/queue/install');
+      final Map<String, dynamic> bodyMap = {};
+      if (packageIds != null) bodyMap['package_ids'] = packageIds;
+      if (folderPath != null) bodyMap['folder_path'] = folderPath;
+
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: json.encode(bodyMap),
+      ).timeout(const Duration(seconds: 15));
+
+      return json.decode(utf8.decode(response.bodyBytes));
+    } catch (e) {
+      debugPrint('[ApiService] startDriverQueueInstall error: $e');
+      return {'success': false, 'message': 'خطا در شروع صف نصب درایورها: $e'};
+    }
+  }
+
+  Future<DriverBatchStatus> getDriverQueueStatus() async {
+    return getDriverBatchStatus();
+  }
+
+  Future<Map<String, dynamic>> cancelDriverQueue() async {
+    return cancelDriverBatchInstall();
+  }
+
+  Future<List<Map<String, dynamic>>> getDriverInstallHistory() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return [];
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/drivers/history');
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('[ApiService] getDriverInstallHistory error: $e');
+      return [];
+    }
+  }
 }

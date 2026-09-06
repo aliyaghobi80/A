@@ -10,16 +10,21 @@ class DriverInstallController extends GetxController {
   final ApiService _apiService = ApiService();
 
   final RxString driverFolder = ''.obs;
-  final RxList<ScannedDriverFile> scannedFiles = <ScannedDriverFile>[].obs;
   final RxBool isScanning = false.obs;
   final RxBool isBatchInstalling = false.obs;
   final Rx<DriverBatchStatus> batchStatus = DriverBatchStatus.empty().obs;
+  final Rx<DriverScanResult> scanResult = DriverScanResult.empty().obs;
+  final RxSet<String> selectedPackageIds = <String>{}.obs;
+  final RxBool isAdvancedMode = false.obs;
+  final RxList<RemovableDriverSource> removableSources = <RemovableDriverSource>[].obs;
+  final RxList<ScannedDriverFile> scannedFiles = <ScannedDriverFile>[].obs; // For backwards compatibility
 
   Timer? _pollTimer;
 
   @override
   void onInit() {
     super.onInit();
+    _loadInitialConfig();
     _checkInitialDriverBatchStatus();
   }
 
@@ -27,6 +32,21 @@ class DriverInstallController extends GetxController {
   void onClose() {
     _pollTimer?.cancel();
     super.onClose();
+  }
+
+  Future<void> _loadInitialConfig() async {
+    try {
+      final cfg = await _apiService.getDriverDirectoryConfig();
+      final path = cfg['resolved_path'] as String? ?? cfg['configured_path'] as String? ?? 'Drivers';
+      driverFolder.value = path;
+
+      final rawRemovables = cfg['removable_sources'] as List<dynamic>? ?? [];
+      removableSources.value = rawRemovables
+          .map((e) => RemovableDriverSource.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('[DriverInstallController] Error loading driver config: $e');
+    }
   }
 
   Future<void> _checkInitialDriverBatchStatus() async {
@@ -41,6 +61,39 @@ class DriverInstallController extends GetxController {
     } catch (_) {}
   }
 
+  void toggleAdvancedMode() {
+    isAdvancedMode.value = !isAdvancedMode.value;
+  }
+
+  void togglePackageSelection(String packageId) {
+    if (selectedPackageIds.contains(packageId)) {
+      selectedPackageIds.remove(packageId);
+    } else {
+      selectedPackageIds.add(packageId);
+    }
+  }
+
+  void selectAllPackages() {
+    final pkgs = scanResult.value.packages;
+    // Select all installable packages that are matching
+    final installable = pkgs.where((p) {
+      final m = p.match;
+      if (m == null) return false;
+      return m.isMatched && m.recommendation == 'recommended';
+    }).map((p) => p.packageId);
+
+    if (installable.isEmpty) {
+      // Fallback: select all packages if none marked recommended
+      selectedPackageIds.addAll(pkgs.map((p) => p.packageId));
+    } else {
+      selectedPackageIds.addAll(installable);
+    }
+  }
+
+  void clearSelection() {
+    selectedPackageIds.clear();
+  }
+
   Future<void> selectFolderAndScan(BuildContext context) async {
     final selectedPath = await FolderPickerService.pickFolder(
       title: 'انتخاب پوشه حاوی فایل‌های نصبی درایور',
@@ -48,264 +101,74 @@ class DriverInstallController extends GetxController {
 
     if (selectedPath != null && selectedPath.isNotEmpty) {
       driverFolder.value = selectedPath;
+      await _apiService.setDriverDirectoryConfig(selectedPath);
       if (context.mounted) {
-        await scanFolder(context, selectedPath);
+        await scanDrivers(context, folderPath: selectedPath);
       }
     }
   }
 
-  Future<void> scanFolder(BuildContext context, String folderPath) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Future<void> selectRemovableSource(BuildContext context, RemovableDriverSource source) async {
+    driverFolder.value = source.driverPath;
+    await _apiService.setDriverDirectoryConfig(source.driverPath);
+    if (context.mounted) {
+      await scanDrivers(context, folderPath: source.driverPath);
+    }
+  }
+
+  Future<void> scanDrivers(BuildContext context, {String? folderPath}) async {
+    final targetPath = folderPath ?? driverFolder.value;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     isScanning.value = true;
+    selectedPackageIds.clear();
+
     try {
-      final res = await _apiService.scanDriverFolder(folderPath);
-      final success = res['success'] == true;
-      final rawFiles = res['files'] as List<dynamic>? ?? [];
+      final result = await _apiService.intelligentScanDrivers(folderPath: targetPath);
+      scanResult.value = result;
 
-      scannedFiles.value = rawFiles
-          .map((e) => ScannedDriverFile.fromJson(e as Map<String, dynamic>))
-          .toList();
-      final autoCount = scannedFiles
-          .where((file) => file.isValid && file.autoInstallSupported)
-          .length;
-      final blockedCount = scannedFiles.where((file) => !file.isValid).length;
-      final manualCount = scannedFiles.length - autoCount - blockedCount;
+      // Update removable sources if discovered
+      if (result.removableSources.isNotEmpty) {
+        removableSources.value = result.removableSources;
+      }
 
-      if (!success || scannedFiles.isEmpty) {
+      // Populate scannedFiles for backwards compatibility
+      scannedFiles.value = result.packages.map((p) => ScannedDriverFile(
+        filename: p.installerFile.isNotEmpty ? p.installerFile : p.displayName,
+        relativePath: p.relativePath,
+        fullPath: p.sourcePath,
+        type: p.packageType,
+        fileSizeDisplay: p.fileSizeDisplay,
+        installerType: p.installMethod,
+        autoInstallSupported: true,
+        isValid: true,
+      )).toList();
+
+      // Auto-select recommended packages
+      for (final p in result.packages) {
+        if (p.match != null && p.match!.isMatched && p.match!.recommendation == 'recommended') {
+          selectedPackageIds.add(p.packageId);
+        }
+      }
+
+      if (!result.success || result.packages.isEmpty) {
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
-              res['message'] as String? ??
-                  'هیچ فایل درایوری (.exe, .msi, .inf, .zip, .cab) در این پوشه یافت نشد.',
+              result.message.isNotEmpty
+                  ? result.message
+                  : 'هیچ بسته درایور معتبری در این پوشه شناسایی نشد.',
             ),
             backgroundColor: const Color(0xFFF59E0B),
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
           ),
         );
-        return;
-      }
-
-      // Show confirmation dialog with list of discovered drivers
-      if (context.mounted) {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogCtx) => AlertDialog(
-            backgroundColor: isDark ? const Color(0xFF131D33) : Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0D9488).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.drive_file_rename_outline_rounded,
-                    color: Color(0xFF0D9488),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'درایورهای یافت‌شده برای نصب خودکار',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: isDark
-                        ? const Color(0xFFF1F5F9)
-                        : const Color(0xFF0F172A),
-                  ),
-                ),
-              ],
-            ),
-            content: SizedBox(
-              width: 500,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${scannedFiles.length} فایل یافت شد: $autoCount خودکار، $manualCount دستی و $blockedCount مسدود',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isDark
-                          ? const Color(0xFFE2E8F0)
-                          : const Color(0xFF1E293B),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    folderPath,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontFamily: 'Consolas',
-                      color: isDark
-                          ? const Color(0xFF94A3B8)
-                          : const Color(0xFF64748B),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    constraints: const BoxConstraints(maxHeight: 220),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF0F172A)
-                          : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isDark
-                            ? const Color(0xFF1E293B)
-                            : const Color(0xFFE2E8F0),
-                      ),
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: scannedFiles.length,
-                      separatorBuilder: (context, index) =>
-                          const Divider(height: 8),
-                      itemBuilder: (_, idx) {
-                        final file = scannedFiles[idx];
-                        Color typeColor = const Color(0xFF2563EB);
-                        if (file.type == 'inf') {
-                          typeColor = const Color(0xFF10B981);
-                        }
-                        if (file.type == 'msi') {
-                          typeColor = const Color(0xFF8B5CF6);
-                        }
-                        if (!file.isValid) typeColor = const Color(0xFFEF4444);
-                        if (file.isValid && !file.autoInstallSupported) {
-                          typeColor = const Color(0xFFF59E0B);
-                        }
-
-                        return Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: typeColor.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                file.type.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: typeColor,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                file.filename,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isDark
-                                      ? const Color(0xFFCBD5E1)
-                                      : const Color(0xFF334155),
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Text(
-                              file.fileSizeDisplay,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: isDark
-                                    ? const Color(0xFF64748B)
-                                    : const Color(0xFF94A3B8),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Tooltip(
-                              message: file.validationError ?? '',
-                              child: Icon(
-                                !file.isValid
-                                    ? Icons.gpp_bad_outlined
-                                    : (file.autoInstallSupported
-                                          ? Icons.check_circle_outline
-                                          : Icons.pan_tool_outlined),
-                                size: 16,
-                                color: typeColor,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0D9488).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline_rounded,
-                          size: 18,
-                          color: Color(0xFF0D9488),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'نصب درایورها به ترتیب و به صورت کاملاً خودکار انجام می‌شود و ری‌استارت خودکار جلوگیری خواهد شد.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF0D9488),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogCtx).pop(false),
-                child: const Text('انصراف'),
-              ),
-              ElevatedButton.icon(
-                onPressed: autoCount > 0
-                    ? () => Navigator.of(dialogCtx).pop(true)
-                    : null,
-                icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0D9488),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                label: Text('شروع نصب خودکار ($autoCount)'),
-              ),
-            ],
-          ),
-        );
-
-        if (confirmed == true && context.mounted) {
-          await startDriverAutoInstall(context, folderPath);
-        }
       }
     } catch (e) {
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('خطا در اسکن پوشه: $e'),
+          content: Text('خطا در اسکن درایورها: $e'),
           backgroundColor: const Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
         ),
@@ -315,21 +178,228 @@ class DriverInstallController extends GetxController {
     }
   }
 
-  Future<void> startDriverAutoInstall(
-    BuildContext context,
-    String folderPath,
-  ) async {
+  // Compatibility wrapper
+  Future<void> scanFolder(BuildContext context, String folderPath) async {
+    await scanDrivers(context, folderPath: folderPath);
+  }
+
+  Future<void> installSelectedDrivers(BuildContext context) async {
+    if (selectedPackageIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لطفاً حداقل یک بسته درایور را انتخاب کنید.'),
+          backgroundColor: Color(0xFFF59E0B),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final selectedCount = selectedPackageIds.length;
+    final confirmed = await _showInstallConfirmationDialog(
+      context,
+      title: 'تأیید نصب درایورهای انتخاب‌شده',
+      message: 'تعداد $selectedCount بسته درایور در صف نصب خودکار قرار خواهند گرفت.',
+      packageIds: selectedPackageIds.toList(),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await _executeDriverQueue(context, packageIds: selectedPackageIds.toList());
+    }
+  }
+
+  Future<void> installAllDrivers(BuildContext context) async {
+    final pkgs = scanResult.value.packages;
+    final recommended = pkgs.where((p) {
+      final m = p.match;
+      return m != null && m.isMatched && m.recommendation == 'recommended';
+    }).toList();
+
+    final targetList = recommended.isNotEmpty ? recommended : pkgs;
+
+    if (targetList.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('هیچ بسته درایور معتبری برای نصب وجود ندارد.'),
+          backgroundColor: Color(0xFFF59E0B),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await _showInstallConfirmationDialog(
+      context,
+      title: 'تأیید نصب همه درایورها',
+      message: 'تمامی بسته‌های معتبر و سازگار (${targetList.length} بسته) به ترتیب در صف نصب قرار خواهند گرفت.',
+      packageIds: targetList.map((p) => p.packageId).toList(),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await _executeDriverQueue(
+        context,
+        packageIds: targetList.map((p) => p.packageId).toList(),
+      );
+    }
+  }
+
+  Future<bool?> _showInstallConfirmationDialog(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required List<String> packageIds,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pkgs = scanResult.value.packages.where((p) => packageIds.contains(p.packageId)).toList();
+
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF131D33) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D9488).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.extension_rounded, color: Color(0xFF0D9488), size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                message,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 220),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: pkgs.length,
+                  separatorBuilder: (context, index) => const Divider(height: 8),
+                  itemBuilder: (_, idx) {
+                    final p = pkgs[idx];
+                    return Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0D9488).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            p.categoryFa,
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            p.displayName,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          p.fileSizeDisplay,
+                          style: TextStyle(fontSize: 11, color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D9488).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.shield_outlined, size: 18, color: Color(0xFF0D9488)),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'نصب با دسترسی Administrator و ترتیب اولویت استاندارد (چیپست، شبکه، صدا، گرافیک) انجام خواهد شد.',
+                        style: TextStyle(fontSize: 11.5, color: Color(0xFF0D9488)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('انصراف'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            icon: const Icon(Icons.play_arrow_rounded, size: 18),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D9488),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            label: Text('شروع صف نصب (${pkgs.length})'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _executeDriverQueue(BuildContext context, {List<String>? packageIds}) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     isBatchInstalling.value = true;
 
     try {
-      final res = await _apiService.startDriverBatchInstall(folderPath);
+      final res = await _apiService.startDriverQueueInstall(
+        packageIds: packageIds,
+        folderPath: driverFolder.value,
+      );
+
       if (res['success'] == true) {
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(
-              res['message'] as String? ?? 'نصب خودکار درایورها شروع شد...',
-            ),
+            content: Text(res['message'] as String? ?? 'صف نصب درایورها شروع شد...'),
             backgroundColor: const Color(0xFF0D9488),
             duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
@@ -340,9 +410,7 @@ class DriverInstallController extends GetxController {
         isBatchInstalling.value = false;
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(
-              res['message'] as String? ?? 'خطا در شروع نصب درایورها.',
-            ),
+            content: Text(res['message'] as String? ?? 'خطا در شروع صف نصب درایورها.'),
             backgroundColor: const Color(0xFFEF4444),
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
@@ -363,30 +431,31 @@ class DriverInstallController extends GetxController {
 
   void _startDriverBatchPolling(ScaffoldMessengerState? scaffoldMessenger) {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
-      timer,
-    ) async {
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
       try {
-        final status = await _apiService.getDriverBatchStatus();
+        final status = await _apiService.getDriverQueueStatus();
         batchStatus.value = status;
 
         if (!status.isRunning) {
           timer.cancel();
           isBatchInstalling.value = false;
 
-          // Refresh system info to update driver status and record driver install
+          // Refresh system info to update driver status
           try {
             if (Get.isRegistered<SystemInfoController>()) {
               if (status.completed > 0) {
-                Get.find<SystemInfoController>().recordDriverInstall(
-                  status.completed,
-                );
+                Get.find<SystemInfoController>().recordDriverInstall(status.completed);
               }
-              Get.find<SystemInfoController>().fetchSystemInfo(
-                forceRefresh: true,
-              );
+              Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
             }
           } catch (_) {}
+
+          // Rescan driver folder to update UI badges
+          if (driverFolder.value.isNotEmpty) {
+            _apiService.intelligentScanDrivers(folderPath: driverFolder.value).then((res) {
+              scanResult.value = res;
+            });
+          }
 
           if (scaffoldMessenger != null && status.summaryMessage.isNotEmpty) {
             scaffoldMessenger.showSnackBar(
@@ -400,17 +469,83 @@ class DriverInstallController extends GetxController {
               ),
             );
           }
+
+          // If reboot is required, show reboot dialog
+          if (status.rebootRequired) {
+            _showRebootRequiredDialog();
+          }
         }
       } catch (e) {
-        debugPrint('[DriverInstallController] Batch poll error: $e');
+        debugPrint('[DriverInstallController] Queue poll error: $e');
       }
     });
+  }
+
+  void _showRebootRequiredDialog() {
+    final context = Get.context;
+    if (context == null) return;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF131D33) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.restart_alt_rounded, color: Color(0xFFF59E0B), size: 24),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'نیاز به راه‌اندازی مجدد سیستم',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'برای اعمال کامل درایورهای نصب‌شده، سیستم‌عامل ویندوز نیازمند راه‌اندازی مجدد (Restart) است.\nآیا مایلید سیستم هم‌اکنون ری‌استارت شود؟',
+          style: TextStyle(
+            fontSize: 13.5,
+            height: 1.6,
+            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+          ),
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('بعداً ری‌استارت شود'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(dialogCtx).pop();
+              _apiService.restartSystem(delaySeconds: 5, reason: 'اعمال درایورهای نصب‌شده');
+            },
+            icon: const Icon(Icons.restart_alt_rounded, size: 16),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF59E0B),
+              foregroundColor: Colors.white,
+            ),
+            label: const Text('راه‌اندازی مجدد هم‌اکنون'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> cancelDriverAutoInstall(BuildContext context) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     try {
-      final res = await _apiService.cancelDriverBatchInstall();
+      final res = await _apiService.cancelDriverQueue();
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text(res['message'] as String? ?? 'دستور لغو ارسال شد.'),
