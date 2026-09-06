@@ -237,6 +237,33 @@ void main() {
     expect(resp.summary.availableToInstall, 1);
   });
 
+  test('SoftwarePackage parses portable tools correctly with isPortable and open action', () {
+    final wubJson = {
+      'id': 'wub_x64',
+      'name': 'Windows Update Blocker',
+      'filename': 'Wub_x64.exe',
+      'relative_path': 'Tools/Wub_x64.exe',
+      'full_path': r'C:\Packages\Tools\Wub_x64.exe',
+      'version': '1.8',
+      'publisher': 'Sordum.org',
+      'is_valid': true,
+      'status': 'Ready to Run',
+      'is_installed': true,
+      'is_portable_tool': true,
+      'can_open_tool': true,
+      'install_allowed': false,
+      'has_icon': true,
+      'installed_exe_path': r'C:\Packages\Tools\Wub_x64.exe'
+    };
+
+    final pkg = SoftwarePackage.fromJson(wubJson);
+    expect(pkg.isPortable, true);
+    expect(pkg.isPortableTool, true);
+    expect(pkg.canOpenTool, true);
+    expect(pkg.installAllowed, false);
+    expect(pkg.installPathTooltip.contains('ابزار پرتابل'), true);
+  });
+
   test('WindowsActivationInfo & OfficeActivationInfo parse correctly from json', () {
     final winJson = {
       'status': 'Licensed',

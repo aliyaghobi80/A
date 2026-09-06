@@ -720,6 +720,81 @@ def _load_matching_manifest(folder: str, filename: str) -> Dict[str, Any]:
         return {}
 
 
+_PORTABLE_TOOL_STEMS = {
+    "wub", "wub_x64", "wub32", "wub_x86", "wubx64", "wubx86",
+    "windowsupdateblocker", "windows_update_blocker",
+    "dcontrol", "dcontrol_x64", "defendercontrol", "defender_control",
+    "rufus", "rufus_x86", "rufus_x64",
+    "cpuz", "cpu-z", "cpu_z", "cpuz_x64", "cpuz_x32",
+    "gpuz", "gpu-z", "gpu_z",
+    "hwmonitor", "hwmonitor_x64", "hwmonitor_x32",
+    "crystaldiskinfo", "diskinfo", "diskinfo64", "diskinfo32",
+    "crystaldiskmark", "diskmark", "diskmark64", "diskmark32",
+    "coretemp", "core_temp", "core-temp",
+    "kmsauto", "kmsauto_net", "kmsauto_lite",
+    "aact", "aact_x64", "aact_portable",
+    "mas", "mas_aio", "microsoft_activation_scripts",
+    "heu_kms", "kms_vl_all",
+    "anydesk", "teamviewer_qs", "teamviewerqs"
+}
+
+_PORTABLE_KEYWORDS = (
+    "windows update blocker",
+    "update blocker",
+    "defender control",
+    "rufus",
+    "kmsauto",
+    "aact portable",
+    "crystaldiskinfo",
+    "crystaldiskmark",
+    "hwmonitor",
+    "gpu-z",
+    "cpu-z",
+    "core temp",
+)
+
+
+def _is_portable_tool(
+    file_path: str,
+    metadata: Optional[Dict[str, str]] = None,
+    manifest: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Checks whether an executable file is a standalone / portable utility rather than an installer."""
+    if manifest:
+        if (
+            manifest.get("is_portable")
+            or manifest.get("portable")
+            or str(manifest.get("type", "")).lower() in ("portable", "tool", "standalone")
+            or str(manifest.get("action", "")).lower() == "open"
+            or str(manifest.get("category", "")).lower() in ("portable", "tool", "tools")
+        ):
+            return True
+
+    filename = os.path.basename(file_path).lower()
+    stem = os.path.splitext(filename)[0]
+    bare_stem = re.sub(r'[_\-\.\s]*(x64|x86|64bit|32bit|v?[\d]+[\d\.]*)[_\-\.\s]*$', '', stem)
+
+    if stem in _PORTABLE_TOOL_STEMS or bare_stem in _PORTABLE_TOOL_STEMS:
+        return True
+
+    if any(stem.startswith(s) for s in ("wub", "dcontrol", "rufus")):
+        return True
+
+    if "wub" in stem or "update_blocker" in stem or "updateblocker" in stem:
+        return True
+
+    parent_dir = os.path.basename(os.path.dirname(file_path)).lower()
+    if parent_dir in ("portable", "ابزار", "ابزارها", "tools", "utilities", "wub", "kms") or "portable" in parent_dir or "wub" in parent_dir:
+        return True
+
+    if metadata:
+        meta_text = f"{metadata.get('product_name', '')} {metadata.get('file_description', '')}".lower()
+        if any(kw in meta_text for kw in _PORTABLE_KEYWORDS):
+            return True
+
+    return False
+
+
 def _validate_installer(
     file_path: str,
     metadata: Dict[str, str],
@@ -776,7 +851,19 @@ def _validate_installer(
                 "trust_level": "blocked",
             }
 
-        has_installer_signal = bool(manifest) or installer_type != "unknown" or any(
+        if _is_portable_tool(file_path, metadata, manifest):
+            return {
+                "is_valid": True,
+                "is_portable_tool": True,
+                "can_open_tool": True,
+                "validation_code": "portable_tool",
+                "validation_error": None,
+                "auto_install_supported": False,
+                "manual_install_supported": False,
+                "trust_level": "portable_tool",
+            }
+
+        has_installer_signal = bool(manifest) or installer_type not in ("unknown", "portable") or any(
             word in f"{filename} {description} {product}".lower()
             for word in ("setup", "installer", "install", "deployment", "bootstrapper")
         )
@@ -1104,13 +1191,24 @@ def _folder_display_name(root: str, pkg_dir: str) -> Optional[str]:
         return None
     return folder_name.replace("_", " ").replace("-", " ").strip()
 
-def _is_ignored_file_or_dir(root: str, filename: str) -> bool:
+def _is_ignored_file_or_dir(root: str, filename: str, base_dir: Optional[str] = None) -> bool:
     """Checks if a file or directory is an internal backend/system artifact that must not be scanned."""
     fn_lower = filename.lower()
     root_lower = root.lower().replace("\\", "/")
 
-    # Check root path components
-    path_parts = root_lower.split("/")
+    # Check root path components relative to base_dir if provided
+    if base_dir:
+        try:
+            rel = os.path.relpath(root, base_dir).replace("\\", "/")
+            if rel != ".":
+                path_parts = [p.lower() for p in rel.split("/") if p]
+            else:
+                path_parts = []
+        except Exception:
+            path_parts = root_lower.split("/")
+    else:
+        path_parts = root_lower.split("/")
+
     if any(part in IGNORED_SCAN_DIR_NAMES for part in path_parts):
         return True
 
@@ -1158,7 +1256,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             if extension not in SUPPORTED_PACKAGE_EXTENSIONS:
                 continue
 
-            if _is_ignored_file_or_dir(root, file):
+            if _is_ignored_file_or_dir(root, file, pkg_dir):
                 continue
 
             full_path = os.path.abspath(os.path.join(root, file))
@@ -1285,21 +1383,37 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
                 except Exception:
                     pass
 
-        status = "Installed" if is_installed else "Not Installed"
+        is_portable = bool(validation.get("is_portable_tool", False))
+        if is_portable:
+            installed_exe_path = full_path
+            install_location = os.path.dirname(full_path)
+            is_installed = True
+            status = "Ready to Run"
+        else:
+            status = "Installed" if is_installed else "Not Installed"
 
         # Resolve accurate display name
         prod_meta = meta.get("product_name", "").lower()
         is_generic_pe = "operating system" in prod_meta or "windows" in prod_meta
         clean_file_title = os.path.splitext(file)[0].replace("_", " ").replace("-", " ").replace(".", " ").strip().title()
 
+        _file_stem = os.path.splitext(file)[0].lower()
+        if _file_stem in ("wub", "wub_x64", "wub32", "wub_x86", "wubx64"):
+            display_name = "Windows Update Blocker"
+        elif _file_stem in ("dcontrol", "dcontrol_x64"):
+            display_name = "Defender Control"
+
         # Priority:
-        # 1. Matched registry app name (if installed) - always most accurate
-        # 2. Folder fallback name (if filename is generic like setup.exe) - user-visible folder name
+        # 1. Portable tool friendly name or display name
+        # 2. Matched registry app name (if installed) - always most accurate
+        # 3. Folder fallback name (if filename is generic like setup.exe) - user-visible folder name
         #    is more meaningful than internal branding like "Adobe Self Extractor"
-        # 3. display_name from metadata/manifest (if not generic OS binary)
-        # 4. Folder fallback name as secondary fallback
-        # 5. Cleaned filename as last resort
-        if is_installed and matched_app_name:
+        # 4. display_name from metadata/manifest (if not generic OS binary)
+        # 5. Folder fallback name as secondary fallback
+        # 6. Cleaned filename as last resort
+        if is_portable:
+            final_name = display_name or clean_file_title
+        elif is_installed and matched_app_name:
             final_name = matched_app_name
         elif folder_fallback_name and is_generic_filename:
             # Folder name takes priority for generic installers (setup.exe, install.exe)
@@ -1326,7 +1440,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "file_size_bytes": file_size,
             "file_size_display": _format_file_size(file_size),
             "package_format": extension.lstrip(".").upper(),
-            "installer_type": installer_type,
+            "installer_type": "portable" if is_portable else installer_type,
             "is_valid": validation["is_valid"],
             "validation_code": validation["validation_code"],
             "validation_error": validation["validation_error"],
@@ -1336,12 +1450,12 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "installed_version": installed_version if is_installed else "Not available",
             "installed_exe_path": installed_exe_path,
             "install_location": install_location or (os.path.dirname(installed_exe_path) if installed_exe_path else None),
-            "detection_source": detection["detection_source"],
-            "is_portable_tool": bool(validation.get("is_portable_tool", False)),
-            "can_open_tool": bool(validation.get("can_open_tool", False)),
-            "install_allowed": bool(validation["is_valid"] and validation["manual_install_supported"] and not is_installed),
-            "auto_install_supported": bool(validation["auto_install_supported"] and not is_installed),
-            "manual_install_supported": bool(validation["manual_install_supported"] and not is_installed),
+            "detection_source": "portable_tool" if is_portable else detection["detection_source"],
+            "is_portable_tool": is_portable,
+            "can_open_tool": is_portable or bool(validation.get("can_open_tool", False)),
+            "install_allowed": False if is_portable else bool(validation["is_valid"] and validation["manual_install_supported"] and not is_installed),
+            "auto_install_supported": False if is_portable else bool(validation["auto_install_supported"] and not is_installed),
+            "manual_install_supported": False if is_portable else bool(validation["manual_install_supported"] and not is_installed),
             "has_icon": icon_data is not None,
             "icon_base64": icon_data,
             "silent_arguments": silent_args,
@@ -1584,6 +1698,9 @@ def _guess_installer_type(exe_path: str) -> str:
         return ext.lstrip(".")
     if ext != ".exe":
         return "unknown"
+
+    if _is_portable_tool(exe_path):
+        return "portable"
 
     fname = os.path.basename(exe_path).lower()
     parent = os.path.basename(os.path.dirname(exe_path)).lower()

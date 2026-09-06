@@ -674,7 +674,7 @@ class PackagesCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          if (!pkg.isValid && !pkg.isPortableTool && !pkg.canOpenTool)
+          if (!pkg.isValid && !pkg.isPortable)
             Tooltip(
               message: pkg.validationError ?? statusText,
               child: Container(
@@ -701,11 +701,11 @@ class PackagesCard extends StatelessWidget {
                 ),
               ),
             )
-          else if (pkg.isPortableTool || pkg.canOpenTool)
+          else if (pkg.isPortable)
             ElevatedButton.icon(
               onPressed: onOpen != null ? () => onOpen!(pkg) : null,
-              icon: const Icon(Icons.play_arrow_rounded, size: 14),
-              label: Text(l10n.isPersian ? 'باز کردن ابزار' : 'Open Tool'),
+              icon: const Icon(Icons.open_in_new_rounded, size: 14),
+              label: Text(l10n.isPersian ? 'باز کردن' : 'Open'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0284C7),
                 foregroundColor: Colors.white,

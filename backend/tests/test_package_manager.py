@@ -109,6 +109,54 @@ class PackageManagerTests(unittest.TestCase):
         formats = {item["filename"]: item["package_format"] for item in result["packages"]}
         self.assertEqual(formats["Agent.msi"], "MSI")
 
+    def test_wub_and_portable_tools_classified_as_portable_tool(self):
+        for tool_name in ("Wub.exe", "Wub_x64.exe", "dcontrol.exe", "rufus.exe", "AnyDesk.exe"):
+            with self.subTest(tool=tool_name):
+                result = manager._validate_installer(
+                    rf"C:\Packages\{tool_name}",
+                    {"product_name": "", "file_description": "", "publisher": ""},
+                    "unknown",
+                    {},
+                )
+                self.assertTrue(result["is_valid"])
+                self.assertTrue(result["is_portable_tool"])
+                self.assertTrue(result["can_open_tool"])
+                self.assertFalse(result["auto_install_supported"])
+                self.assertFalse(result["manual_install_supported"])
+                self.assertEqual(result["validation_code"], "portable_tool")
+
+    def test_scan_packages_marks_wub_with_open_action_and_installed_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wub_path = os.path.join(temp_dir, "Wub_x64.exe")
+            with open(wub_path, "wb") as f:
+                f.write(b"MZ" + b"\x00" * 100)
+
+            wub_meta = {
+                "product_name": "Windows Update Blocker",
+                "file_description": "Windows Update Blocker v1.8",
+                "publisher": "Sordum.org",
+                "version": "1.8",
+                "original_filename": "Wub_x64.exe",
+                "display_name": "Windows Update Blocker",
+            }
+            with (
+                mock.patch.object(manager, "get_packages_directory", return_value=temp_dir),
+                mock.patch.object(manager, "get_all_installed_registry_apps", return_value=[]),
+                mock.patch.object(manager, "_extract_icons_batch", return_value={}),
+                mock.patch.object(manager, "_extract_exe_metadata", return_value=wub_meta),
+                mock.patch.object(manager, "_resolve_known_executable", return_value=None),
+            ):
+                result = manager.scan_packages(temp_dir)
+
+        self.assertEqual(result["summary"]["total_packages"], 1)
+        pkg = result["packages"][0]
+        self.assertTrue(pkg["is_portable_tool"])
+        self.assertTrue(pkg["can_open_tool"])
+        self.assertFalse(pkg["install_allowed"])
+        self.assertEqual(pkg["installed_exe_path"], wub_path)
+        self.assertEqual(pkg["name"], "Windows Update Blocker")
+        self.assertEqual(pkg["status"], "Ready to Run")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -491,16 +491,20 @@ class SoftwareController extends GetxController {
     );
 
     try {
-      // 1. If installedExePath is known, open directly from Flutter desktop session
-      if (pkg.installedExePath != null &&
-          pkg.installedExePath!.isNotEmpty &&
+      // 1. If installedExePath or fullPath for portable tools is known, open directly from Flutter desktop session
+      final directExe = (pkg.installedExePath != null && pkg.installedExePath!.isNotEmpty)
+          ? pkg.installedExePath!
+          : (pkg.isPortable && pkg.fullPath.isNotEmpty ? pkg.fullPath : null);
+
+      if (directExe != null &&
+          directExe.isNotEmpty &&
           Platform.isWindows) {
         try {
           await Process.run('cmd.exe', [
             '/c',
             'start',
             '',
-            pkg.installedExePath!,
+            directExe,
           ], runInShell: true);
           scaffoldMessenger.showSnackBar(
             SnackBar(

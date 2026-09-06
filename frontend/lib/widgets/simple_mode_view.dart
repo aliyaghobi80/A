@@ -3273,12 +3273,12 @@ class SimpleModeView extends StatelessWidget {
                 ),
               ),
             )
-          else if (pkg.isPortableTool || pkg.canOpenTool)
+          else if (pkg.isPortable)
             ElevatedButton.icon(
               onPressed: () => softwareCtrl.openInstalledApp(context, pkg),
-              icon: const Icon(Icons.play_arrow_rounded, size: 16),
+              icon: const Icon(Icons.open_in_new_rounded, size: 16),
               label: Text(
-                l10n.isPersian ? 'باز کردن ابزار' : 'Open Tool',
+                l10n.isPersian ? 'باز کردن' : 'Open',
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,

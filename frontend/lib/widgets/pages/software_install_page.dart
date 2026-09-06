@@ -43,13 +43,15 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
         return true;
       }).toList();
 
-      final readyPackages = visiblePackages.where((p) => !p.isInstalled && p.isValid).toList();
-      final installedPackages = visiblePackages.where((p) => p.isInstalled).toList();
+      final readyPackages = visiblePackages.where((p) => !p.isInstalled && p.isValid && !p.isPortable).toList();
+      final installedPackages = visiblePackages.where((p) => p.isInstalled && !p.isPortable).toList();
+      final portablePackages = visiblePackages.where((p) => p.isPortable).toList();
 
       final filteredPackages = visiblePackages.where((p) {
         if (selectedCategory == 'all') return true;
-        if (selectedCategory == 'ready') return !p.isInstalled && p.isValid;
-        if (selectedCategory == 'installed') return p.isInstalled;
+        if (selectedCategory == 'ready') return !p.isInstalled && p.isValid && !p.isPortable;
+        if (selectedCategory == 'installed') return p.isInstalled && !p.isPortable;
+        if (selectedCategory == 'portable' || selectedCategory == 'tools') return p.isPortable;
         return p.publisher.toLowerCase().contains(selectedCategory.toLowerCase()) ||
             p.name.toLowerCase().contains(selectedCategory.toLowerCase());
       }).toList();
@@ -183,6 +185,10 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                           _buildFilterTab('ready', 'آماده نصب (${readyPackages.length})', isDark, accent),
                           const SizedBox(width: 6),
                           _buildFilterTab('installed', 'نصب شده (${installedPackages.length})', isDark, accent),
+                          if (portablePackages.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            _buildFilterTab('portable', 'ابزارها (${portablePackages.length})', isDark, accent),
+                          ],
                         ],
                       ),
                       Row(
@@ -380,7 +386,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
       ),
       child: Row(
         children: [
-          if (!isInstalled && pkg.isValid) ...[
+          if (!isInstalled && pkg.isValid && !pkg.isPortable) ...[
             Checkbox(
               value: isSelected,
               activeColor: accent,
@@ -466,8 +472,12 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
           // Status Badge
           StatusBadge(
-            label: isInstalled ? 'نصب شده' : 'آماده نصب',
-            status: isInstalled ? BadgeStatus.success : BadgeStatus.info,
+            label: pkg.isPortable
+                ? 'آماده اجرا'
+                : (isInstalled ? 'نصب شده' : 'آماده نصب'),
+            status: pkg.isPortable
+                ? BadgeStatus.info
+                : (isInstalled ? BadgeStatus.success : BadgeStatus.info),
             fontSize: 12,
           ),
 
@@ -476,6 +486,18 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
           // Action Button
           if (isInstalling)
             const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+          else if (pkg.isPortable)
+            ElevatedButton.icon(
+              onPressed: () => ctrl.openInstalledApp(context, pkg),
+              icon: const Icon(Icons.open_in_new_rounded, size: 15),
+              label: const Text('باز کردن'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                minimumSize: const Size(0, 32),
+              ),
+            )
           else if (isInstalled)
             Row(
               mainAxisSize: MainAxisSize.min,

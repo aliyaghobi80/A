@@ -424,7 +424,15 @@ class SoftwarePackage {
     this.canOpenTool = false,
   });
 
+  bool get isPortable => isPortableTool || canOpenTool;
+
   String get installPathTooltip {
+    if (isPortable) {
+      final exe = (installedExePath != null && installedExePath!.isNotEmpty)
+          ? installedExePath!
+          : fullPath;
+      return 'ابزار پرتابل و آماده اجرا:\n$exe';
+    }
     if (isInstalled) {
       if (installedExePath != null && installedExePath!.isNotEmpty) {
         return 'مسیر نصب:\n$installedExePath';
