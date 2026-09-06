@@ -15,36 +15,21 @@ def get_storage_info() -> List[Dict[str, Any]]:
     drives: List[Dict[str, Any]] = []
 
     try:
-        # Query Get-PhysicalDisk
-        script_msft = (
-            "Get-PhysicalDisk | "
-            "Select-Object DeviceId, FriendlyName, MediaType, BusType, Size, SerialNumber, HealthStatus, OperationalStatus, Model, PartNumber | "
+        # Fast query: Win32_DiskDrive via Get-CimInstance (~0.4s vs ~2.3s for Get-PhysicalDisk)
+        script_wmi = (
+            "Get-CimInstance Win32_DiskDrive | "
+            "Select-Object DeviceID, Index, Model, MediaType, Size, InterfaceType, SerialNumber, PartNumber | "
             "ConvertTo-Json"
         )
-        data_msft = run_powershell_json(script_msft)
-
-        if isinstance(data_msft, dict):
-            raw_msft = [data_msft]
-        elif isinstance(data_msft, list):
-            raw_msft = data_msft
+        data_wmi = run_powershell_json(script_wmi, timeout=6)
+        if isinstance(data_wmi, dict):
+            raw_wmi = [data_wmi]
+        elif isinstance(data_wmi, list):
+            raw_wmi = data_wmi
         else:
-            raw_msft = []
+            raw_wmi = []
 
-        # Fallback to Win32_DiskDrive if Get-PhysicalDisk is empty
-        if not raw_msft:
-            script_wmi = (
-                "Get-CimInstance Win32_DiskDrive | "
-                "Select-Object DeviceID, Index, Model, MediaType, Size, InterfaceType, SerialNumber, PartNumber | "
-                "ConvertTo-Json"
-            )
-            data_wmi = run_powershell_json(script_wmi)
-            if isinstance(data_wmi, dict):
-                raw_wmi = [data_wmi]
-            elif isinstance(data_wmi, list):
-                raw_wmi = data_wmi
-            else:
-                raw_wmi = []
-
+        if raw_wmi:
             for i, disk in enumerate(raw_wmi):
                 idx = disk.get("Index") or i
                 try:
@@ -65,8 +50,16 @@ def get_storage_info() -> List[Dict[str, Any]]:
                 bus_type = clean_string(disk.get("InterfaceType"), default="SATA")
                 media_type = clean_string(disk.get("MediaType"), default="Fixed hard disk media")
 
-                norm = normalize_storage_info(friendly, friendly, bus_type, media_type)
                 health_data = query_physical_drive_health(idx_int, bus_type, media_type, friendly)
+
+                # Refine bus & media type from NVMe direct IOCTL probe or model keywords
+                if "NVMe" in health_data.get("source", "") or "NVMe" in health_data.get("health_source", "") or "NVME" in friendly.upper():
+                    bus_type = "NVMe"
+                    media_type = "SSD"
+                elif bus_type.upper() in ("IDE", "SCSI", "ATAPI"):
+                    bus_type = "SATA"
+
+                norm = normalize_storage_info(friendly, friendly, bus_type, media_type)
 
                 drives.append({
                     "device_id": str(idx_int),
@@ -100,6 +93,21 @@ def get_storage_info() -> List[Dict[str, Any]]:
                     "diagnostic_error": health_data["diagnostic_error"]
                 })
             return drives
+
+        # Fallback: Query MSFT_PhysicalDisk if Win32_DiskDrive was empty
+        script_msft = (
+            "Get-PhysicalDisk | "
+            "Select-Object DeviceId, FriendlyName, MediaType, BusType, Size, SerialNumber, HealthStatus, OperationalStatus, Model, PartNumber | "
+            "ConvertTo-Json"
+        )
+        data_msft = run_powershell_json(script_msft, timeout=8)
+
+        if isinstance(data_msft, dict):
+            raw_msft = [data_msft]
+        elif isinstance(data_msft, list):
+            raw_msft = data_msft
+        else:
+            raw_msft = []
 
         # Process MSFT_PhysicalDisk results
         for disk in raw_msft:

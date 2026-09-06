@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -26,6 +27,9 @@ import 'widgets/pages/tools_source_folders_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Pre-warm backend process asynchronously in parallel with Flutter startup
+  unawaited(BackendProcessManager.ensureBackendRunning());
+
   final settings = await SettingsService.loadSettings();
 
   // Initialize GetX Controllers

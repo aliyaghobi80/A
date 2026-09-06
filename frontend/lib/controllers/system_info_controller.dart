@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
 import '../services/api_service.dart';
+import '../services/cache_service.dart';
 import '../services/folder_picker_service.dart';
 
 class SystemInfoController extends GetxController {
@@ -49,8 +50,20 @@ class SystemInfoController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _loadCacheAndFetch();
+  }
+
+  Future<void> _loadCacheAndFetch() async {
+    try {
+      final cached = await CacheService.loadCachedSystemInfo();
+      if (cached != null) {
+        systemInfo.value = cached;
+        isLoading.value = false;
+      }
+    } catch (_) {}
     fetchSystemInfo();
   }
+
 
   Future<void> changeFileRequirementPath(
     BuildContext context,
@@ -102,7 +115,7 @@ class SystemInfoController extends GetxController {
   }
 
   Future<void> fetchSystemInfo({bool forceRefresh = false}) async {
-    if (forceRefresh) {
+    if (forceRefresh || systemInfo.value != null) {
       isRefreshing.value = true;
     } else {
       isLoading.value = true;
@@ -115,7 +128,9 @@ class SystemInfoController extends GetxController {
       );
       systemInfo.value = info;
     } catch (e) {
-      errorMessage.value = e.toString();
+      if (systemInfo.value == null) {
+        errorMessage.value = e.toString();
+      }
     } finally {
       isLoading.value = false;
       isRefreshing.value = false;

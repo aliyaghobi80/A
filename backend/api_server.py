@@ -35,9 +35,42 @@ from qc.qc_engine import evaluate_system_qc
 
 logger = logging.getLogger(__name__)
 
-# In-memory cached result
+# Persistent system information cache
+def _get_cache_filepath() -> str:
+    appdata = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA")
+    if appdata:
+        d = os.path.join(appdata, "CentralSystemChecker")
+        try:
+            os.makedirs(d, exist_ok=True)
+            return os.path.join(d, "system_info_cache.json")
+        except Exception:
+            pass
+    return os.path.join(_backend_dir, "system_cache.json")
+
+def _load_cached_system_info() -> Optional[dict]:
+    try:
+        p = _get_cache_filepath()
+        if os.path.isfile(p):
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and data.get("status") == "success":
+                    logger.info(f"Loaded persistent system cache from {p}")
+                    return data
+    except Exception as e:
+        logger.debug(f"Failed to load cached system info: {e}")
+    return None
+
+def _save_cached_system_info(data: dict):
+    try:
+        p = _get_cache_filepath()
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.debug(f"Failed to save cached system info: {e}")
+
 _cache_lock = threading.Lock()
-_cached_data: Optional[dict] = None
+_cached_data: Optional[dict] = _load_cached_system_info()
+
 
 class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
     
@@ -87,13 +120,14 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             threading.Thread(target=_delayed_exit, daemon=True).start()
             return
 
-        elif path == "/api/system-info":
+        elif path == "/api/system-info" or path == "/api/refresh":
             # Serve fresh or cached data
-            force = "refresh" in query_params and query_params["refresh"][0].lower() == "true"
+            force = ("refresh" in query_params and query_params["refresh"][0].lower() == "true") or path == "/api/refresh"
             with _cache_lock:
                 if _cached_data is None or force:
                     logger.info("Collecting system, hardware, software, and driver information...")
                     _cached_data = collect_all_system_info()
+                    _save_cached_system_info(_cached_data)
                 data = _cached_data
 
             self.send_response(200)
@@ -269,6 +303,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             logger.info("Force refresh requested via POST...")
             with _cache_lock:
                 _cached_data = collect_all_system_info()
+                _save_cached_system_info(_cached_data)
                 data = _cached_data
 
             self.send_response(200)
@@ -282,6 +317,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             logger.info("Full system QC check requested via POST...")
             with _cache_lock:
                 _cached_data = collect_all_system_info()
+                _save_cached_system_info(_cached_data)
                 data = _cached_data
             pkgs = scan_packages()
             qc_report = evaluate_system_qc(data, pkgs)

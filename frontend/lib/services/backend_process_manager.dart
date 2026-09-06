@@ -13,11 +13,14 @@ class BackendProcessManager {
 
   static String get baseUrl => 'http://127.0.0.1:$activePort';
 
-  static Future<bool> isBackendRunningOnPort(int port) async {
+  static Future<bool> isBackendRunningOnPort(
+    int port, [
+    Duration timeout = const Duration(milliseconds: 250),
+  ]) async {
     try {
       final response = await http
           .get(Uri.parse('http://127.0.0.1:$port/api/health'))
-          .timeout(const Duration(milliseconds: 1500));
+          .timeout(timeout);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final contractVersion = data['api_contract_version'];
@@ -158,9 +161,25 @@ class BackendProcessManager {
   }
 
   static Future<bool> _ensureBackendRunning() async {
-    // 1. Check if backend is already running on any candidate port
-    for (final port in candidatePorts) {
-      if (await isBackendRunningOnPort(port)) {
+    // 1. Fast check: Check default activePort first (120ms)
+    if (await isBackendRunningOnPort(activePort, const Duration(milliseconds: 120))) {
+      debugPrint(
+        '[BackendProcessManager] Connected to active backend on port $activePort.',
+      );
+      return true;
+    }
+
+    // Parallel check across all candidate ports (~180ms max)
+    final portChecks = await Future.wait(
+      candidatePorts.map((p) async {
+        if (p == activePort) return null;
+        return (await isBackendRunningOnPort(p, const Duration(milliseconds: 180)))
+            ? p
+            : null;
+      }),
+    );
+    for (final port in portChecks) {
+      if (port != null) {
         activePort = port;
         debugPrint(
           '[BackendProcessManager] Connected to active backend on port $activePort.',
@@ -243,17 +262,31 @@ class BackendProcessManager {
       return false;
     }
 
-    // 4. Wait up to 35 seconds for backend to respond to health checks (crucial for older laptops with HDDs)
-    for (int i = 0; i < 70; i++) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      // Check candidate ports in case backend auto-selected a fallback port
-      for (final port in candidatePorts) {
-        if (await isBackendRunningOnPort(port)) {
-          activePort = port;
-          debugPrint(
-            '[BackendProcessManager] Backend is UP and healthy on port $activePort (iteration $i).',
-          );
-          return true;
+    // 4. Fast targeted polling for backend startup (starts @ 50ms intervals, scaling up)
+    for (int i = 0; i < 90; i++) {
+      final delayMs = i < 10 ? 50 : (i < 25 ? 120 : 300);
+      await Future.delayed(Duration(milliseconds: delayMs));
+
+      // Prioritize targetPort first with quick check
+      if (await isBackendRunningOnPort(targetPort, const Duration(milliseconds: 100))) {
+        activePort = targetPort;
+        debugPrint(
+          '[BackendProcessManager] Backend is UP and healthy on port $activePort (iteration $i).',
+        );
+        return true;
+      }
+
+      // After 6 iterations (~400ms), check candidate ports in case backend auto-selected a fallback
+      if (i >= 6) {
+        for (final port in candidatePorts) {
+          if (port == targetPort) continue;
+          if (await isBackendRunningOnPort(port, const Duration(milliseconds: 100))) {
+            activePort = port;
+            debugPrint(
+              '[BackendProcessManager] Backend is UP on fallback port $activePort (iteration $i).',
+            );
+            return true;
+          }
         }
       }
     }

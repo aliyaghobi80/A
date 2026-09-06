@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/system_info.dart';
 import '../models/qc_report.dart';
 import 'backend_process_manager.dart';
+import 'cache_service.dart';
 
 class ApiService {
   static String get baseUrl => BackendProcessManager.baseUrl;
@@ -29,7 +30,9 @@ class ApiService {
           : await http.get(uri).timeout(timeoutDuration);
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final rawBody = utf8.decode(response.bodyBytes);
+        CacheService.saveRawSystemInfoJson(rawBody);
+        final Map<String, dynamic> data = json.decode(rawBody);
         return SystemInfo.fromJson(data);
       } else {
         throw Exception('Server returned status ${response.statusCode}: ${response.body}');
@@ -56,7 +59,9 @@ class ApiService {
       final response = await http.get(uri).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final rawBody = utf8.decode(response.bodyBytes);
+        CacheService.saveRawPackagesJson(rawBody);
+        final Map<String, dynamic> data = json.decode(rawBody);
         return PackagesResponse.fromJson(data);
       }
       return PackagesResponse.empty();
@@ -77,7 +82,9 @@ class ApiService {
       final response = await http.post(uri).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final rawBody = utf8.decode(response.bodyBytes);
+        CacheService.saveRawPackagesJson(rawBody);
+        final Map<String, dynamic> data = json.decode(rawBody);
         return PackagesResponse.fromJson(data);
       }
       return PackagesResponse.empty();

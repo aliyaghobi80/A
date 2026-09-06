@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
 import '../services/api_service.dart';
+import '../services/cache_service.dart';
 import '../services/folder_picker_service.dart';
 import 'system_info_controller.dart';
 
@@ -38,9 +39,23 @@ class SoftwareController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    fetchPackages();
-    _startPeriodicSync();
-    _checkInitialBatchStatus();
+    _loadCacheAndFetch();
+  }
+
+  Future<void> _loadCacheAndFetch() async {
+    try {
+      final cached = await CacheService.loadCachedPackages();
+      if (cached != null) {
+        packagesResponse.value = cached;
+      }
+    } catch (_) {}
+
+    // Defer initial scan slightly (500ms) so it does not contest initial frame render
+    Timer(const Duration(milliseconds: 500), () {
+      fetchPackages();
+      _startPeriodicSync();
+      _checkInitialBatchStatus();
+    });
   }
 
   @override

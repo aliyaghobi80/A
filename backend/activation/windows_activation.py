@@ -169,14 +169,17 @@ def get_windows_activation_info() -> Dict[str, Any]:
         "tool_path": None,
     }
 
-    # 1. Query slmgr /xpr
+    # 1. Query slmgr /xpr (fast, ~0.8s)
     xpr_activated, xpr_exp = _query_slmgr_xpr()
 
-    # 2. Query slmgr /dli
+    # 2. Query slmgr /dli (fast, ~0.8s)
     dli_data = _query_slmgr_dli()
     
-    # 3. Query WMI SoftwareLicensingProduct
-    wmi_data = _query_wmi_licensing()
+    # 3. Query WMI SoftwareLicensingProduct only if slmgr /dli was inconclusive (saves ~2.5s)
+    if dli_data.get("status_text") or dli_data.get("name"):
+        wmi_data = {}
+    else:
+        wmi_data = _query_wmi_licensing()
 
     # Multi-source activation confirmation
     activated = (
