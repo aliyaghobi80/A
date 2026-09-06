@@ -188,7 +188,7 @@ def step_sync_release_folder(backend_exe: str):
                 shutil.copy2(s_item, d_item)
         print(f" * Verified assets synchronized -> {dst_assets}")
 
-    # 2.5 Bundle Visual C++ Runtime DLLs for legacy / fresh Windows compatibility
+    # 2.5 Bundle Visual C++ Runtime & Universal C Runtime DLLs for fresh Windows compatibility
     system32 = os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32")
     vc_dlls = [
         "vcruntime140.dll",
@@ -199,13 +199,22 @@ def step_sync_release_folder(backend_exe: str):
         "msvcp140_atomic_wait.dll",
         "msvcp140_codecvt_ids.dll",
         "vcomp140.dll",
+        "ucrtbase.dll",
     ]
     for dll in vc_dlls:
         src_dll = os.path.join(system32, dll)
         if os.path.isfile(src_dll):
             shutil.copy2(src_dll, os.path.join(FLUTTER_RELEASE_DIR, dll))
             shutil.copy2(src_dll, os.path.join(dest_backend_dir, dll))
-    print(f" * Bundled {len(vc_dlls)} Visual C++ runtime DLLs for 100% legacy/clean Windows compatibility.")
+
+    # Also copy api-ms-win-* DLLs from backend _internal to root application folder
+    backend_internal = os.path.join(dest_backend_dir, "_internal")
+    if os.path.isdir(backend_internal):
+        for f in os.listdir(backend_internal):
+            if f.lower().startswith("api-ms-win-") and f.lower().endswith(".dll"):
+                shutil.copy2(os.path.join(backend_internal, f), os.path.join(FLUTTER_RELEASE_DIR, f))
+
+    print(f" * Bundled Visual C++ & Universal C Runtime DLLs for 100% clean-machine Windows compatibility.")
 
     # 3. Create clean logs folder without lingering log files
     logs_dir = os.path.join(FLUTTER_RELEASE_DIR, "logs")
