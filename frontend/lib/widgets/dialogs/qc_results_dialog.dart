@@ -137,8 +137,8 @@ class QcResultsDialog extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   l10n.isPersian
-                      ? 'پایش سخت‌افزار، ویندوز، درایورها، فعال‌سازی، نرم‌افزارها و پوشه‌ها'
-                      : 'Hardware, OS, Drivers, Licenses, Apps & Folders audit',
+                      ? 'پایش سخت‌افزار، ویندوز، درایورها، فعال‌سازی و نرم‌افزارها'
+                      : 'Hardware, OS, Drivers, Licenses & Apps audit',
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),

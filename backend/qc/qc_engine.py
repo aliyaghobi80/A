@@ -2,7 +2,7 @@
 """
 Quality Control (QC) & System Readiness Evaluation Engine
 Evaluates complete hardware, operating system, device drivers, required/optional software,
-corporate files/folders, and activation licenses into standardized QC States:
+and activation licenses (Windows & Office) into standardized QC States:
 - PASS
 - WARNING
 - FAIL
@@ -420,70 +420,7 @@ def evaluate_system_qc(system_info: Dict[str, Any], packages_data: Optional[Dict
     })
 
     # -------------------------------------------------------------------------
-    # 5. REQUIRED FILES & FOLDERS CHECK
-    # -------------------------------------------------------------------------
-    file_items = []
-    files_list = system_info.get("required_files", [])
-    for f in files_list:
-        f_id = f.get("id", "file")
-        f_name = f.get("displayName") or f.get("name", "File/Folder")
-        f_path = f.get("path", "")
-        f_type = f.get("type", "folder")
-        is_present = f.get("present", False) or f.get("exists", False) or f.get("status") in ["Present", "Present (File)", "Present (Folder)"]
-        is_req = f.get("required", True)
-
-        if is_present:
-            state = STATE_PASS
-        else:
-            state = STATE_FAIL if is_req else STATE_WARNING
-
-        file_items.append({
-            "id": f"file_{f_id}",
-            "name": f_name,
-            "detail": f_path if is_present else f"مسیر یافت نشد: {f_path}",
-            "state": state,
-            "is_required": is_req,
-            "path": f_path,
-            "type": f_type,
-        })
-
-        if not is_present:
-            problems.append({
-                "id": f"file_{f_id}",
-                "category": "required_files",
-                "category_name": "فایل‌ها و پوشه‌ها",
-                "name": f_name,
-                "status": state,
-                "severity": STATE_FAIL if is_req else STATE_WARNING,
-                "description": f"{'پوشه' if f_type == 'folder' else 'فایل'} موردنیاز در مسیر زیر یافت نشد:\n{f_path}",
-                "solution_title": f"ایجاد یا کپی {f_name}",
-                "solution_steps": f"فایل یا پوشه مربوطه را در مسیر {f_path} قرار دهید یا مسیر آن را در برنامه تنظیم کنید.",
-                "is_required": is_req,
-                "action_type": "open_folder",
-                "action_label": "باز کردن پوشه والد",
-                "action_target": f_path,
-                "package_filename": None,
-                "can_auto_prepare": False,
-            })
-
-    files_state = STATE_PASS
-    if any(i["state"] == STATE_FAIL for i in file_items):
-        files_state = STATE_FAIL
-    elif any(i["state"] == STATE_WARNING for i in file_items):
-        files_state = STATE_WARNING
-
-    categories.append({
-        "id": "required_files",
-        "name": "Required Files",
-        "displayName": "فایل‌ها و پوشه‌های سازمانی",
-        "state": files_state,
-        "items": file_items,
-        "passed_count": sum(1 for i in file_items if i["state"] == STATE_PASS),
-        "total_count": len(file_items),
-    })
-
-    # -------------------------------------------------------------------------
-    # 6. WINDOWS ACTIVATION CHECK
+    # 5. WINDOWS ACTIVATION CHECK
     # -------------------------------------------------------------------------
     win_act = system_info.get("windows_activation", {})
     win_is_activated = win_act.get("activated", False)
@@ -527,7 +464,7 @@ def evaluate_system_qc(system_info: Dict[str, Any], packages_data: Optional[Dict
     })
 
     # -------------------------------------------------------------------------
-    # 7. OFFICE INSTALLATION & ACTIVATION CHECK
+    # 6. OFFICE INSTALLATION & ACTIVATION CHECK
     # -------------------------------------------------------------------------
     off_act = system_info.get("office_activation", {})
     off_installed = off_act.get("installed", False)
@@ -603,7 +540,7 @@ def evaluate_system_qc(system_info: Dict[str, Any], packages_data: Optional[Dict
     })
 
     # -------------------------------------------------------------------------
-    # 8. OVERALL SYSTEM EVALUATION (READY vs NEEDS_ATTENTION)
+    # 7. OVERALL SYSTEM EVALUATION (READY vs NEEDS_ATTENTION)
     # -------------------------------------------------------------------------
     # System is READY ONLY IF all required checks are satisfied (PASS or NOT_PRESENT).
     # Any required FAIL causes NEEDS_ATTENTION.

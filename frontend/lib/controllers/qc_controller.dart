@@ -40,14 +40,13 @@ class QcController extends GetxController {
     } catch (_) {}
   }
 
-  /// 8 Check Steps for Animated Progress UI
+  /// 7 Check Steps for Animated Progress UI
   List<String> getCheckStepKeys() {
     return [
       'qcStepHardware',
       'qcStepWindows',
       'qcStepDrivers',
       'qcStepSoftware',
-      'qcStepFiles',
       'qcStepWindowsActivation',
       'qcStepOfficeInstallation',
       'qcStepOfficeActivation',
