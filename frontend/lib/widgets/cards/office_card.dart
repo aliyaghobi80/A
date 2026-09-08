@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
+import '../common/design_components.dart';
 import '../common/hardware_illustrations.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
@@ -17,6 +18,7 @@ class OfficeCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final isInstalled = office.installed;
     final isActivated = office.activated;
+    final isGenuine = office.isGenuineOriginal;
 
     final statusColor = !isInstalled
         ? const Color(0xFF64748B)
@@ -27,7 +29,9 @@ class OfficeCard extends StatelessWidget {
         : (isActivated ? l10n.activated : l10n.notActivated);
 
     final summarySub = isInstalled
-        ? '${office.product} • $statusLabel'
+        ? (isGenuine
+            ? '${office.product} • ${office.effectiveBadgeLabel}'
+            : '${office.product} • $statusLabel')
         : l10n.notInstalled;
 
     return CardWrapper(
@@ -36,40 +40,85 @@ class OfficeCard extends StatelessWidget {
       summarySubtitle: summarySub,
       illustration: const OfficeIllustration(),
       iconColor: const Color(0xFFD97706),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: statusColor.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isActivated
-                  ? Icons.check_circle_rounded
-                  : (!isInstalled
-                        ? Icons.remove_circle_outline_rounded
-                        : Icons.cancel_rounded),
-              size: 13,
-              color: statusColor,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              statusLabel,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: statusColor,
+      trailing: isGenuine
+          ? GenuineOriginalBadge(
+              compact: true,
+              isOffice: true,
+              label: office.effectiveBadgeLabel,
+              subLabel: office.genuineType.isNotEmpty ? office.genuineType : null,
+            )
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isActivated
+                        ? Icons.check_circle_rounded
+                        : (!isInstalled
+                              ? Icons.remove_circle_outline_rounded
+                              : Icons.cancel_rounded),
+                    size: 13,
+                    color: statusColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    statusLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (isGenuine)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF10B981).withValues(alpha: isDark ? 0.18 : 0.1),
+                    const Color(0xFF059669).withValues(alpha: isDark ? 0.08 : 0.04),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.4 : 0.25),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.verified_user_rounded,
+                    color: Color(0xFF10B981),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      office.effectiveActivationSummaryFa,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF065F46),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // Product Banner
           Container(
             width: double.infinity,

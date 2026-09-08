@@ -121,19 +121,29 @@ class LicenseStatusPage extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                StatusBadge(
-                                  label: isWinActive ? 'فعال (Activated)' : 'غیرفعال',
-                                  status: isWinActive ? BadgeStatus.success : BadgeStatus.danger,
-                                  fontSize: 12.5,
-                                ),
+                                if (win.isGenuineOriginal)
+                                  GenuineOriginalBadge(
+                                    label: 'ویندوز اورجینال',
+                                    subLabel: win.genuineType.isNotEmpty ? win.genuineType : 'Digital License',
+                                    compact: isNarrow,
+                                  )
+                                else
+                                  StatusBadge(
+                                    label: isWinActive ? 'فعال (Activated)' : 'غیرفعال',
+                                    status: isWinActive ? BadgeStatus.success : BadgeStatus.danger,
+                                    fontSize: 12.5,
+                                  ),
                               ],
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              win.description.isNotEmpty ? win.description : (isWinActive ? 'ویندوز با موفقیت فعال است.' : 'نیاز به فعال‌سازی با اسکریپت یا لایسنس دیجیتال'),
+                              win.effectiveActivationSummaryFa,
                               style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                                fontSize: 13.5,
+                                fontWeight: win.isGenuineOriginal ? FontWeight.w700 : FontWeight.w500,
+                                color: win.isGenuineOriginal
+                                    ? (isDark ? const Color(0xFF34D399) : const Color(0xFF059669))
+                                    : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
                               ),
                             ),
                             if (win.channel.isNotEmpty && win.channel != 'Unknown') ...[
@@ -145,7 +155,9 @@ class LicenseStatusPage extends StatelessWidget {
                                   MetaTag(label: 'نوع کانال لایسنس', value: win.channel),
                                   if (win.partialKey.isNotEmpty && win.partialKey != '-')
                                     MetaTag(label: '۵ رقم آخر کلید', value: win.partialKey),
-                                  if (isOemOriginal)
+                                  if (win.isGenuineOriginal)
+                                    const StatusBadge(label: 'لایسنس اصلی و دائمی مایکروسافت', status: BadgeStatus.success, showIcon: true, fontSize: 11)
+                                  else if (isOemOriginal)
                                     const StatusBadge(label: 'لایسنس اصلی / دیجیتال OEM', status: BadgeStatus.info, showIcon: false, fontSize: 11),
                                 ],
                               ),
@@ -165,6 +177,23 @@ class LicenseStatusPage extends StatelessWidget {
                                       backgroundColor: const Color(0xFF0284C7),
                                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                       minimumSize: const Size(0, 36),
+                                    ),
+                                  )
+                                else if (win.isGenuineOriginal)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.2 : 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.verified_user_rounded, size: 16, color: Color(0xFF10B981)),
+                                        SizedBox(width: 6),
+                                        Text('ویندوز اورجینال و تأیید شده', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF10B981))),
+                                      ],
                                     ),
                                   )
                                 else
@@ -225,27 +254,34 @@ class LicenseStatusPage extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                StatusBadge(
-                                  label: !hasOffice
-                                      ? 'نصب نشده'
-                                      : (isOffActive ? 'فعال (Activated)' : 'غیرفعال'),
-                                  status: !hasOffice
-                                      ? BadgeStatus.neutral
-                                      : (isOffActive ? BadgeStatus.success : BadgeStatus.danger),
-                                  fontSize: 12.5,
-                                ),
+                                if (off.isGenuineOriginal)
+                                  GenuineOriginalBadge(
+                                    label: 'آفیس اورجینال',
+                                    subLabel: off.genuineType.isNotEmpty ? off.genuineType : 'Original',
+                                    compact: isNarrow,
+                                    isOffice: true,
+                                  )
+                                else
+                                  StatusBadge(
+                                    label: !hasOffice
+                                        ? 'نصب نشده'
+                                        : (isOffActive ? 'فعال (Activated)' : 'غیرفعال'),
+                                    status: !hasOffice
+                                        ? BadgeStatus.neutral
+                                        : (isOffActive ? BadgeStatus.success : BadgeStatus.danger),
+                                    fontSize: 12.5,
+                                  ),
                               ],
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              !hasOffice
-                                  ? 'مجموعه آفیس روی این سیستم نصب نشده است.'
-                                  : (off.product.isNotEmpty
-                                      ? off.product
-                                      : (isOffActive ? 'آفیس با موفقیت فعال است.' : 'نیاز به فعال‌سازی آفیس')),
+                              off.effectiveActivationSummaryFa,
                               style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                                fontSize: 13.5,
+                                fontWeight: off.isGenuineOriginal ? FontWeight.w700 : FontWeight.w500,
+                                color: off.isGenuineOriginal
+                                    ? (isDark ? const Color(0xFF34D399) : const Color(0xFF059669))
+                                    : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
                               ),
                             ),
                             if (hasOffice && off.product.isNotEmpty) ...[
@@ -259,6 +295,8 @@ class LicenseStatusPage extends StatelessWidget {
                                     MetaTag(label: 'شماره ساخت', value: off.version),
                                   if (off.partialKey.isNotEmpty && off.partialKey != 'Not available')
                                     MetaTag(label: '۵ رقم آخر کلید', value: off.partialKey),
+                                  if (off.isGenuineOriginal)
+                                    const StatusBadge(label: 'لایسنس اصلی و رسمی مایکروسافت', status: BadgeStatus.success, showIcon: true, fontSize: 11),
                                 ],
                               ),
                             ],
@@ -277,6 +315,23 @@ class LicenseStatusPage extends StatelessWidget {
                                       backgroundColor: const Color(0xFFD97706),
                                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                       minimumSize: const Size(0, 36),
+                                    ),
+                                  )
+                                else if (hasOffice && off.isGenuineOriginal)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.2 : 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.verified_user_rounded, size: 16, color: Color(0xFF10B981)),
+                                        SizedBox(width: 6),
+                                        Text('آفیس اورجینال و فعال', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF10B981))),
+                                      ],
                                     ),
                                   )
                                 else if (hasOffice && isOffActive)

@@ -230,7 +230,73 @@ def get_windows_activation_info() -> Dict[str, Any]:
         info["expiration"] = None
         info["is_permanent"] = True
 
-    # 4. Check Activation Tool Availability
+    # 4. Check UEFI BIOS ACPI MSDM embedded OEM key
+    oa3x_key = None
+    try:
+        ps_oa3x = "(Get-CimInstance -Namespace root\\wmi -ClassName SoftwareLicensingService -ErrorAction SilentlyContinue).OA3xOriginalProductKey"
+        proc_oa = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_oa3x],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            **get_hidden_subprocess_kwargs()
+        )
+        raw_key = proc_oa.stdout.strip()
+        if raw_key and len(raw_key) >= 15 and re.match(r'^[A-Za-z0-9\-]+$', raw_key):
+            oa3x_key = raw_key
+    except Exception:
+        pass
+
+    # 5. Evaluate Genuine Original License (Windows Home, OEM:DM, Retail, Digital License)
+    edition_lower = info["edition"].lower()
+    desc_lower = (info.get("description") or "").lower()
+    ch_lower = (info.get("channel") or "").lower()
+    is_home = any(k in edition_lower for k in ["home", "core", "singlelanguage", "singlemanguage"])
+    is_oem_channel = any(k in ch_lower or k in desc_lower for k in ["oem_dm", "oem:dm", "oem_slp", "oem_coa", "oem"])
+    is_retail_channel = "retail" in ch_lower or "retail" in desc_lower
+    has_oa3x = bool(oa3x_key)
+    is_permanent = info.get("is_permanent", True)
+
+    is_genuine = False
+    genuine_type = ""
+
+    if activated:
+        if is_home:
+            is_genuine = True
+            genuine_type = "Windows Home OEM / Digital License"
+        elif is_oem_channel and is_permanent:
+            is_genuine = True
+            genuine_type = "OEM (Digital License)"
+        elif is_retail_channel and is_permanent:
+            is_genuine = True
+            genuine_type = "Retail (Digital License)"
+        elif has_oa3x and is_permanent:
+            is_genuine = True
+            genuine_type = "OEM Factory License (BIOS MSDM)"
+        elif is_permanent and "volume" not in ch_lower and "volume" not in desc_lower:
+            is_genuine = True
+            genuine_type = "Digital License"
+
+    info["is_genuine"] = is_genuine
+    info["genuine_type"] = genuine_type
+    info["oa3x_key_present"] = has_oa3x
+    info["needs_activation"] = not (activated and is_permanent)
+
+    if is_genuine:
+        info["activation_summary_fa"] = "ویندوز اورجینال است و نیازی به فعال‌سازی ندارد."
+        info["badge_label"] = "ویندوز اورجینال"
+    elif activated:
+        if is_permanent:
+            info["activation_summary_fa"] = "ویندوز به صورت دائمی فعال است."
+            info["badge_label"] = "فعال دائمی"
+        else:
+            info["activation_summary_fa"] = f"ویندوز فعال است ({info.get('expiration') or 'لایسنس موقت'})."
+            info["badge_label"] = "فعال موقت"
+    else:
+        info["activation_summary_fa"] = "ویندوز فعال نیست و نیاز به فعال‌سازی دارد."
+        info["badge_label"] = "نیازمند فعال‌سازی"
+
+    # 6. Check Activation Tool Availability
     tool_status = get_tool_status("windows")
     info["tool_available"] = tool_status.get("available", False)
     info["tool_path"] = tool_status.get("tool_path")

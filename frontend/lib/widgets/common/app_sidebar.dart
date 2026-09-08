@@ -306,11 +306,20 @@ class AppSidebar extends StatelessWidget {
               height: 48,
               decoration: BoxDecoration(
                 color: isSelected
-                    ? accent.withValues(alpha: isDark ? 0.22 : 0.12)
+                    ? (isDark ? accent.withValues(alpha: 0.28) : accent.withValues(alpha: 0.14))
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
                 border: isSelected
-                    ? Border.all(color: accent.withValues(alpha: 0.4), width: 1.2)
+                    ? Border.all(color: isDark ? accent : accent.withValues(alpha: 0.5), width: 1.5)
+                    : null,
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: accent.withValues(alpha: isDark ? 0.35 : 0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 1),
+                        ),
+                      ]
                     : null,
               ),
               child: Stack(
@@ -320,7 +329,7 @@ class AppSidebar extends StatelessWidget {
                     icon,
                     size: 24,
                     color: isSelected
-                        ? accent
+                        ? (isDark ? Colors.white : accent)
                         : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
                   ),
                   if (badgeCount != null && badgeCount > 0)
@@ -353,23 +362,42 @@ class AppSidebar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: isSelected
-                ? accent.withValues(alpha: isDark ? 0.18 : 0.1)
+                ? (isDark ? accent.withValues(alpha: 0.25) : accent.withValues(alpha: 0.12))
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isSelected
-                  ? accent.withValues(alpha: isDark ? 0.45 : 0.3)
+                  ? (isDark ? accent : accent.withValues(alpha: 0.4))
                   : Colors.transparent,
-              width: 1,
+              width: 1.2,
             ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: accent.withValues(alpha: isDark ? 0.25 : 0.1),
+                      blurRadius: 6,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             children: [
+              if (isSelected)
+                Container(
+                  width: 3.5,
+                  height: 18,
+                  margin: const EdgeInsets.only(left: 6),
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
               Icon(
                 icon,
                 size: 20,
                 color: isSelected
-                    ? accent
+                    ? (isDark ? Colors.white : accent)
                     : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
               ),
               const SizedBox(width: 10),
@@ -380,8 +408,8 @@ class AppSidebar extends StatelessWidget {
                     fontSize: 13.5,
                     fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                     color: isSelected
-                        ? accent
-                        : (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
+                        ? (isDark ? Colors.white : accent)
+                        : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextPrimary),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

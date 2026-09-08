@@ -81,8 +81,15 @@ def _run_batch_install(package_ids: List[str], custom_dir: Optional[str] = None)
 
         logger.info(f"[BatchInstall] Installing {idx + 1}/{len(package_ids)}: {pkg_id}")
 
+        is_office = (
+            pkg_id.lower().startswith("office")
+            or "office" in pkg_id.lower()
+            or _batch_state["items"][idx].get("installer_type") == "office_cmd"
+        )
+        timeout = 900 if is_office else 300
+
         try:
-            result = silent_install_package(pkg_id, custom_dir=custom_dir, timeout_seconds=300)
+            result = silent_install_package(pkg_id, custom_dir=custom_dir, timeout_seconds=timeout)
         except Exception as e:
             result = {
                 "success": False,
@@ -161,7 +168,7 @@ def start_batch_install(package_ids: Optional[List[str]] = None, custom_dir: Opt
             pid_clean = pid.strip().replace("\\", "/").lower()
             for pkg in all_packages:
                 if pid_clean in [pkg["id"].lower(), pkg.get("relative_path", "").lower(), pkg.get("filename", "").lower()]:
-                    if pkg.get("is_valid") and pkg.get("auto_install_supported"):
+                    if pkg.get("is_valid") and (pkg.get("auto_install_supported") or pkg.get("installer_type") == "office_cmd"):
                         target_packages.append(pkg)
                     break
     else:
@@ -179,6 +186,11 @@ def start_batch_install(package_ids: Optional[List[str]] = None, custom_dir: Opt
             "message": "هیچ نصاب معتبرِ قابل نصب خودکاری یافت نشد؛ موارد ناشناخته را با نصب دستی بررسی کنید.",
         }
 
+    # Queue reordering: All regular applications install first; Microsoft Office installs at the VERY END!
+    normal_pkgs = [p for p in target_packages if p.get("installer_type") != "office_cmd" and "office" not in p.get("id", "").lower()]
+    office_pkgs = [p for p in target_packages if p.get("installer_type") == "office_cmd" or "office" in p.get("id", "").lower()]
+    target_packages = normal_pkgs + office_pkgs
+
     _reset_state()
 
     with _batch_lock:
@@ -191,6 +203,7 @@ def start_batch_install(package_ids: Optional[List[str]] = None, custom_dir: Opt
                 "name": pkg.get("name", pkg.get("filename", "")),
                 "filename": pkg.get("filename", ""),
                 "relative_path": pkg.get("relative_path", ""),
+                "installer_type": pkg.get("installer_type", ""),
                 "status": "queued",
                 "message": "",
                 "installed_version": "",

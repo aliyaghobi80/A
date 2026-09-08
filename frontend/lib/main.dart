@@ -22,11 +22,21 @@ import 'widgets/pages/driver_install_page.dart';
 import 'widgets/pages/license_status_page.dart';
 import 'widgets/pages/settings_page.dart';
 import 'widgets/pages/software_install_page.dart';
+import 'package:flutter/foundation.dart';
+import 'package:video_player_win/video_player_win_plugin.dart';
 import 'widgets/pages/system_specs_page.dart';
 import 'widgets/pages/tools_source_folders_page.dart';
+import 'widgets/splash/video_splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+    try {
+      WindowsVideoPlayer.registerWith();
+    } catch (e) {
+      debugPrint('[Main] WindowsVideoPlayer registration skipped: $e');
+    }
+  }
   // Pre-warm backend process asynchronously in parallel with Flutter startup
   unawaited(BackendProcessManager.ensureBackendRunning());
 
@@ -86,7 +96,7 @@ class CentralSystemCheckerApp extends StatelessWidget {
             child: child ?? const SizedBox.shrink(),
           );
         },
-        home: const DashboardScreen(),
+        home: const VideoSplashScreen(),
       );
     });
   }

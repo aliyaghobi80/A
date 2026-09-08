@@ -428,7 +428,7 @@ void main() {
   testWidgets(
     'OfficeCard displays Microsoft Office activation and licensing status',
     (WidgetTester tester) async {
-      final officeActivated = OfficeActivationInfo(
+      final officeGenuine = OfficeActivationInfo(
         installed: true,
         product: 'Microsoft Office Professional Plus 2024',
         version: '16.0.20228.20158',
@@ -446,7 +446,7 @@ void main() {
 
       await tester.pumpWidget(
         buildTestableWidget(
-          OfficeCard(office: officeActivated),
+          OfficeCard(office: officeGenuine),
           locale: const Locale('fa'),
         ),
       );
@@ -456,10 +456,102 @@ void main() {
         find.text('Microsoft Office Professional Plus 2024'),
         findsAtLeast(1),
       );
-      expect(find.text('فعال است'), findsOneWidget);
+      // Genuine Retail displays genuine badge and summary
+      expect(find.text('آفیس اورجینال'), findsAtLeast(1));
       expect(find.text('Retail'), findsOneWidget);
-      // Activation button should NOT be shown because already activated
-      expect(find.text('فعالسازی آفیس'), findsNothing);
+
+      // Also verify Volume/generic activated Office displays 'فعال است'
+      final officeVolume = OfficeActivationInfo(
+        installed: true,
+        product: 'Microsoft Office 2021 Volume',
+        version: '16.0.14332.20255',
+        architecture: '64-bit',
+        installType: 'Click-to-Run',
+        activated: true,
+        statusCode: 1,
+        statusText: 'Licensed',
+        channel: 'Volume:GVLK',
+        partialKey: 'XXXXX',
+        expiration: null,
+        toolAvailable: true,
+      );
+
+      await tester.pumpWidget(
+        buildTestableWidget(
+          OfficeCard(office: officeVolume),
+          locale: const Locale('fa'),
+        ),
+      );
+
+      expect(find.text('فعال است'), findsAtLeast(1));
+      expect(find.text('Volume:GVLK'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'PackagesCard office reminder banner is hidden when Office is installed and shown when not installed',
+    (WidgetTester tester) async {
+      final packages = <SoftwarePackage>[
+        SoftwarePackage(
+          id: 'test-app',
+          name: 'Test App',
+          filename: 'TestApp.exe',
+          relativePath: 'TestApp.exe',
+          fullPath: r'G:\MarkaziSystem\Packages\TestApp.exe',
+          version: '1.0',
+          publisher: 'Test Publisher',
+          fileSizeDisplay: '1 MB',
+          isValid: true,
+          status: 'Not Installed',
+          isInstalled: false,
+          installedVersion: 'Not available',
+          installAllowed: true,
+          hasIcon: false,
+        ),
+      ];
+      final pkgSummary = PackageSummary(
+        totalPackages: 1,
+        validPackages: 1,
+        installedPackages: 0,
+        availableToInstall: 1,
+      );
+
+      // Case 1: Office IS installed -> Banner MUST NOT be shown
+      await tester.pumpWidget(
+        buildTestableWidget(
+          PackagesCard(
+            packages: packages,
+            summary: pkgSummary,
+            packagesDirectory: r'G:\MarkaziSystem\Packages',
+            directoryExists: true,
+            onOpenOfficeFolder: () {},
+            isOfficeInstalled: true,
+          ),
+          locale: const Locale('fa'),
+        ),
+      );
+
+      expect(find.text('یادت نره آفیس رو نصب کنی !'), findsNothing);
+      expect(find.text('بخش اختصاصی آفیس'), findsNothing);
+
+      // Case 2: Office is NOT installed -> Banner MUST be shown
+      await tester.pumpWidget(
+        buildTestableWidget(
+          PackagesCard(
+            packages: packages,
+            summary: pkgSummary,
+            packagesDirectory: r'G:\MarkaziSystem\Packages',
+            directoryExists: true,
+            onOpenOfficeFolder: () {},
+            isOfficeInstalled: false,
+          ),
+          locale: const Locale('fa'),
+        ),
+      );
+
+      expect(find.text('یادت نره آفیس رو نصب کنی !'), findsOneWidget);
+      expect(find.text('بخش اختصاصی آفیس'), findsOneWidget);
     },
   );
 }
+

@@ -22,6 +22,7 @@ class PackagesCard extends StatelessWidget {
   final BatchInstallStatus? batchStatus;
   final VoidCallback? onCancelBatch;
   final VoidCallback? onOpenOfficeFolder;
+  final bool isOfficeInstalled;
 
   const PackagesCard({
     super.key,
@@ -41,6 +42,7 @@ class PackagesCard extends StatelessWidget {
     this.batchStatus,
     this.onCancelBatch,
     this.onOpenOfficeFolder,
+    this.isOfficeInstalled = false,
   });
 
   Widget _buildIcon(SoftwarePackage pkg, bool isDark) {
@@ -334,7 +336,7 @@ class PackagesCard extends StatelessWidget {
             ...packages.map(
               (pkg) => _buildPackageRow(context, pkg, isDark, l10n),
             ),
-            if (onOpenOfficeFolder != null && packages.isNotEmpty && directoryExists)
+            if (!isOfficeInstalled && onOpenOfficeFolder != null && packages.isNotEmpty && directoryExists)
               _buildOfficeReminderBanner(context, isDark, l10n),
           ],
         ],
@@ -347,6 +349,9 @@ class PackagesCard extends StatelessWidget {
     bool isDark,
     AppLocalizations l10n,
   ) {
+    if (isOfficeInstalled) {
+      return const SizedBox.shrink();
+    }
     const officeColor = Color(0xFFEA580C);
     return Column(
       mainAxisSize: MainAxisSize.min,

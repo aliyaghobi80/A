@@ -136,6 +136,43 @@ def _install_inf_package(inf_path: str, timeout: int = 180) -> Tuple[int, str]:
     return res.returncode, out
 
 
+def _format_driver_failure_reason(exit_code: int, method: str, out: str, match: Dict[str, Any]) -> str:
+    """Provides human-readable, actionable Persian failure reasons."""
+    if method in ("pnputil", "inf_pnputil"):
+        out_l = out.lower()
+        if any(k in out_l for k in ("no more data", "match", "not found", "no device", "absent")):
+            return "سخت‌افزار متناظر با این درایور (INF) روی مادربورد یا سیستم شما متصل نیست."
+
+    if exit_code == 1603:
+        return "عدم سازگاری: این درایور با مدل سخت‌افزار یا نسخه ویندوز فعلی سازگار نیست (Error 1603)."
+    elif exit_code == 1633:
+        return "عدم همخوانی معماری: نسخه درایور با پردازنده یا نسخه ۶۴ بیتی ویندوز سازگار نیست (Error 1633)."
+    elif exit_code == 1602:
+        return "عملیات نصب توسط کاربر یا سیستم متوقف گردید (کد 1602)."
+    elif exit_code == 1618:
+        return "یک فرآیند نصب دیگر در پس‌زمینه ویندوز فعال است؛ لطفاً پس از پایان آن مجدداً تلاش کنید."
+    elif exit_code in (5, -1073741790):
+        return "عدم دسترسی کافی؛ نیازمند مجوز کامل مدیر سیستم (Administrator)."
+    elif exit_code in (2, 3):
+        return "فایل اجرایی یا مسیر درایور در پوشه یافت نشد یا ناقص است."
+    elif exit_code == -2:
+        return "زمان مجاز برای پاسخ‌دهی نصاب به پایان رسید (تایم‌اوت)."
+
+    confidence = match.get("confidence", "UNKNOWN")
+    is_matched = match.get("is_matched", True)
+
+    if not is_matched or confidence == "NOT_APPLICABLE":
+        return "این درایور برای قطعه سخت‌افزاری دیگری است و با مشخصات سیستم شما سازگار نیست."
+
+    if confidence == "LOW":
+        return "شناسه سخت‌افزاری دقیقاً با قطعات سیستم مطابقت ندارد و ممکن است درایور نامناسب باشد."
+
+    if method in ("pnputil", "inf_pnputil") and out:
+        return f"عدم سازگاری سخت‌افزار یا خطای امضای دیجیتال (PnPUtil: {out[:100]})."
+
+    return f"نصب درایور ناموفق بود (کد خروج: {exit_code} - عدم سازگاری یا خطای نصاب)."
+
+
 def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str, Any]:
     """
     Executes installation for a single validated DriverPackage:
@@ -162,11 +199,12 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
     _log_driver_event(f"Starting installation of [{category.upper()}] {pkg_name} using method '{method}' ({installer_path})")
 
     try:
+        out = ""
         if method == "pnputil":
             exit_code, out = _install_inf_package(installer_path, timeout=timeout)
             success = exit_code in (0, 259, 3010)
             reboot = (exit_code == 3010)
-            msg = "نصب INF با PnPUtil با موفقیت انجام شد." if success else f"خطای PnPUtil: {out[:200]}"
+            msg = "نصب INF با PnPUtil با موفقیت انجام شد." if success else _format_driver_failure_reason(exit_code, method, out, pkg.get("match", {}))
             if reboot:
                 msg += " (نیازمند راه‌اندازی مجدد)"
 
@@ -184,7 +222,7 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
             exit_code = _run_elevated_and_wait(cmd, work_dir, timeout)
             success = exit_code in (0, 3010, 1638)
             reboot = (exit_code == 3010)
-            msg = "بسته MSI با موفقیت نصب شد." if success else f"خطای msiexec: کد خروج {exit_code}"
+            msg = "بسته MSI با موفقیت نصب شد." if success else _format_driver_failure_reason(exit_code, method, "", pkg.get("match", {}))
 
         elif method == "script":
             work_dir = os.path.dirname(installer_path)
@@ -192,7 +230,7 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
             exit_code = _run_elevated_and_wait(cmd, work_dir, timeout)
             success = exit_code in (0, 3010)
             reboot = (exit_code == 3010)
-            msg = "اسکریپت درایور با موفقیت اجرا شد." if success else f"خطا در اجرای اسکریپت: کد خروج {exit_code}"
+            msg = "اسکریپت درایور با موفقیت اجرا شد." if success else _format_driver_failure_reason(exit_code, method, "", pkg.get("match", {}))
 
         else:  # asus_setup or setup_exe
             work_dir = os.path.dirname(installer_path)
@@ -200,7 +238,7 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
             exit_code = _run_elevated_and_wait(cmd, work_dir, timeout)
             success = exit_code in (0, 3010, 1638)
             reboot = (exit_code == 3010)
-            msg = "نصاب درایور با موفقیت اجرا و نصب شد." if success else f"خطا در نصب درایور: کد خروج {exit_code}"
+            msg = "نصاب درایور با موفقیت اجرا و نصب شد." if success else _format_driver_failure_reason(exit_code, method, "", pkg.get("match", {}))
 
         # Record to persistent installation history
         res_str = "needs_reboot" if reboot else ("success" if success else "failed")
@@ -267,6 +305,7 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
                 else:
                     _queue_state["items"][idx]["status"] = "failed"
                     _queue_state["items"][idx]["message"] = res.get("message", "خطا در نصب.")
+                    _queue_state["items"][idx]["failure_reason"] = res.get("message", "خطا در نصب.")
                     _queue_state["failed"] += 1
 
             _queue_state["reboot_required"] = any_reboot

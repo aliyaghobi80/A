@@ -30,6 +30,7 @@ class StorageCard extends StatelessWidget {
         storageType: primaryStorage?.type,
         busType: primaryStorage?.busType,
         model: primaryStorage?.model,
+        typeDescription: primaryStorage?.typeDescription,
       ),
       iconColor: const Color(0xFF06B6D4),
       trailing: Container(
@@ -89,6 +90,7 @@ class StorageCard extends StatelessWidget {
                           storageType: drive.type,
                           busType: drive.busType,
                           model: drive.model,
+                          typeDescription: drive.typeDescription,
                         ),
                       ),
                       const SizedBox(width: 10),

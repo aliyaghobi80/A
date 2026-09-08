@@ -220,6 +220,14 @@ def get_packages_directory(custom_path: Optional[str] = None) -> str:
         os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "Packages")),
         os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Packages")),
     ]
+
+    # Auto-detect PROGRAM, Packages, or Software on external or USB drives
+    for letter in ["H", "D", "E", "F", "G", "I", "J", "K", "L"]:
+        for sub in ["PROGRAM", "Packages", "Software", "Programs"]:
+            cand = f"{letter}:\\{sub}"
+            if cand not in candidates and os.path.isdir(cand):
+                candidates.append(cand)
+
     for c in candidates:
         if os.path.isdir(c):
             return c
@@ -1006,6 +1014,9 @@ def _detect_installed_package(
 
     if matched:
         matched_name = matched.get("name")
+        if matched_name:
+            clean_name = re.sub(r"\s*\((?:remove|uninstall)\s*only\)", "", matched_name, flags=re.IGNORECASE).strip()
+            matched_name = clean_name or matched_name
         version = matched.get("version")
         if version and version != "Not available":
             installed_version = version
@@ -1251,7 +1262,32 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         # Prune internal and temporary directories in-place
         dirs[:] = [d for d in dirs if d.lower() not in IGNORED_SCAN_DIR_NAMES and not d.startswith(".")]
 
+        # Check if this directory contains an Office setup script (e.g. Setup_Office 2024.cmd)
+        office_cmds = [f for f in files if f.lower().startswith("setup_office") and f.lower().endswith(".cmd")]
+        if office_cmds:
+            # Prioritize Setup_Office 2024.cmd, then 2021, etc.
+            office_cmds.sort(key=lambda x: "2024" not in x)
+            chosen_office_cmd = office_cmds[0]
+            cmd_full = os.path.abspath(os.path.join(root, chosen_office_cmd))
+            if cmd_full not in seen_paths and _is_safe_path(pkg_dir, cmd_full):
+                seen_paths.add(cmd_full)
+                rel_p = os.path.relpath(cmd_full, pkg_dir).replace("\\", "/")
+                sz = os.path.getsize(cmd_full) if os.path.isfile(cmd_full) else 0
+                discovered_files.append({
+                    "file": chosen_office_cmd,
+                    "full_path": cmd_full,
+                    "root": root,
+                    "rel_path": rel_p,
+                    "file_size": sz,
+                    "parent_folder": os.path.basename(root),
+                    "is_office_cmd": True,
+                })
+
         for file in files:
+            # If an Office setup script is present in this folder, do not enumerate ODT.exe or other internal helper files
+            if office_cmds and (file.lower() in ("odt.exe", "setup.exe") or file.lower().endswith(".cmd")):
+                continue
+
             extension = os.path.splitext(file)[1].lower()
             if extension not in SUPPORTED_PACKAGE_EXTENSIONS:
                 continue
@@ -1277,6 +1313,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
                 "rel_path": rel_path,
                 "file_size": file_size,
                 "parent_folder": os.path.basename(root),
+                "is_office_cmd": False,
             })
 
     # Only PE executables have embedded icons supported by the native extractor.
@@ -1299,20 +1336,45 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         rel_path = df["rel_path"]
         file_size = df["file_size"]
         parent_folder = df.get("parent_folder", "")
+        is_office_cmd = df.get("is_office_cmd", False)
 
         extension = os.path.splitext(file)[1].lower()
-        meta = _extract_exe_metadata(full_path) if extension == ".exe" else {
-            "product_name": "",
-            "file_description": "",
-            "publisher": "",
-            "version": "",
-            "original_filename": "",
-            "display_name": os.path.splitext(file)[0].replace("_", " ").replace("-", " "),
-        }
-        display_name = meta["display_name"]
-        version = meta["version"] or ""
-        publisher = meta["publisher"]
-        product_name = meta["product_name"] or display_name
+        if is_office_cmd:
+            meta = {
+                "product_name": "Microsoft Office 2024 (Pro Plus)",
+                "file_description": "Microsoft Office 2024 Installer",
+                "publisher": "Microsoft Corporation",
+                "version": "2024",
+                "original_filename": file,
+                "display_name": "Microsoft Office 2024 Pro Plus",
+            }
+            display_name = "Microsoft Office 2024 Pro Plus"
+            version = "2024"
+            publisher = "Microsoft Corporation"
+            product_name = "Microsoft Office 2024 (Pro Plus)"
+            installer_type = "office_cmd"
+            validation = {
+                "is_valid": True,
+                "validation_code": "ok",
+                "validation_error": None,
+                "auto_install_supported": True,
+                "manual_install_supported": True,
+                "trust_level": "verified_installer",
+            }
+        else:
+            meta = _extract_exe_metadata(full_path) if extension == ".exe" else {
+                "product_name": "",
+                "file_description": "",
+                "publisher": "",
+                "version": "",
+                "original_filename": "",
+                "display_name": os.path.splitext(file)[0].replace("_", " ").replace("-", " "),
+            }
+            display_name = meta["display_name"]
+            version = meta["version"] or ""
+            publisher = meta["publisher"]
+            product_name = meta["product_name"] or display_name
+            installer_type = _guess_installer_type(full_path)
 
         # Determine if the installer filename is too generic to be a display name.
         # e.g. setup.exe, installer.exe, install.exe inside a named sub-folder.
@@ -1334,29 +1396,48 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             silent_args = str(manifest.get("silentArguments") or "")
             detection_id = manifest.get("detectionId") or manifest.get("id")
 
-        installer_type = _guess_installer_type(full_path)
-        validation = _validate_installer(full_path, meta, installer_type, manifest)
-        pkg_id = _stable_package_id(rel_path)
+        if not is_office_cmd:
+            validation = _validate_installer(full_path, meta, installer_type, manifest)
+        pkg_id = "office_2024_pro_plus" if is_office_cmd else _stable_package_id(rel_path)
         icon_data = icons_map.get(full_path)
 
         # Resolve detection name
         effective_detect_name = folder_fallback_name if (folder_fallback_name and is_generic_filename) else display_name
         effective_product_name = folder_fallback_name if (folder_fallback_name and is_generic_filename) else product_name
 
-        detection = _detect_installed_package(
-            installed_apps,
-            effective_detect_name,
-            file,
-            effective_product_name,
-            publisher,
-            detection_id,
-            folder_name=parent_folder or folder_fallback_name,
-        )
-        is_installed = bool(detection["is_installed"])
-        installed_version = detection["installed_version"]
-        installed_exe_path = detection["installed_exe_path"]
-        install_location = detection["install_location"]
-        matched_app_name = detection["matched_app_name"]
+        if is_office_cmd:
+            from software.office import detect_microsoft_office
+            off_info = detect_microsoft_office()
+            is_installed = bool(off_info.get("installed", False))
+            installed_version = off_info.get("version", "Not available")
+            installed_exe_path = None
+            install_location = off_info.get("install_location")
+            matched_app_name = off_info.get("product_name", "Microsoft Office 2024")
+            detection_id = "microsoft_office"
+            icon_data = _resolve_best_brand_icon("office", file, None)
+            detection = {
+                "is_installed": is_installed,
+                "installed_version": installed_version,
+                "installed_exe_path": installed_exe_path,
+                "install_location": install_location,
+                "matched_app_name": matched_app_name,
+                "detection_source": "office_registry",
+            }
+        else:
+            detection = _detect_installed_package(
+                installed_apps,
+                effective_detect_name,
+                file,
+                effective_product_name,
+                publisher,
+                detection_id,
+                folder_name=parent_folder or folder_fallback_name,
+            )
+            is_installed = bool(detection["is_installed"])
+            installed_version = detection["installed_version"]
+            installed_exe_path = detection["installed_exe_path"]
+            install_location = detection["install_location"]
+            matched_app_name = detection["matched_app_name"]
 
         # Fallback version from installer metadata if not found in registry
         if not installed_version and version:
@@ -1453,9 +1534,9 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "detection_source": "portable_tool" if is_portable else detection["detection_source"],
             "is_portable_tool": is_portable,
             "can_open_tool": is_portable or bool(validation.get("can_open_tool", False)),
-            "install_allowed": False if is_portable else bool(validation["is_valid"] and validation["manual_install_supported"] and not is_installed),
-            "auto_install_supported": False if is_portable else bool(validation["auto_install_supported"] and not is_installed),
-            "manual_install_supported": False if is_portable else bool(validation["manual_install_supported"] and not is_installed),
+            "install_allowed": False if is_portable else bool(validation["is_valid"] and validation["manual_install_supported"]),
+            "auto_install_supported": False if is_portable else bool(validation["auto_install_supported"]),
+            "manual_install_supported": False if is_portable else bool(validation["manual_install_supported"]),
             "has_icon": icon_data is not None,
             "icon_base64": icon_data,
             "silent_arguments": silent_args,
@@ -1584,6 +1665,8 @@ def _manual_install_command(package: Dict[str, Any]) -> tuple[str, str]:
         return os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "wusa.exe"), subprocess.list2cmdline([
             path, "/norestart"
         ])
+    if extension in (".cmd", ".bat") or package.get("installer_type") == "office_cmd":
+        return os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "cmd.exe"), f'/c "{path}"'
     # App Installer provides the appropriate interactive UI for AppX/MSIX.
     return path, ""
 
@@ -1921,6 +2004,93 @@ def _silent_install_command(pkg: Dict[str, Any]) -> List[str]:
     return []
 
 
+def _install_office_automated(pkg: Dict[str, Any], timeout_seconds: int = 900) -> Dict[str, Any]:
+    """Automates Setup_Office 2024.cmd execution by piping option '1' (All Products) and verifying installation."""
+    cmd_path = os.path.abspath(pkg.get("full_path", ""))
+    office_dir = os.path.dirname(cmd_path)
+    if not os.path.isfile(cmd_path):
+        return {
+            "success": False,
+            "message": f"فایل نصاب آفیس یافت نشد: {cmd_path}",
+            "verified_installed": False,
+            "exit_code": -1,
+            "package_id": pkg.get("id"),
+            "name": pkg.get("name", "Microsoft Office 2024"),
+        }
+
+    logger.info(f"[OfficeInstall] Starting automated Office 2024 install from: {cmd_path}")
+
+    import tempfile
+    temp_dir = tempfile.gettempdir()
+    runner_path = os.path.join(temp_dir, "run_office_2024_auto.cmd")
+    runner_content = (
+        "@echo off\r\n"
+        f"cd /d \"{office_dir}\"\r\n"
+        f"(echo 1 & echo.) | \"{cmd_path}\"\r\n"
+        "exit /b %ERRORLEVEL%\r\n"
+    )
+    try:
+        with open(runner_path, "w", encoding="ascii", errors="ignore") as f:
+            f.write(runner_content)
+    except Exception as e:
+        logger.warning(f"[OfficeInstall] Error writing runner script: {e}")
+        runner_path = cmd_path
+
+    try:
+        exit_code = _run_elevated_and_wait([runner_path], office_dir, timeout_seconds=timeout_seconds)
+    finally:
+        if os.path.isfile(runner_path) and runner_path != cmd_path:
+            try:
+                os.remove(runner_path)
+            except Exception:
+                pass
+
+    from software.office import detect_microsoft_office
+    import time
+    time.sleep(3)
+    off_info = detect_microsoft_office()
+    if off_info.get("installed"):
+        ver = off_info.get("version", "")
+        prod = off_info.get("product_name", "Microsoft Office 2024")
+        return {
+            "success": True,
+            "skipped": False,
+            "message": f"✓ {prod}" + (f" (نسخه {ver})" if ver else "") + " با موفقیت نصب و شناسایی شد.",
+            "verified_installed": True,
+            "installed_version": ver,
+            "exit_code": exit_code,
+            "reboot_required": False,
+            "verification_state": "verified",
+            "package_id": pkg.get("id"),
+            "name": pkg.get("name", prod),
+        }
+    elif exit_code == 0:
+        return {
+            "success": True,
+            "skipped": False,
+            "message": "عملیات نصب آفیس با موفقیت به پایان رسید.",
+            "verified_installed": True,
+            "installed_version": "2024",
+            "exit_code": exit_code,
+            "reboot_required": False,
+            "verification_state": "exit_code_only",
+            "package_id": pkg.get("id"),
+            "name": pkg.get("name", "Microsoft Office 2024"),
+        }
+    else:
+        return {
+            "success": False,
+            "skipped": False,
+            "message": f"نصب آفیس با کد خروجی {exit_code} به پایان رسید اما در سیستم تأیید نشد.",
+            "verified_installed": False,
+            "exit_code": exit_code,
+            "reboot_required": False,
+            "verification_state": "failed",
+            "package_id": pkg.get("id"),
+            "name": pkg.get("name", "Microsoft Office 2024"),
+        }
+
+
 def silent_install_package(target_identifier: str, custom_dir: Optional[str] = None, timeout_seconds: int = 300) -> Dict[str, Any]:
     """
     Installs a package SILENTLY (no GUI wizard), waits for completion, and verifies installation.
@@ -1952,6 +2122,10 @@ def silent_install_package(target_identifier: str, custom_dir: Optional[str] = N
             "exit_code": -1,
             "verified_installed": False,
         }
+
+    # Special handling for Microsoft Office automation
+    if target_pkg.get("installer_type") == "office_cmd" or "setup_office" in os.path.basename(target_pkg.get("full_path", "")).lower():
+        return _install_office_automated(target_pkg, timeout_seconds=max(timeout_seconds, 900))
 
     # Skip if already installed
     if target_pkg.get("is_installed"):

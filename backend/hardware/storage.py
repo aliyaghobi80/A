@@ -176,3 +176,202 @@ def get_storage_info() -> List[Dict[str, Any]]:
         logger.error(f"Failed to detect storage devices: {e}")
 
     return drives
+
+
+def get_connected_usb_drives() -> List[Dict[str, Any]]:
+    """
+    Dynamically detects all connected USB flash drives and removable media.
+    Uses Win32 ctypes API for fast, elevation-free querying of volume and bus properties.
+    """
+    import ctypes
+    import struct
+    import os
+
+    drives: List[Dict[str, Any]] = []
+    try:
+        bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+        system_drive = (os.environ.get("SystemDrive") or "C:").upper().rstrip("\\")
+
+        for i in range(26):
+            if not (bitmask & (1 << i)):
+                continue
+
+            letter = chr(ord("A") + i) + ":"
+            root_path = letter + "\\"
+            drive_type = ctypes.windll.kernel32.GetDriveTypeW(root_path)
+
+            # 2 = DRIVE_REMOVABLE, 3 = DRIVE_FIXED
+            if drive_type not in (2, 3):
+                continue
+
+            if letter.upper() == system_drive:
+                continue
+
+            is_usb = (drive_type == 2)
+            vendor = ""
+            product = ""
+            serial = ""
+
+            # Query device descriptor via IOCTL_STORAGE_QUERY_PROPERTY
+            try:
+                h = ctypes.windll.kernel32.CreateFileW(
+                    rf"\\.\{letter}",
+                    0,  # Query access only (no admin required)
+                    1 | 2,  # FILE_SHARE_READ | FILE_SHARE_WRITE
+                    None,
+                    3,  # OPEN_EXISTING
+                    0,
+                    None
+                )
+                if h != -1 and h != 0:
+                    query = (ctypes.c_ulong * 3)(0, 0, 0)
+                    out_buf = ctypes.create_string_buffer(1024)
+                    bytes_returned = ctypes.c_ulong()
+                    res = ctypes.windll.kernel32.DeviceIoControl(
+                        h,
+                        0x002D1400,  # IOCTL_STORAGE_QUERY_PROPERTY
+                        query,
+                        ctypes.sizeof(query),
+                        out_buf,
+                        len(out_buf),
+                        ctypes.byref(bytes_returned),
+                        None
+                    )
+                    if res and bytes_returned.value >= 28:
+                        data = out_buf.raw[:bytes_returned.value]
+                        version, size, dev_type, dev_type_mod, removable, cmd_q, v_off, p_off, r_off, s_off, bus_type = struct.unpack_from('<LLBBBBLLLLL', data, 0)
+                        if bus_type == 7 or removable == 1:
+                            is_usb = True
+
+                        def _get_str(off: int) -> str:
+                            if 0 < off < len(data):
+                                end = data.find(b"\x00", off)
+                                raw = data[off:end] if end != -1 else data[off:]
+                                return raw.decode("latin-1", errors="ignore").strip()
+                            return ""
+
+                        vendor = _get_str(v_off)
+                        product = _get_str(p_off)
+                        serial = _get_str(s_off)
+                    ctypes.windll.kernel32.CloseHandle(h)
+            except Exception as e:
+                logger.debug(f"DeviceIoControl query failed for {letter}: {e}")
+
+            if not is_usb:
+                continue
+
+            # Query volume information
+            vol_name_buf = ctypes.create_unicode_buffer(261)
+            fs_name_buf = ctypes.create_unicode_buffer(261)
+            vol_serial = ctypes.c_ulong()
+            max_comp = ctypes.c_ulong()
+            flags = ctypes.c_ulong()
+            ctypes.windll.kernel32.GetVolumeInformationW(
+                root_path,
+                vol_name_buf,
+                260,
+                ctypes.byref(vol_serial),
+                ctypes.byref(max_comp),
+                ctypes.byref(flags),
+                fs_name_buf,
+                260
+            )
+
+            # Query disk space
+            free_bytes = ctypes.c_ulonglong(0)
+            total_bytes = ctypes.c_ulonglong(0)
+            total_free = ctypes.c_ulonglong(0)
+            ctypes.windll.kernel32.GetDiskFreeSpaceExW(
+                root_path,
+                ctypes.byref(free_bytes),
+                ctypes.byref(total_bytes),
+                ctypes.byref(total_free)
+            )
+
+            t_bytes = total_bytes.value
+            f_bytes = total_free.value
+            u_bytes = max(0, t_bytes - f_bytes)
+            t_gb = round(t_bytes / (1024 ** 3), 2) if t_bytes > 0 else 0.0
+            f_gb = round(f_bytes / (1024 ** 3), 2) if t_bytes > 0 else 0.0
+            u_gb = round(u_bytes / (1024 ** 3), 2) if t_bytes > 0 else 0.0
+            pct = round((u_bytes / t_bytes * 100), 1) if t_bytes > 0 else 0.0
+
+            drives.append({
+                "drive_letter": letter,
+                "volume_name": vol_name_buf.value or "فلش مموری",
+                "file_system": fs_name_buf.value or "FAT32",
+                "vendor": vendor,
+                "product": product,
+                "serial": serial,
+                "total_bytes": t_bytes,
+                "free_bytes": f_bytes,
+                "used_bytes": u_bytes,
+                "total_gb": t_gb,
+                "free_gb": f_gb,
+                "used_gb": u_gb,
+                "percent_used": pct,
+                "is_removable": True
+            })
+    except Exception as ex:
+        logger.error(f"Error querying USB drives: {ex}")
+
+    return drives
+
+
+def safe_eject_drive(drive_letter: str) -> Dict[str, Any]:
+    """
+    Safely ejects / dismounts a USB removable drive using native Windows Shell COM.
+    CRITICAL: Strictly dismounts/ejects without formatting or deleting anything.
+    """
+    import os
+    import re
+    import subprocess
+
+    drive = str(drive_letter).strip().upper()
+    if not drive.endswith(":"):
+        drive = drive + ":"
+
+    if not re.match(r"^[A-Z]:$", drive):
+        return {"success": False, "message": "نام درایو نامعتبر است."}
+
+    system_drive = (os.environ.get("SystemDrive") or "C:").upper().rstrip("\\")
+    if drive == system_drive:
+        return {"success": False, "message": "امکان خروج درایو سیستمی ویندوز وجود ندارد."}
+
+    # Execute Explorer Shell native Eject verb
+    ps_cmd = (
+        f"$sh = New-Object -ComObject Shell.Application; "
+        f"$item = $sh.Namespace(17).ParseName('{drive}'); "
+        f"if ($item) {{ "
+        f"  $ejected = $false; "
+        f"  foreach ($v in $item.Verbs()) {{ "
+        f"    if ($v.Name -match 'E.*ject|خروج|Eject') {{ "
+        f"      $v.DoIt(); $ejected = $true; break "
+        f"    }} "
+        f"  }}; "
+        f"  if (-not $ejected) {{ $item.InvokeVerb('E&ject') }}; "
+        f"  Write-Output 'OK' "
+        f"}} else {{ "
+        f"  Write-Output 'NOT_FOUND' "
+        f"}}"
+    )
+
+    try:
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        out = (proc.stdout or "").strip()
+        if "NOT_FOUND" in out:
+            return {"success": False, "message": f"درایو {drive} یافت نشد یا قبلاً خارج شده است."}
+
+        return {
+            "success": True,
+            "message": f"فلش مموری ({drive}) با موفقیت به صورت ایمن خارج شد و اکنون قابل جدا کردن است."
+        }
+    except Exception as e:
+        logger.error(f"Failed to safely eject {drive}: {e}")
+        return {"success": False, "message": f"خطا در خروج ایمن درایو: {e}"}
+

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/software_controller.dart';
+import '../../controllers/system_info_controller.dart';
 import '../../controllers/theme_language_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
@@ -257,7 +258,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                           ),
                           const SizedBox(width: 10),
                           ElevatedButton.icon(
-                            onPressed: (isBatchRunning || readyPackages.isEmpty)
+                            onPressed: (isBatchRunning || (readyPackages.isEmpty && selectedPackageIds.isEmpty))
                                 ? null
                                 : () => softwareCtrl.startAutoInstallAll(
                                       context,
@@ -304,8 +305,19 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                     final isThisUninstalling = softwareCtrl.isCurrentUninstalling(pkg);
                     return _buildPackageRow(pkg, softwareCtrl, isThisInstalling, isThisUninstalling, isDark, accent);
                   }),
-                  if (packages.isNotEmpty && softwareCtrl.directoryExists)
-                    _buildOfficeReminderBanner(context, softwareCtrl, isDark),
+                  if (packages.isNotEmpty && softwareCtrl.directoryExists) ...[
+                    Builder(
+                      builder: (context) {
+                        final sysCtrl = Get.isRegistered<SystemInfoController>()
+                            ? Get.find<SystemInfoController>()
+                            : null;
+                        final isOfficeInstalled =
+                            sysCtrl?.systemInfo.value?.officeActivation.installed ?? false;
+                        if (isOfficeInstalled) return const SizedBox.shrink();
+                        return _buildOfficeReminderBanner(context, softwareCtrl, isDark);
+                      },
+                    ),
+                  ],
               ],
             ),
           );
@@ -319,19 +331,39 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
     return InkWell(
       onTap: () => setState(() => selectedCategory = cat),
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: isSelected ? accent.withValues(alpha: isDark ? 0.25 : 0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
+          color: isSelected
+              ? accent
+              : (isDark ? const Color(0xFF162238) : const Color(0xFFF1F5F9)),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected
+                ? accent
+                : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+            width: 1.2,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: accent.withValues(alpha: isDark ? 0.35 : 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12.5,
             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected ? accent : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+            color: isSelected
+                ? Colors.white
+                : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
           ),
         ),
       ),
@@ -354,7 +386,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
           );
         }
       } catch (e) {
-        debugPrint('[SoftwareInstallPage] Icon decode error for ${pkg.name}: $e');
+        debugPrint('[SoftwareInstallPage] Error decoding icon for ${pkg.id}: $e');
       }
     }
     return Icon(Icons.apps_rounded, size: 24, color: accent);
@@ -375,21 +407,38 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
+        color: isSelected
+            ? (isDark ? accent.withValues(alpha: 0.16) : accent.withValues(alpha: 0.08))
+            : (isDark ? AppTheme.darkCard : AppTheme.lightCard),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isSelected
               ? accent
-              : (isInstalled ? (isDark ? AppTheme.darkBorder : AppTheme.lightBorder) : const Color(0xFF0284C7).withValues(alpha: 0.35)),
-          width: isSelected ? 1.8 : 1.2,
+              : (isInstalled ? (isDark ? AppTheme.darkBorder : AppTheme.lightBorder) : const Color(0xFF0284C7).withValues(alpha: isDark ? 0.5 : 0.35)),
+          width: isSelected ? 2.0 : 1.2,
         ),
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: accent.withValues(alpha: isDark ? 0.28 : 0.12),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
       child: Row(
         children: [
-          if (!isInstalled && pkg.isValid && !pkg.isPortable) ...[
+          if (pkg.isValid && !pkg.isPortable) ...[
             Checkbox(
               value: isSelected,
               activeColor: accent,
+              checkColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              side: BorderSide(
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                width: 1.8,
+              ),
               onChanged: (val) {
                 setState(() {
                   if (val == true) {
@@ -568,6 +617,14 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
   }
 
   Widget _buildOfficeReminderBanner(BuildContext context, SoftwareController softwareCtrl, bool isDark) {
+    final sysCtrl = Get.isRegistered<SystemInfoController>()
+        ? Get.find<SystemInfoController>()
+        : null;
+    final isOfficeInstalled =
+        sysCtrl?.systemInfo.value?.officeActivation.installed ?? false;
+    if (isOfficeInstalled) {
+      return const SizedBox.shrink();
+    }
     const officeColor = Color(0xFFEA580C);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -688,7 +745,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'پوشه Microsoft Office را از روی هارد/فلش باز کنید و مراحل نصب آفیس را انجام دهید.',
+                      'نصب خودکار آفیس ۲۰۲۴ (انتخاب خودکار گزینه ۱ و تأیید نصب) یا باز کردن مستقیم پوشه آفیس از روی هارد/فلش.',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
@@ -703,28 +760,50 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                 ),
               ),
               const SizedBox(width: 12),
-              ElevatedButton.icon(
-                onPressed: () => softwareCtrl.openOfficeFolder(context),
-                icon: const Icon(Icons.folder_open_rounded, size: 15),
-                label: const Text(
-                  'باز کردن پوشه آفیس',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: officeColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 9,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: 1.5,
-                ),
+              Builder(
+                builder: (context) {
+                  final officePkg = softwareCtrl.packages.firstWhereOrNull(
+                    (p) => p.installerType == 'office_cmd' || p.id == 'office_2024_pro_plus' || p.name.toLowerCase().contains('office'),
+                  );
+
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (officePkg != null) ...[
+                        ElevatedButton.icon(
+                          onPressed: () => softwareCtrl.startAutoInstallAll(context, targetPackageIds: [officePkg.id]),
+                          icon: const Icon(Icons.play_circle_filled_rounded, size: 15),
+                          label: const Text(
+                            'نصب خودکار آفیس ۲۰۲۴',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFEA580C),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            elevation: 1.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      OutlinedButton.icon(
+                        onPressed: () => softwareCtrl.openOfficeFolder(context),
+                        icon: const Icon(Icons.folder_open_rounded, size: 15),
+                        label: const Text(
+                          'پوشه آفیس',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: officeColor,
+                          side: BorderSide(color: officeColor.withValues(alpha: 0.6)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ],
           ),

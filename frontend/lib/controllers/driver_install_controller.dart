@@ -564,4 +564,139 @@ class DriverInstallController extends GetxController {
       );
     }
   }
+
+  Future<void> installSingleDriverAuto(BuildContext context, IntelligentDriverPackage pkg) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    isBatchInstalling.value = true;
+    try {
+      final res = await _apiService.startDriverQueueInstall(
+        packageIds: [pkg.packageId],
+        folderPath: driverFolder.value,
+      );
+      if (res['success'] == true) {
+        _startDriverBatchPolling(scaffoldMessenger);
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('نصب خودکار «${pkg.displayName}» آغاز شد.'),
+            backgroundColor: const Color(0xFF0D9488),
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        isBatchInstalling.value = false;
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(res['message'] as String? ?? 'خطا در شروع نصب.'),
+            backgroundColor: const Color(0xFFEF4444),
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      isBatchInstalling.value = false;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('خطا در شروع نصب خودکار: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> installSingleDriverInteractive(BuildContext context, IntelligentDriverPackage pkg) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    try {
+      final res = await _apiService.installDriverInteractive(pkg.packageId, folderPath: driverFolder.value);
+      final ok = res['success'] == true;
+      final msg = res['message'] as String? ?? '';
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(msg.isNotEmpty ? msg : (ok ? 'پنجره نصب با موفقیت باز شد.' : 'خطا در باز کردن نصاب.')),
+          backgroundColor: ok ? const Color(0xFF2563EB) : const Color(0xFFEF4444),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      if (ok) {
+        Get.find<SystemInfoController>().recordDriverInstall(1);
+      }
+    } catch (e) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('خطا در باز کردن نصاب دستی: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> openPackageFolder(BuildContext context, IntelligentDriverPackage pkg) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    try {
+      final res = await _apiService.openDriverFolder(pkg.packageId, folderPath: driverFolder.value);
+      if (res['success'] != true) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(res['message'] as String? ?? 'خطا در باز کردن پوشه.'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('خطا در باز کردن پوشه: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> installSelectedDriversManual(BuildContext context) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final selected = scanResult.value.packages.where((p) => selectedPackageIds.contains(p.packageId)).toList();
+    if (selected.isEmpty) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('هیچ درایوری انتخاب نشده است.'),
+          backgroundColor: Color(0xFFF59E0B),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Launch each selected driver installer interactively
+    int launched = 0;
+    for (final pkg in selected) {
+      try {
+        final res = await _apiService.installDriverInteractive(pkg.packageId, folderPath: driverFolder.value);
+        if (res['success'] == true) {
+          launched++;
+        }
+      } catch (_) {}
+    }
+
+    scaffoldMessenger.showSnackBar(
+      SnackBar(
+        content: Text('$launched نصاب درایور به صورت دستی باز شدند.'),
+        backgroundColor: const Color(0xFF2563EB),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    if (launched > 0) {
+      Get.find<SystemInfoController>().recordDriverInstall(launched);
+    }
+  }
 }
+

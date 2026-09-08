@@ -374,7 +374,51 @@ def get_office_activation_info() -> Dict[str, Any]:
         if info["channel"] == "Not available":
             info["channel"] = "Permanent (Ohook)"
 
-    # Step 5: Check Activation Tool Availability
+    # Step 5: Evaluate Genuine Original Office (Retail, 365, OEM)
+    product_lower = (info["product"] or "").lower()
+    ch_lower = (info["channel"] or "").lower()
+    activated = info["activated"]
+
+    is_genuine = False
+    genuine_type = ""
+
+    if activated:
+        is_retail = "retail" in ch_lower or "retail" in product_lower
+        is_oem = "oem" in ch_lower
+        is_sub = any(k in product_lower or k in ch_lower for k in ["365", "subscription", "family", "personal"])
+        is_home_office = any(k in product_lower for k in ["home & student", "home & business", "home and student", "home and business", "homestudent", "homebusiness"])
+
+        if is_sub:
+            is_genuine = True
+            genuine_type = "Microsoft 365 Subscription"
+        elif is_home_office or is_retail or is_oem:
+            is_genuine = True
+            genuine_type = "Retail / OEM Original"
+        elif is_ohook:
+            is_genuine = False
+            genuine_type = "Ohook Permanent"
+        elif "volume" not in ch_lower and "kms" not in ch_lower:
+            is_genuine = True
+            genuine_type = "Original License"
+
+    info["is_genuine"] = is_genuine
+    info["genuine_type"] = genuine_type
+    info["needs_activation"] = info["installed"] and not activated
+
+    if not info["installed"]:
+        info["activation_summary_fa"] = "مایکروسافت آفیس روی سیستم نصب نیست."
+        info["badge_label"] = "نصب نیست"
+    elif is_genuine:
+        info["activation_summary_fa"] = "لایسنس آفیس اورجینال است و نیازی به فعال‌سازی ندارد."
+        info["badge_label"] = "آفیس اورجینال"
+    elif activated:
+        info["activation_summary_fa"] = "مایکروسافت آفیس فعال است."
+        info["badge_label"] = "فعال شده"
+    else:
+        info["activation_summary_fa"] = "آفیس فعال نیست و نیاز به فعال‌سازی دارد."
+        info["badge_label"] = "نیازمند فعال‌سازی"
+
+    # Step 6: Check Activation Tool Availability
     tool_status = get_tool_status("office")
     info["tool_available"] = tool_status.get("available", False)
     info["tool_path"] = tool_status.get("tool_path")

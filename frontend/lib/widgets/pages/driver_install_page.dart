@@ -93,7 +93,16 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
 
                 // 4. Detected Driver Package Cards (or hardware status list if no scan yet)
                 if (packages.isNotEmpty)
-                  ...packages.map((pkg) => _buildPackageCard(pkg, driverCtrl, isDark, accent, isAdvanced))
+                  ...packages.map((pkg) => _buildPackageCard(
+                        context,
+                        pkg,
+                        driverCtrl,
+                        isDark,
+                        accent,
+                        isAdvanced,
+                        batchStatus,
+                        isBatchRunning,
+                      ))
                 else if (drivers.isNotEmpty) ...[
                   _buildHardwareStatusHeader(isDark, accent, driverCtrl, context),
                   const SizedBox(height: 10),
@@ -309,14 +318,30 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                   minimumSize: const Size(0, 34),
                 ),
               ),
-              // Install Selected Button
+              // Auto Install Selected Button
               ElevatedButton.icon(
                 onPressed: (isBatchRunning || selectedIds.isEmpty) ? null : () => ctrl.installSelectedDrivers(context),
-                icon: const Icon(Icons.check_box_outlined, size: 16),
-                label: Text('نصب موارد انتخاب‌شده (${selectedIds.length})'),
+                icon: const Icon(Icons.auto_mode_rounded, size: 16),
+                label: Text('نصب خودکار (${selectedIds.length})'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0D9488),
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                  disabledForegroundColor: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: const Size(0, 34),
+                ),
+              ),
+              // Manual Install Selected Button
+              ElevatedButton.icon(
+                onPressed: (isBatchRunning || selectedIds.isEmpty) ? null : () => ctrl.installSelectedDriversManual(context),
+                icon: const Icon(Icons.launch_rounded, size: 16),
+                label: Text('نصب دستی (${selectedIds.length})'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                  disabledForegroundColor: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   minimumSize: const Size(0, 34),
                 ),
@@ -325,10 +350,12 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
               ElevatedButton.icon(
                 onPressed: isBatchRunning ? null : () => ctrl.installAllDrivers(context),
                 icon: const Icon(Icons.play_arrow_rounded, size: 16),
-                label: const Text('نصب همه'),
+                label: const Text('نصب خودکار همه'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: accent,
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                  disabledForegroundColor: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   minimumSize: const Size(0, 34),
                 ),
@@ -341,20 +368,52 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
   }
 
   Widget _buildPackageCard(
+    BuildContext context,
     IntelligentDriverPackage pkg,
     DriverInstallController ctrl,
     bool isDark,
     Color accent,
     bool isAdvanced,
+    DriverBatchStatus batchStatus,
+    bool isBatchRunning,
   ) {
     final match = pkg.match;
     final isSelected = ctrl.selectedPackageIds.contains(pkg.packageId);
+
+    // Find any batch installation status item for this driver
+    DriverInstallItem? queueItem;
+    for (final item in batchStatus.items) {
+      if ((item.packageId != null && item.packageId == pkg.packageId) ||
+          (item.displayName != null && item.displayName == pkg.displayName) ||
+          (item.filename == pkg.installerFile)) {
+        queueItem = item;
+        break;
+      }
+    }
 
     Color statusColor = AppTheme.statusSuccess;
     String statusBadgeText = 'آماده';
     BadgeStatus badgeStatus = BadgeStatus.success;
 
-    if (match != null) {
+    if (queueItem != null) {
+      if (queueItem.status == 'installing') {
+        statusColor = const Color(0xFFF59E0B);
+        statusBadgeText = 'در حال نصب...';
+        badgeStatus = BadgeStatus.warning;
+      } else if (queueItem.status == 'completed') {
+        statusColor = const Color(0xFF10B981);
+        statusBadgeText = 'نصب شد';
+        badgeStatus = BadgeStatus.success;
+      } else if (queueItem.status == 'failed') {
+        statusColor = const Color(0xFFEF4444);
+        statusBadgeText = 'خطا در نصب';
+        badgeStatus = BadgeStatus.danger;
+      } else if (queueItem.status == 'skipped') {
+        statusColor = const Color(0xFF64748B);
+        statusBadgeText = 'رد شد';
+        badgeStatus = BadgeStatus.neutral;
+      }
+    } else if (match != null) {
       if (match.status == 'needs_install') {
         statusColor = const Color(0xFFEF4444);
         statusBadgeText = 'نیاز به نصب';
@@ -378,14 +437,25 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
+        color: isSelected
+            ? (isDark ? accent.withValues(alpha: 0.16) : accent.withValues(alpha: 0.08))
+            : (isDark ? AppTheme.darkCard : AppTheme.lightCard),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isSelected
-              ? const Color(0xFF0D9488)
+              ? accent
               : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
-          width: isSelected ? 1.5 : 1.2,
+          width: isSelected ? 2.0 : 1.2,
         ),
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: accent.withValues(alpha: isDark ? 0.28 : 0.12),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -395,8 +465,13 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
               // Selection Checkbox
               Checkbox(
                 value: isSelected,
-                activeColor: const Color(0xFF0D9488),
+                activeColor: accent,
+                checkColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                side: BorderSide(
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  width: 1.8,
+                ),
                 onChanged: (_) => ctrl.togglePackageSelection(pkg.packageId),
               ),
               // Category Icon
@@ -468,6 +543,40 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
             ],
           ),
 
+          // Failure Reason Banner (if failed during batch installation)
+          if (queueItem != null && queueItem.status == 'failed') ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFEF4444)),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'علت عدم نصب: ${(queueItem.failureReason?.isNotEmpty == true ? queueItem.failureReason! : queueItem.message.isNotEmpty ? queueItem.message : "خطای نامشخص در نصب درایور")}',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xFFDC2626),
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           // Advanced Mode Extended Details
           if (isAdvanced) ...[
             const Divider(height: 14),
@@ -512,6 +621,55 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
               ),
             ),
           ],
+
+          // Actions Row (Auto Install, Manual Install, Open Folder)
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: (isBatchRunning || queueItem?.status == 'installing')
+                    ? null
+                    : () => ctrl.installSingleDriverAuto(context, pkg),
+                icon: const Icon(Icons.auto_mode_rounded, size: 14),
+                label: const Text('نصب خودکار', style: TextStyle(fontSize: 11.5)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0D9488),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: const Size(0, 30),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: (isBatchRunning || queueItem?.status == 'installing')
+                    ? null
+                    : () => ctrl.installSingleDriverInteractive(context, pkg),
+                icon: const Icon(Icons.touch_app_rounded, size: 14),
+                label: const Text('نصب دستی', style: TextStyle(fontSize: 11.5)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: const Size(0, 30),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () => ctrl.openPackageFolder(context, pkg),
+                icon: const Icon(Icons.folder_open_rounded, size: 14),
+                label: const Text('پوشه درایور', style: TextStyle(fontSize: 11.5)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                  side: BorderSide(color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: const Size(0, 30),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

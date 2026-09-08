@@ -13,6 +13,11 @@ def get_motherboard_info() -> Dict[str, Any]:
         "manufacturer": "Not available",
         "model": "Not available",
         "display_name": "Not available",
+        "brand": "Unknown",
+        "brand_fa": "نامشخص",
+        "clean_model": "Not available",
+        "chipset": "",
+        "form_factor": "ATX",
         "serial": "-",
         "uuid": "-",
         "version": "-"
@@ -42,6 +47,12 @@ def get_motherboard_info() -> Dict[str, Any]:
             board_result["manufacturer"] = mfg
             board_result["model"] = mdl
             board_result["display_name"] = norm["display_name"]
+            board_result["brand"] = norm.get("brand", mfg)
+            board_result["brand_fa"] = norm.get("brand_fa", mfg)
+            board_result["brand_slug"] = norm.get("brand_slug", "generic")
+            board_result["clean_model"] = norm.get("clean_model", mdl)
+            board_result["chipset"] = norm.get("chipset", "")
+            board_result["form_factor"] = norm.get("form_factor", "ATX")
             board_result["serial"] = clean_serial_number(data.get("SerialNumber"), default="-")
             board_result["version"] = clean_string(data.get("Version"), default="-")
             board_result["uuid"] = clean_serial_number(data.get("UUID"), default="-")

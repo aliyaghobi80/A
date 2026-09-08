@@ -7,6 +7,7 @@ import '../controllers/system_info_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
 import 'cards/battery_card.dart';
+import 'common/design_components.dart';
 import 'common/hardware_illustrations.dart';
 import 'qc/qc_summary_banner.dart';
 
@@ -63,6 +64,7 @@ class SimpleModeView extends StatelessWidget {
         // 1.5 Quick System Summary Strip (Compact one-liner)
         _buildSystemSummaryStrip(context, info, isDark, l10n, systemCtrl),
         _buildDeviceIdentityCard(context, info, isDark, l10n, systemCtrl),
+        _buildLiveUsbSection(context, isDark, l10n, systemCtrl),
         const SizedBox(height: 14),
 
         // 2. Hardware Section Header with 1-click Copy
@@ -207,29 +209,36 @@ class SimpleModeView extends StatelessWidget {
                       ? info.system.serial
                       : '-');
 
+            final mb = info.motherboard;
             final cardMotherboard = _buildProminentSpecCard(
               context: context,
               stepNumber: 4,
               categoryTitle: l10n.motherboard,
-              icon: Icons.developer_board_rounded,
-              accentColor: const Color(0xFF10B981),
+              headerTrailing: MotherboardBrandBadge(motherboard: mb, compact: true),
+              icon: mb.brandIcon,
+              accentColor: mb.brandColor,
               illustration: const MotherboardIllustration(),
-              primaryValue: info.motherboard.model != 'Not available'
-                  ? info.motherboard.model
-                  : info.motherboard.manufacturer,
-              secondaryValue: info.motherboard.manufacturer != 'Not available'
-                  ? info.motherboard.manufacturer
-                  : null,
+              primaryValue: mb.fullDisplayName.isNotEmpty
+                  ? mb.fullDisplayName
+                  : (mb.model != 'Not available' ? mb.model : mb.manufacturer),
+              secondaryValue: mb.effectiveBrandFa.isNotEmpty
+                  ? (mb.effectiveChipset.isNotEmpty
+                      ? '${mb.effectiveBrandFa} • چیپست ${mb.effectiveChipset}'
+                      : mb.effectiveBrandFa)
+                  : (mb.manufacturer != 'Not available' ? mb.manufacturer : null),
               specPills: [
+                if (mb.effectiveChipset.isNotEmpty)
+                  'Chipset: ${mb.effectiveChipset}',
+                if (mb.effectiveFormFactor.isNotEmpty)
+                  mb.effectiveFormFactor,
                 if (info.bios.manufacturer != 'Not available')
                   'BIOS: ${info.bios.manufacturer}',
                 if (info.bios.version != 'Not available') info.bios.version,
-                if (info.motherboard.uuid != '-' &&
-                    info.motherboard.uuid.isNotEmpty)
-                  'UUID: ${info.motherboard.uuid}',
+                if (mb.uuid != '-' && mb.uuid.isNotEmpty)
+                  'UUID: ${mb.uuid}',
               ],
               serialNumber: mbSerial,
-              copyValue: info.motherboard.model,
+              copyValue: mb.fullDisplayName.isNotEmpty ? mb.fullDisplayName : mb.model,
               onCopy: (val) => systemCtrl.copyToClipboard(
                 context,
                 val,
@@ -250,6 +259,7 @@ class SimpleModeView extends StatelessWidget {
                 storageType: primaryStorage?.type,
                 busType: primaryStorage?.busType,
                 model: primaryStorage?.model,
+                typeDescription: primaryStorage?.typeDescription,
               ),
               primaryValue: '',
               copyValue: info.storage
@@ -312,6 +322,7 @@ class SimpleModeView extends StatelessWidget {
                                     storageType: d.type,
                                     busType: d.busType,
                                     model: d.model,
+                                    typeDescription: d.typeDescription,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -519,7 +530,10 @@ class SimpleModeView extends StatelessWidget {
               ),
             );
 
-            final isWinActivated = info.windowsActivation.activated;
+            final winAct = info.windowsActivation;
+            final isWinActivated = winAct.activated;
+            final isWinGenuine = winAct.isGenuineOriginal;
+
             final cardWindows = _buildProminentSpecCard(
               context: context,
               stepNumber: 6,
@@ -539,47 +553,94 @@ class SimpleModeView extends StatelessWidget {
                 if (info.windows.build != 'Not available')
                   'Build ${info.windows.build}',
               ],
-              headerTrailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color:
-                      (isWinActivated
+              headerTrailing: isWinGenuine
+                  ? GenuineOriginalBadge(
+                      compact: true,
+                      label: winAct.effectiveBadgeLabel,
+                    )
+                  : Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color:
+                            (isWinActivated
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFFEF4444))
+                                .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color:
+                              (isWinActivated
+                                      ? const Color(0xFF10B981)
+                                      : const Color(0xFFEF4444))
+                                  .withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        isWinActivated
+                            ? '✓ ${l10n.activated}'
+                            : '✕ ${l10n.notActivated}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: isWinActivated
                               ? const Color(0xFF10B981)
-                              : const Color(0xFFEF4444))
-                          .withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color:
-                        (isWinActivated
-                                ? const Color(0xFF10B981)
-                                : const Color(0xFFEF4444))
-                            .withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Text(
-                  isWinActivated
-                      ? '✓ ${l10n.activated}'
-                      : '✕ ${l10n.notActivated}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isWinActivated
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFFEF4444),
-                  ),
-                ),
-              ),
+                              : const Color(0xFFEF4444),
+                        ),
+                      ),
+                    ),
               copyValue: info.windows.edition,
               onCopy: (val) => systemCtrl.copyToClipboard(
                 context,
                 val,
                 '${l10n.copiedToClipboard}: $val',
               ),
-              actionWidget: null,
+              actionWidget: isWinGenuine
+                  ? Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF10B981).withValues(alpha: isDark ? 0.2 : 0.1),
+                            const Color(0xFF059669).withValues(alpha: isDark ? 0.08 : 0.04),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.4 : 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.verified_user_rounded,
+                            size: 16,
+                            color: Color(0xFF10B981),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              winAct.effectiveActivationSummaryFa,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? const Color(0xFF6EE7B7)
+                                    : const Color(0xFF065F46),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : null,
             );
 
-            final officeInstalled = info.officeActivation.installed;
-            final officeActivated = info.officeActivation.activated;
+            final officeAct = info.officeActivation;
+            final officeInstalled = officeAct.installed;
+            final officeActivated = officeAct.activated;
+            final officeIsGenuine = officeAct.isGenuineOriginal;
+
             final officeStatusColor = !officeInstalled
                 ? const Color(0xFF64748B)
                 : (officeActivated
@@ -599,47 +660,92 @@ class SimpleModeView extends StatelessWidget {
               accentColor: const Color(0xFFD97706),
               illustration: const OfficeIllustration(),
               primaryValue: officeInstalled
-                  ? info.officeActivation.product
+                  ? officeAct.product
                   : l10n.notInstalled,
               secondaryValue:
                   officeInstalled &&
-                      info.officeActivation.version != 'Not available'
-                  ? '${info.officeActivation.architecture} • ${info.officeActivation.version}'
+                      officeAct.version != 'Not available'
+                  ? '${officeAct.architecture} • ${officeAct.version}'
                   : null,
               specPills: officeInstalled
                   ? [
-                      info.officeActivation.architecture,
-                      if (info.officeActivation.version != 'Not available')
-                        'v${info.officeActivation.version}',
-                      if (info.officeActivation.channel != 'Not available')
-                        info.officeActivation.channel,
+                      officeAct.architecture,
+                      if (officeAct.version != 'Not available')
+                        'v${officeAct.version}',
+                      if (officeAct.channel != 'Not available')
+                        officeAct.channel,
                     ]
                   : null,
-              headerTrailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: officeStatusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: officeStatusColor.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Text(
-                  officeStatusLabel,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: officeStatusColor,
-                  ),
-                ),
-              ),
-              copyValue: officeInstalled ? info.officeActivation.product : null,
+              headerTrailing: officeIsGenuine
+                  ? GenuineOriginalBadge(
+                      compact: true,
+                      isOffice: true,
+                      label: officeAct.effectiveBadgeLabel,
+                    )
+                  : Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: officeStatusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: officeStatusColor.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        officeStatusLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: officeStatusColor,
+                        ),
+                      ),
+                    ),
+              copyValue: officeInstalled ? officeAct.product : null,
               onCopy: (val) => systemCtrl.copyToClipboard(
                 context,
                 val,
                 '${l10n.copiedToClipboard}: $val',
               ),
-              actionWidget: null,
+              actionWidget: officeIsGenuine
+                  ? Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF10B981).withValues(alpha: isDark ? 0.2 : 0.1),
+                            const Color(0xFF059669).withValues(alpha: isDark ? 0.08 : 0.04),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.4 : 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.verified_user_rounded,
+                            size: 16,
+                            color: Color(0xFF10B981),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              officeAct.effectiveActivationSummaryFa,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? const Color(0xFF6EE7B7)
+                                    : const Color(0xFF065F46),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : null,
             );
 
             final cardBattery = BatteryCard(battery: info.battery);
@@ -1182,12 +1288,13 @@ class SimpleModeView extends StatelessWidget {
                       softwareCtrl,
                     ),
                   ),
-                  _buildOfficeReminderSection(
-                    context,
-                    isDark,
-                    l10n,
-                    softwareCtrl,
-                  ),
+                  if (!(systemCtrl.systemInfo.value?.officeActivation.installed ?? info.officeActivation.installed))
+                    _buildOfficeReminderSection(
+                      context,
+                      isDark,
+                      l10n,
+                      softwareCtrl,
+                    ),
                 ] else if (info.software.isNotEmpty) ...[
                   // Fallback to configured required software checklist
                   LayoutBuilder(
@@ -2087,6 +2194,311 @@ class SimpleModeView extends StatelessWidget {
                   ? 'کپی سریال دستگاه'
                   : 'Copy device serial',
               icon: const Icon(Icons.copy_rounded, size: 18),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLiveUsbSection(
+    BuildContext context,
+    bool isDark,
+    AppLocalizations l10n,
+    SystemInfoController systemCtrl,
+  ) {
+    return Obx(() {
+      final drives = systemCtrl.usbDrives;
+      if (drives.isEmpty) {
+        return const SizedBox.shrink();
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 12),
+          ...drives.map((drive) => _buildUsbDriveCard(context, drive, isDark, l10n, systemCtrl)),
+        ],
+      );
+    });
+  }
+
+  Widget _buildUsbDriveCard(
+    BuildContext context,
+    UsbDriveInfo drive,
+    bool isDark,
+    AppLocalizations l10n,
+    SystemInfoController systemCtrl,
+  ) {
+    const primaryColor = Color(0xFFEF4444);
+    final isEjecting = systemCtrl.isEjecting.value;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  const Color(0xFF1E1E2E),
+                  const Color(0xFF181824),
+                ]
+              : [
+                  Colors.white,
+                  const Color(0xFFFFF5F5),
+                ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: primaryColor.withValues(alpha: isDark ? 0.45 : 0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primaryColor.withValues(alpha: isDark ? 0.12 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            // Top Header Strip
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: primaryColor.withValues(alpha: isDark ? 0.12 : 0.06),
+                border: Border(
+                  bottom: BorderSide(
+                    color: primaryColor.withValues(alpha: isDark ? 0.2 : 0.1),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Pulsing Live Indicator
+                  Container(
+                    width: 9,
+                    height: 9,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xFF10B981),
+                          blurRadius: 6,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.isPersian ? 'فلش مموری متصل (Live USB)' : 'Connected USB Flash Drive',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+                    ),
+                  ),
+                  const Spacer(),
+                  // File System Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF2E384D) : const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      drive.fileSystem,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Drive Letter Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: isDark ? 0.25 : 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: primaryColor.withValues(alpha: 0.5),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      drive.driveLetter,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'monospace',
+                        color: primaryColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Card Body: Photo + Info + Eject Button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  // Real Photo of Flash Drive
+                  Container(
+                    width: 90,
+                    height: 60,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF12141C) : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: const UsbFlashIllustration(
+                      width: 82,
+                      height: 52,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Middle: Name, Volume, Capacity
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title / Name
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                drive.displayName,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (drive.volumeName.isNotEmpty &&
+                                drive.volumeName != 'فلش مموری' &&
+                                drive.volumeName != 'USB Drive') ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0D9488).withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  drive.volumeName,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0D9488),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Capacity Bar
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: (drive.percentUsed / 100.0).clamp(0.0, 1.0),
+                            minHeight: 7,
+                            backgroundColor: isDark ? const Color(0xFF262D3D) : const Color(0xFFE2E8F0),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              drive.percentUsed > 90
+                                  ? const Color(0xFFEF4444)
+                                  : (drive.percentUsed > 75
+                                      ? const Color(0xFFF59E0B)
+                                      : const Color(0xFF3B82F6)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+
+                        // Size details
+                        Row(
+                          children: [
+                            Text(
+                              l10n.isPersian
+                                  ? '${drive.usedGb.toStringAsFixed(1)} GB از ${drive.totalGb.toStringAsFixed(1)} GB'
+                                  : '${drive.usedGb.toStringAsFixed(1)} GB of ${drive.totalGb.toStringAsFixed(1)} GB',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              l10n.isPersian
+                                  ? '${drive.freeGb.toStringAsFixed(1)} GB آزاد'
+                                  : '${drive.freeGb.toStringAsFixed(1)} GB free',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF10B981),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Dedicated Safe Eject Button
+                  ElevatedButton.icon(
+                    onPressed: isEjecting
+                        ? null
+                        : () => systemCtrl.safeEjectDrive(context, drive.driveLetter),
+                    icon: isEjecting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.eject_rounded, size: 18),
+                    label: Text(
+                      l10n.isPersian ? 'خروج ایمن' : 'Eject',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFDC2626),
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -3533,6 +3945,11 @@ class SimpleModeView extends StatelessWidget {
     AppLocalizations l10n,
     SoftwareController softwareCtrl,
   ) {
+    final sysCtrl = Get.isRegistered<SystemInfoController>() ? Get.find<SystemInfoController>() : null;
+    final isOfficeInstalled = sysCtrl?.systemInfo.value?.officeActivation.installed ?? info.officeActivation.installed;
+    if (isOfficeInstalled) {
+      return const SizedBox.shrink();
+    }
     const officeColor = Color(0xFFEA580C);
     return Column(
       mainAxisSize: MainAxisSize.min,

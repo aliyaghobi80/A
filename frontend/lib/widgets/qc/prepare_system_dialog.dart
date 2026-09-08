@@ -138,19 +138,23 @@ class _PrepareSystemDialogState extends State<PrepareSystemDialog> {
                         }
                       });
                     },
-                    child: Container(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9))
+                            ? (isDark ? const Color(0xFF1A2F4A) : const Color(0xFFEFF6FF))
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isSelected
-                              ? (isDark ? const Color(0xFF38BDF8).withValues(alpha: 0.5) : const Color(0xFF2563EB))
+                              ? (isDark ? const Color(0xFF38BDF8) : const Color(0xFF2563EB))
                               : (isDark ? const Color(0xFF1E2C4A) : const Color(0xFFE2E8F0)),
-                          width: isSelected ? 1.4 : 1.0,
+                          width: isSelected ? 1.8 : 1.0,
                         ),
+                        boxShadow: isSelected && isDark
+                            ? [BoxShadow(color: const Color(0xFF38BDF8).withValues(alpha: 0.15), blurRadius: 8, spreadRadius: 0)]
+                            : [],
                       ),
                       child: Row(
                         children: [

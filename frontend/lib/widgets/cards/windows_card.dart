@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
+import '../common/design_components.dart';
 import '../common/hardware_illustrations.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
@@ -32,40 +33,81 @@ class WindowsCard extends StatelessWidget {
     return CardWrapper(
       icon: Icons.window_rounded,
       title: l10n.windowsInformation,
-      summarySubtitle:
-          '${windows.edition} (${windows.architecture}) • $statusLabel',
+      summarySubtitle: act.isGenuineOriginal
+          ? '${windows.edition} (${windows.architecture}) • ویندوز اورجینال'
+          : '${windows.edition} (${windows.architecture}) • $statusLabel',
       illustration: const WindowsIllustration(),
       iconColor: const Color(0xFF0284C7),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: statusColor.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isActivated ? Icons.check_circle_rounded : Icons.cancel_rounded,
-              size: 13,
-              color: statusColor,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              statusLabel,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: statusColor,
+      trailing: act.isGenuineOriginal
+          ? const GenuineOriginalBadge(compact: true, label: 'ویندوز اورجینال')
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isActivated ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                    size: 13,
+                    color: statusColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    statusLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (act.isGenuineOriginal)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF10B981).withValues(alpha: isDark ? 0.18 : 0.1),
+                    const Color(0xFF059669).withValues(alpha: isDark ? 0.08 : 0.04),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.4 : 0.25),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.verified_user_rounded,
+                    color: Color(0xFF10B981),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      act.effectiveActivationSummaryFa,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF065F46),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // Edition banner
           Container(
             width: double.infinity,

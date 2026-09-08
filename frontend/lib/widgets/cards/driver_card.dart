@@ -396,17 +396,18 @@ class _DriverCardState extends State<DriverCard> {
       child: InkWell(
         onTap: () => setState(() => _selectedCategory = key),
         borderRadius: BorderRadius.circular(20),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: isSelected
                 ? activeColor
-                : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
+                : (isDark ? const Color(0xFF162238) : const Color(0xFFF1F5F9)),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isSelected
                   ? activeColor
-                  : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                  : (isDark ? const Color(0xFF2D3F5E) : const Color(0xFFE2E8F0)),
             ),
           ),
           child: Text(
@@ -416,7 +417,7 @@ class _DriverCardState extends State<DriverCard> {
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
               color: isSelected
                   ? Colors.white
-                  : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                  : (isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569)),
             ),
           ),
         ),

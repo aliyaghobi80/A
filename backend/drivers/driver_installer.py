@@ -5,10 +5,12 @@ Coordinates discovery, inspection, hardware matching, deduplication,
 and priority installation of local driver packages:
 - Configurable driver root (config/driver_directory.json)
 - Auto-detection of removable USB driver repositories
-- Deep package inspection (ZIP, Extracted Folders, Self-extracting EXEs, INFs)
+- Deep package inspection (ZIP, RAR, 7Z, Extracted Folders, Self-extracting EXEs, INFs)
+- Automatic extraction of archives into isolated dedicated subfolders
 - Real-time matching against current hardware (Win32_PnPEntity / PnPSignedDriver)
 - Deduplication and fingerprinting
 - 9-Tier priority sequential queue execution
+- Interactive / manual installation and folder navigation
 - Zero internet download, zero blind execution of unknown files
 """
 
@@ -16,9 +18,12 @@ import json
 import logging
 import os
 import shutil
+import subprocess
+import time
 from typing import Dict, Any, List, Optional
 
 from utils.powershell import run_powershell_json
+from .archive_extractor import auto_unpack_driver_archives
 from .package_inspector import inspect_driver_package, DriverPackage
 from .hardware_matcher import get_current_system_hardware, match_package_to_hardware
 from .deduplicator import deduplicate_driver_packages
@@ -36,9 +41,11 @@ CONFIG_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "config", "driver_directory.json")
 )
 
-# Cached scan result
+# Cached scan result with TTL
 _cached_scan_result: Optional[Dict[str, Any]] = None
 _cached_packages_map: Dict[str, Dict[str, Any]] = {}
+_cached_scan_time: float = 0.0
+_SCAN_CACHE_TTL_SECONDS: float = 60.0  # Invalidate stale scan after 60 s
 
 
 def get_driver_directory_config() -> Dict[str, Any]:
@@ -132,15 +139,82 @@ def detect_removable_driver_sources() -> List[Dict[str, Any]]:
     return sources
 
 
+_IGNORED_DRIVER_DIR_NAMES = {"backend", "_internal", "build", "dist", "node_modules", ".git", "temp", "tmp", "logs", "__pycache__"}
+
+
+def _has_direct_installer(dir_path: str) -> bool:
+    """Checks if a directory has an installer right at its top level."""
+    try:
+        for f in os.listdir(dir_path):
+            ext = os.path.splitext(f)[1].lower()
+            fname = f.lower()
+            if ext in (".inf", ".msi"):
+                return True
+            if ext == ".exe" and any(k in fname for k in ("setup", "install", "asus", "igxp", "dpinst", "rtk", "intel")):
+                return True
+            if ext in (".cmd", ".bat") and any(k in fname for k in ("install", "setup", "silent")):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _collect_driver_candidates(dir_path: str, current_depth: int = 0, max_depth: int = 2) -> List[str]:
+    """Recursively collects driver package candidates or extracts from motherboard folders."""
+    found = []
+    if current_depth > max_depth or not os.path.isdir(dir_path):
+        return found
+    try:
+        items = os.listdir(dir_path)
+        subdirs = [
+            os.path.join(dir_path, d) for d in items
+            if os.path.isdir(os.path.join(dir_path, d))
+            and d.lower() not in _IGNORED_DRIVER_DIR_NAMES
+            and not d.startswith(".")
+        ]
+
+        # If this folder has direct installers, treat it as a driver package
+        if _has_direct_installer(dir_path):
+            found.append(dir_path)
+            return found
+
+        # If it has subdirectories (e.g. Motherboard folder with Audio, LAN, VGA...), explore them
+        if subdirs:
+            for sd in subdirs:
+                found.extend(_collect_driver_candidates(sd, current_depth + 1, max_depth))
+        else:
+            # Leaf directory without direct installer: check if it has any INF/EXE files inside
+            has_any_driver_file = False
+            for _, _, files in os.walk(dir_path):
+                if any(f.lower().endswith((".inf", ".exe", ".msi")) for f in files):
+                    has_any_driver_file = True
+                    break
+            if has_any_driver_file:
+                found.append(dir_path)
+    except Exception as err:
+        logger.warning(f"Error exploring {dir_path}: {err}")
+    return found
+
+
 def intelligent_scan_drivers(custom_dir: Optional[str] = None) -> Dict[str, Any]:
     """
     Performs intelligent discovery, inspection, hardware matching,
     and deduplication across the target driver directory.
+    Automatically unpacks compressed archives (.zip, .rar, .7z) into dedicated subfolders.
     """
-    global _cached_scan_result, _cached_packages_map
+    global _cached_scan_result, _cached_packages_map, _cached_scan_time
 
     cfg = get_driver_directory_config()
     target_dir = os.path.abspath(custom_dir.strip()) if custom_dir and custom_dir.strip() else cfg["resolved_path"]
+
+    # Fast path: return cached result if still fresh (within TTL) and same directory
+    if (
+        _cached_scan_result is not None
+        and _cached_scan_result.get("driver_directory") == target_dir
+        and (time.monotonic() - _cached_scan_time) < _SCAN_CACHE_TTL_SECONDS
+    ):
+        logger.debug("[IntelligentDriver] Returning cached scan result (TTL not expired).")
+        return _cached_scan_result
 
     if not os.path.isdir(target_dir):
         return {
@@ -163,36 +237,42 @@ def intelligent_scan_drivers(custom_dir: Optional[str] = None) -> Dict[str, Any]
 
     logger.info(f"[IntelligentDriver] Starting scan in: {target_dir}")
 
-    # Discover candidate entries:
-    # 1. Immediate subdirectories (e.g. Drivers/ASUS_LAN/)
-    # 2. Immediate ZIP archives (e.g. Drivers/WiFi.zip)
-    # 3. Direct executable installers or INF files if placed directly in root
+    # 1. Automatically unpack any compressed archives (.zip, .rar, .7z)
+    try:
+        unpacked = auto_unpack_driver_archives(target_dir)
+        if unpacked:
+            logger.info(f"[IntelligentDriver] Unpacked {len(unpacked)} archive(s) into dedicated folders: {unpacked}")
+    except Exception as e:
+        logger.warning(f"[IntelligentDriver] Error during archive auto-unpacking: {e}")
+
+    # 2. Discover candidate driver packages (folders and standalone installers)
     candidates: List[str] = []
-    ignored_names = {"backend", "_internal", "build", "dist", "node_modules", ".git", "temp", "tmp", "logs", "__pycache__"}
+    ignored_names = _IGNORED_DRIVER_DIR_NAMES
 
     try:
-        entries = os.listdir(target_dir)
-        for e in entries:
+        # Check top-level items in target_dir
+        for e in os.listdir(target_dir):
             if e.lower() in ignored_names or e.startswith("."):
                 continue
             full = os.path.join(target_dir, e)
             if os.path.isdir(full):
-                candidates.append(full)
+                # May be a driver folder or a container folder (like Motherboard model)
+                candidates.extend(_collect_driver_candidates(full, current_depth=0, max_depth=2))
             elif os.path.isfile(full):
                 ext = os.path.splitext(e)[1].lower()
-                if ext in (".zip", ".exe", ".inf", ".msi"):
+                if ext in (".exe", ".inf", ".msi"):
                     candidates.append(full)
 
-        # If no candidates at top-level, search 1 level deeper
-        if not candidates:
-            for root, dirs, files in os.walk(target_dir):
-                dirs[:] = [d for d in dirs if d.lower() not in ignored_names and not d.startswith(".")]
-                for d in dirs:
-                    candidates.append(os.path.join(root, d))
-                for f in files:
-                    if f.lower().endswith((".zip", ".exe", ".inf", ".msi")):
-                        candidates.append(os.path.join(root, f))
-                break  # Only 1 depth
+        # Remove duplicate paths preserving order
+        unique_candidates = []
+        seen_cand = set()
+        for c in candidates:
+            c_norm = os.path.normcase(os.path.abspath(c))
+            if c_norm not in seen_cand:
+                seen_cand.add(c_norm)
+                unique_candidates.append(c)
+        candidates = unique_candidates
+
     except Exception as e:
         logger.error(f"Error enumerating candidates in {target_dir}: {e}")
         return {"success": False, "message": f"خطا در خواندن پوشه: {str(e)}", "packages": []}
@@ -249,6 +329,7 @@ def intelligent_scan_drivers(custom_dir: Optional[str] = None) -> Dict[str, Any]
 
     _cached_scan_result = result
     _cached_packages_map = {p["package_id"]: p for p in sorted_unique}
+    _cached_scan_time = time.monotonic()
 
     return result
 
@@ -259,8 +340,7 @@ def start_intelligent_driver_install(
 ) -> Dict[str, Any]:
     """
     Validates selected packages and starts the 9-tier priority queue.
-    If package_ids is omitted or empty, selects all installable recommended packages
-    (needs_install or update_available with confidence != LOW and confidence != NOT_APPLICABLE).
+    If package_ids is omitted or empty, selects all installable recommended packages.
     """
     global _cached_scan_result, _cached_packages_map
 
@@ -271,11 +351,9 @@ def start_intelligent_driver_install(
     all_pkgs = scan["packages"]
 
     if package_ids:
-        # User explicitly checked specific packages
         id_set = set(package_ids)
         target_pkgs = [p for p in all_pkgs if p.get("package_id") in id_set]
     else:
-        # Install All: only valid installable packages that are recommended
         target_pkgs = [
             p for p in all_pkgs
             if p.get("match", {}).get("recommendation") == "recommended"
@@ -292,6 +370,87 @@ def start_intelligent_driver_install(
     return start_driver_queue(target_pkgs)
 
 
+def launch_interactive_driver_installer(package_id: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Launches a driver package's installer interactively for manual installation.
+    If it's an EXE/MSI/Script, launches it elevated without silent flags so the setup UI appears.
+    Also starts InstallerAutoPilot in background to automatically handle dialogs.
+    """
+    global _cached_packages_map
+    if not _cached_packages_map or package_id not in _cached_packages_map:
+        intelligent_scan_drivers(custom_dir)
+
+    pkg = _cached_packages_map.get(package_id)
+    if not pkg:
+        return {"success": False, "message": f"بسته درایور با شناسه {package_id} یافت نشد."}
+
+    installer_path = pkg.get("installer_path") or pkg.get("installer_file") or pkg.get("source_path")
+    if not installer_path or not os.path.exists(installer_path):
+        return {"success": False, "message": f"فایل نصبی یافت نشد: {installer_path}"}
+
+    working_dir = os.path.dirname(installer_path) if os.path.isfile(installer_path) else installer_path
+    method = pkg.get("install_method", "setup_exe")
+    display_name = pkg.get("display_name", "Driver Package")
+
+    try:
+        from packages.manager import _launch_elevated
+        from packages.auto_wizard import InstallerAutoPilot
+
+        # Start auto-pilot in background to assist with Language/OK/Next/Begin Install dialogs
+        try:
+            autopilot = InstallerAutoPilot(
+                target_title_keywords=[display_name, os.path.basename(installer_path), "intel", "graphics", "driver"],
+                timeout_seconds=90,
+            )
+            autopilot.run_in_background()
+        except Exception:
+            pass
+
+        if method == "msiexec":
+            sys_root = os.environ.get("SystemRoot", r"C:\Windows")
+            msi_exe = os.path.join(sys_root, "System32", "msiexec.exe")
+            ok, code, err = _launch_elevated(msi_exe, f'/i "{installer_path}"', working_dir)
+        elif method == "pnputil":
+            cmd_args = f'/c pnputil /add-driver "{installer_path}" /install & pause'
+            ok, code, err = _launch_elevated("cmd.exe", cmd_args, working_dir)
+        elif method == "script":
+            ok, code, err = _launch_elevated("cmd.exe", f'/c "{installer_path}"', working_dir)
+        else:
+            # Standalone or vendor setup EXE
+            ok, code, err = _launch_elevated(installer_path, "", working_dir)
+
+        if ok:
+            return {"success": True, "message": f"پنجره نصاب دستی «{display_name}» با موفقیت باز شد."}
+        else:
+            return {"success": False, "message": f"خطا در باز کردن نصاب: {err} (کد: {code})"}
+    except Exception as e:
+        return {"success": False, "message": f"خطا در اجرای نصاب: {str(e)}"}
+
+
+def open_driver_package_folder(package_id: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:
+    """Opens Windows Explorer focused on the driver's folder."""
+    global _cached_packages_map
+    if not _cached_packages_map or package_id not in _cached_packages_map:
+        intelligent_scan_drivers(custom_dir)
+
+    pkg = _cached_packages_map.get(package_id)
+    if not pkg:
+        return {"success": False, "message": "بسته درایور یافت نشد."}
+
+    path = pkg.get("source_path") or pkg.get("installer_file")
+    if not path or not os.path.exists(path):
+        return {"success": False, "message": f"مسیر درایور یافت نشد: {path}"}
+
+    try:
+        if os.path.isfile(path):
+            subprocess.Popen(["explorer.exe", f"/select,{os.path.abspath(path)}"])
+        else:
+            subprocess.Popen(["explorer.exe", os.path.abspath(path)])
+        return {"success": True, "message": "پوشه درایور باز شد."}
+    except Exception as e:
+        return {"success": False, "message": f"خطا در باز کردن پوشه: {str(e)}"}
+
+
 # ---------------------------------------------------------------------------
 # Backwards Compatibility Wrappers for existing API endpoints
 # ---------------------------------------------------------------------------
@@ -299,7 +458,6 @@ def start_intelligent_driver_install(
 def scan_driver_folder(folder_path: str) -> Dict[str, Any]:
     """Legacy compatibility wrapper for /api/drivers/scan-folder."""
     scan = intelligent_scan_drivers(custom_dir=folder_path)
-    # Convert packages to legacy file list format for any caller expecting files
     legacy_files = []
     for p in scan.get("packages", []):
         legacy_files.append({

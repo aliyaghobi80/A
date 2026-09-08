@@ -164,10 +164,19 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
   // -------------------------------------------------------------
   Widget _buildHardwareSummaryRow(SystemInfo info, bool isDark, Color accent, AppLocalizations l10n) {
     // 1. Motherboard
-    final mbName = info.motherboard.model.isNotEmpty ? info.motherboard.model : 'Motherboard';
-    final mbSub = info.motherboard.manufacturer.isNotEmpty && info.motherboard.manufacturer != 'Not available'
-        ? '${info.motherboard.manufacturer}${info.bios.version.isNotEmpty && info.bios.version != "Not available" ? " • BIOS: ${info.bios.version}" : ""}'
-        : (info.bios.version.isNotEmpty ? 'BIOS: ${info.bios.version}' : 'Standard');
+    final mb = info.motherboard;
+    final mbName = mb.fullDisplayName.isNotEmpty ? mb.fullDisplayName : 'Motherboard';
+    final mbSubList = <String>[];
+    if (mb.effectiveChipset.isNotEmpty) {
+      mbSubList.add(mb.effectiveChipset);
+    }
+    if (info.bios.version.isNotEmpty && info.bios.version != 'Not available') {
+      mbSubList.add('BIOS: ${info.bios.version}');
+    } else if (mb.effectiveFormFactor.isNotEmpty) {
+      mbSubList.add(mb.effectiveFormFactor);
+    }
+    final mbSub = mbSubList.isNotEmpty ? mbSubList.join(' • ') : 'استاندارد';
+    final mbCategory = mb.effectiveBrandFa.isNotEmpty ? 'مادربرد (${mb.effectiveBrandFa})' : 'مادربرد (Motherboard)';
 
     // 2. CPU
     final cpuName = normalizeCpuName(info.cpu.name.isNotEmpty ? info.cpu.name : info.cpu.manufacturer);
@@ -218,7 +227,7 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
           final cardWidth = (availableWidth - 4 * 12) / 5.0;
           return Row(
             children: [
-              _buildSummaryCard('مادربرد (Motherboard)', mbName, mbSub, Icons.developer_board_rounded, const Color(0xFF7C3AED), cardWidth, isDark),
+              _buildSummaryCard(mbCategory, mbName, mbSub, mb.brandIcon, mb.brandColor, cardWidth, isDark),
               const SizedBox(width: 12),
               _buildSummaryCard('پردازنده (CPU)', cpuName, cpuSub, Icons.memory_rounded, const Color(0xFF2563EB), cardWidth, isDark),
               const SizedBox(width: 12),
@@ -236,7 +245,7 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
             children: [
               Row(
                 children: [
-                  _buildSummaryCard('مادربرد (Motherboard)', mbName, mbSub, Icons.developer_board_rounded, const Color(0xFF7C3AED), cardWidth, isDark),
+                  _buildSummaryCard(mbCategory, mbName, mbSub, mb.brandIcon, mb.brandColor, cardWidth, isDark),
                   const SizedBox(width: 12),
                   _buildSummaryCard('پردازنده (CPU)', cpuName, cpuSub, Icons.memory_rounded, const Color(0xFF2563EB), cardWidth, isDark),
                 ],
@@ -257,7 +266,7 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
           // 1 column (Compact / Mobile) - 100% full width per card
           return Column(
             children: [
-              _buildSummaryCard('مادربرد (Motherboard)', mbName, mbSub, Icons.developer_board_rounded, const Color(0xFF7C3AED), availableWidth, isDark),
+              _buildSummaryCard(mbCategory, mbName, mbSub, mb.brandIcon, mb.brandColor, availableWidth, isDark),
               const SizedBox(height: 10),
               _buildSummaryCard('پردازنده (CPU)', cpuName, cpuSub, Icons.memory_rounded, const Color(0xFF2563EB), availableWidth, isDark),
               const SizedBox(height: 10),
@@ -352,10 +361,11 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
   }
 
   // -------------------------------------------------------------
-  // 2. Motherboard Layout (Large Image 140px + Clean Details)
+  // 2. Motherboard Layout (Large Image 140px + Clean Details + Brand Badge)
   // -------------------------------------------------------------
   Widget _buildMotherboardCard(MotherboardInfo mb, BiosInfo bios, bool isDark, Color accent, SystemInfoController systemCtrl, bool isCompact) {
     final imgSize = isCompact ? 100.0 : 135.0;
+    final brandColor = mb.brandColor;
 
     return Container(
       padding: EdgeInsets.all(isCompact ? 14 : 18),
@@ -370,7 +380,7 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
           Row(
             children: [
               Text(
-                'مادربرد و بایوس (Motherboard)',
+                'مادربرد و پلتفرم سیستم (Motherboard)',
                 style: TextStyle(
                   fontSize: isCompact ? 16 : 17.5,
                   fontWeight: FontWeight.w800,
@@ -378,6 +388,8 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 ),
               ),
               const Spacer(),
+              MotherboardBrandBadge(motherboard: mb, compact: isCompact),
+              const SizedBox(width: 8),
               const StatusDot(label: 'سالم', status: BadgeStatus.success, fontSize: 13),
             ],
           ),
@@ -394,12 +406,18 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                  border: Border.all(color: brandColor.withValues(alpha: isDark ? 0.35 : 0.2)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: brandColor.withValues(alpha: isDark ? 0.08 : 0.04),
+                      blurRadius: 10,
+                    ),
+                  ],
                 ),
                 child: Image.asset(
                   'assets/Parts/motherboard.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.developer_board_rounded, size: 64, color: Color(0xFF7C3AED)),
+                  errorBuilder: (context, error, stackTrace) => Icon(mb.brandIcon, size: 64, color: brandColor),
                 ),
               ),
               const SizedBox(width: 16),
@@ -410,7 +428,7 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                     Directionality(
                       textDirection: TextDirection.ltr,
                       child: Text(
-                        '${mb.model} ${mb.manufacturer}',
+                        mb.fullDisplayName,
                         style: TextStyle(
                           fontSize: isCompact ? 16.5 : 18.5,
                           fontWeight: FontWeight.w800,
@@ -421,11 +439,47 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    if (mb.effectiveChipset.isNotEmpty || mb.effectiveFormFactor.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          if (mb.effectiveChipset.isNotEmpty) ...[
+                            Text(
+                              'چیپست ${mb.effectiveChipset}',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: brandColor,
+                              ),
+                            ),
+                          ],
+                          if (mb.effectiveChipset.isNotEmpty && mb.effectiveFormFactor.isNotEmpty)
+                            Text(
+                              ' • ',
+                              style: TextStyle(fontSize: 12, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                            ),
+                          if (mb.effectiveFormFactor.isNotEmpty) ...[
+                            Text(
+                              'سایز ${mb.effectiveFormFactor}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
                       runSpacing: 6,
                       children: [
+                        if (mb.effectiveChipset.isNotEmpty)
+                          MetaTag(label: 'چیپست اصلی', value: mb.effectiveChipset, isLtrValue: true, icon: Icons.developer_board_rounded),
+                        if (mb.effectiveFormFactor.isNotEmpty)
+                          MetaTag(label: 'سایز بورد', value: mb.effectiveFormFactor, isLtrValue: true, icon: Icons.aspect_ratio_rounded),
                         if (bios.version.isNotEmpty && bios.version != 'Not available')
                           MetaTag(label: 'نسخه بایوس', value: bios.version, isLtrValue: true, icon: Icons.security_rounded),
                         if (bios.date.isNotEmpty && bios.date != 'Not available')
@@ -436,12 +490,39 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                     ),
                     const SizedBox(height: 12),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        if (mb.serial.isNotEmpty && mb.serial != 'Not available' && mb.serial != 'Default string' && mb.serial != '-') ...[
+                          Tooltip(
+                            message: 'کپی شماره سریال مادربرد',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => systemCtrl.copyToClipboard(context, mb.serial, 'شماره سریال مادربرد کپی شد: ${mb.serial}'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.qr_code_rounded, size: 14, color: brandColor),
+                                    const SizedBox(width: 4),
+                                    Text('S/N: ${mb.serial}', style: TextStyle(fontSize: 11.5, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary)),
+                                    const SizedBox(width: 4),
+                                    Icon(Icons.copy_rounded, size: 12, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                        const Spacer(),
                         OutlinedButton.icon(
-                          onPressed: () => _showMotherboardDetails(context, mb, bios, isDark),
+                          onPressed: () => _showMotherboardDetails(context, mb, bios, isDark, systemCtrl),
                           icon: const Icon(Icons.info_outline_rounded, size: 15),
-                          label: const Text('جزئیات مادربرد →'),
+                          label: const Text('جزئیات مادربرد و بایوس →'),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             minimumSize: const Size(0, 34),
@@ -459,20 +540,32 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
     );
   }
 
-  void _showMotherboardDetails(BuildContext context, MotherboardInfo mb, BiosInfo bios, bool isDark) {
+  void _showMotherboardDetails(BuildContext context, MotherboardInfo mb, BiosInfo bios, bool isDark, SystemInfoController systemCtrl) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('مشخصات مادربرد و بایوس', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        title: Row(
+          children: [
+            const Text('مشخصات مادربرد و بایوس', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const Spacer(),
+            MotherboardBrandBadge(motherboard: mb, compact: true, showChipset: true),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDialogRow('مدل بورد:', mb.model, isDark, isLtrValue: true),
-            _buildDialogRow('سازنده مادربرد:', mb.manufacturer, isDark, isLtrValue: true),
-            _buildDialogRow('شماره سریال مادربرد:', mb.serial, isDark, isLtrValue: true),
-            _buildDialogRow('شناسه یکتای سخت‌افزاری (UUID):', mb.uuid, isDark, isLtrValue: true),
-            _buildDialogRow('نسخه بایوس:', bios.version, isDark, isLtrValue: true),
+            _buildDialogRow('مدل بورد:', mb.fullDisplayName, isDark, isLtrValue: true, onCopy: () => systemCtrl.copyToClipboard(context, mb.fullDisplayName, 'مدل مادربرد کپی شد: ${mb.fullDisplayName}')),
+            _buildDialogRow('سازنده برند:', '${mb.effectiveBrand} (${mb.effectiveBrandFa})', isDark, isLtrValue: false),
+            if (mb.effectiveChipset.isNotEmpty)
+              _buildDialogRow('چیپست مادربرد:', mb.effectiveChipset, isDark, isLtrValue: true),
+            if (mb.effectiveFormFactor.isNotEmpty)
+              _buildDialogRow('فرم فاکتور / ابعاد:', mb.effectiveFormFactor, isDark, isLtrValue: true),
+            _buildDialogRow('نام در بایوس / WMI:', mb.model, isDark, isLtrValue: true),
+            _buildDialogRow('شرکت ثبتی سازنده:', mb.manufacturer, isDark, isLtrValue: true),
+            _buildDialogRow('شماره سریال مادربرد:', mb.serial, isDark, isLtrValue: true, onCopy: () => systemCtrl.copyToClipboard(context, mb.serial, 'شماره سریال مادربرد کپی شد: ${mb.serial}')),
+            _buildDialogRow('شناسه سخت‌افزاری (UUID):', mb.uuid, isDark, isLtrValue: true, onCopy: () => systemCtrl.copyToClipboard(context, mb.uuid, 'شناسه یکتای UUID کپی شد: ${mb.uuid}')),
+            _buildDialogRow('نسخه بایوس:', bios.version, isDark, isLtrValue: true, onCopy: () => systemCtrl.copyToClipboard(context, bios.version, 'نسخه بایوس کپی شد: ${bios.version}')),
             _buildDialogRow('تاریخ انتشار بایوس:', bios.date, isDark, isLtrValue: true),
           ],
         ),
@@ -1097,11 +1190,27 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
     final typeLower = drive.type.toLowerCase();
     final modelLower = drive.model.toLowerCase();
     final busLower = drive.busType.toLowerCase();
+    final typeDescLower = drive.typeDescription.toLowerCase();
 
     String assetPath;
-    if (typeLower.contains('nvme') || busLower.contains('nvme') || modelLower.contains('nvme')) {
+    if (typeDescLower.contains('usb') ||
+        typeLower.contains('usb') ||
+        busLower.contains('usb') ||
+        modelLower.contains('usb') ||
+        typeLower.contains('removable') ||
+        typeDescLower.contains('removable') ||
+        modelLower.contains('sandisk') ||
+        modelLower.contains('cruzer') ||
+        modelLower.contains('flash')) {
+      assetPath = 'assets/Parts/usb_flash.png';
+    } else if (typeDescLower.contains('nvme') ||
+        typeLower.contains('nvme') ||
+        busLower.contains('nvme') ||
+        modelLower.contains('nvme')) {
       assetPath = 'assets/Parts/ssd_m2.png';
-    } else if (typeLower.contains('ssd') || modelLower.contains('ssd')) {
+    } else if (typeDescLower.contains('ssd') ||
+        typeLower.contains('ssd') ||
+        modelLower.contains('ssd')) {
       assetPath = 'assets/Parts/ssd_sata.png';
     } else {
       assetPath = 'assets/Parts/hdd.png';
@@ -1291,7 +1400,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
     );
   }
 
-  Widget _buildDialogRow(String label, String value, bool isDark, {bool isLtrValue = false}) {
+  Widget _buildDialogRow(String label, String value, bool isDark, {bool isLtrValue = false, VoidCallback? onCopy}) {
+    final canCopy = onCopy != null && value.isNotEmpty && value != '-' && value != 'Not available';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5.0),
       child: Row(
@@ -1329,6 +1440,21 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                     ),
                   ),
           ),
+          if (canCopy) ...[
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: onCopy,
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.all(2.5),
+                child: Icon(
+                  Icons.copy_rounded,
+                  size: 14,
+                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

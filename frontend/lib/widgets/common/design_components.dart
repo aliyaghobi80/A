@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/system_info.dart';
 import '../../theme/app_theme.dart';
 
 enum BadgeStatus {
@@ -111,10 +112,10 @@ class StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: isDark ? 0.18 : 0.09),
+        color: color.withValues(alpha: isDark ? 0.22 : 0.09),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: color.withValues(alpha: isDark ? 0.4 : 0.25),
+          color: color.withValues(alpha: isDark ? 0.60 : 0.30),
           width: 1,
         ),
       ),
@@ -268,6 +269,227 @@ class EmptyStateWidget extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A dedicated, premium brand badge for motherboard manufacturers
+/// Displaying English canonical name, Persian localized brand, brand-specific icon,
+/// and distinctive signature color glow.
+class MotherboardBrandBadge extends StatelessWidget {
+  final MotherboardInfo motherboard;
+  final bool compact;
+  final bool showChipset;
+
+  const MotherboardBrandBadge({
+    super.key,
+    required this.motherboard,
+    this.compact = false,
+    this.showChipset = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final brandColor = motherboard.brandColor;
+    final brandEn = motherboard.effectiveBrand;
+    final brandFa = motherboard.effectiveBrandFa;
+    final chipset = motherboard.effectiveChipset;
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 12,
+        vertical: compact ? 3.5 : 5.5,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            brandColor.withValues(alpha: isDark ? 0.24 : 0.14),
+            brandColor.withValues(alpha: isDark ? 0.08 : 0.04),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: brandColor.withValues(alpha: isDark ? 0.5 : 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: brandColor.withValues(alpha: isDark ? 0.22 : 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: brandColor.withValues(alpha: isDark ? 0.3 : 0.16),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              motherboard.brandIcon,
+              size: compact ? 12 : 14,
+              color: brandColor,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(
+              brandEn,
+              style: TextStyle(
+                fontSize: compact ? 11.5 : 12.5,
+                fontWeight: FontWeight.w800,
+                color: brandColor,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+          if (brandFa.isNotEmpty) ...[
+            Container(
+              height: compact ? 10 : 12,
+              width: 1,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              color: brandColor.withValues(alpha: 0.35),
+            ),
+            Text(
+              brandFa,
+              style: TextStyle(
+                fontSize: compact ? 11 : 12,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white.withValues(alpha: 0.95) : const Color(0xFF1E293B),
+              ),
+            ),
+          ],
+          if (showChipset && chipset.isNotEmpty) ...[
+            Container(
+              height: compact ? 10 : 12,
+              width: 1,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              color: brandColor.withValues(alpha: 0.35),
+            ),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                chipset,
+                style: TextStyle(
+                  fontSize: compact ? 10.5 : 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A premium, high-end badge for Genuine Original licenses (Windows / Office)
+/// Featuring an emerald gradient with glowing borders, verified shield icon,
+/// and Persian/English typography.
+class GenuineOriginalBadge extends StatelessWidget {
+  final String label;
+  final String? subLabel;
+  final bool compact;
+  final bool isOffice;
+
+  const GenuineOriginalBadge({
+    super.key,
+    this.label = 'اورجینال (Original)',
+    this.subLabel,
+    this.compact = false,
+    this.isOffice = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const accentGold = Color(0xFF10B981);
+    final primaryColor = isOffice ? const Color(0xFF10B981) : const Color(0xFF059669);
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 12,
+        vertical: compact ? 3.5 : 5.5,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            accentGold.withValues(alpha: isDark ? 0.28 : 0.16),
+            primaryColor.withValues(alpha: isDark ? 0.12 : 0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: accentGold.withValues(alpha: isDark ? 0.6 : 0.4),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accentGold.withValues(alpha: isDark ? 0.25 : 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: accentGold.withValues(alpha: isDark ? 0.35 : 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.verified_rounded,
+              size: compact ? 13 : 15,
+              color: accentGold,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: compact ? 11.5 : 12.5,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF064E3B),
+              letterSpacing: 0.2,
+            ),
+          ),
+          if (subLabel != null && subLabel!.isNotEmpty) ...[
+            Container(
+              height: compact ? 10 : 12,
+              width: 1,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              color: accentGold.withValues(alpha: 0.4),
+            ),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                subLabel!,
+                style: TextStyle(
+                  fontSize: compact ? 10.5 : 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -45,8 +45,17 @@ _AFFIRMATIVE_BUTTONS = [
     "close",
     "بستن",
     "done",
+    "begin installation",
+    "begin install",
+    "begin",
+    "start installation",
+    "start install",
+    "start",
+    "express install",
     "install",
     "نصب",
+    "شروع نصب",
+    "نصب را شروع کنید",
     "i agree",
     "agree",
     "موافقم",
@@ -173,7 +182,7 @@ class InstallerAutoPilot:
         # Generic installer windows
         generic_installer_titles = [
             "setup", "installer", "installation", "wizard", "language", "نصب",
-            "select setup language", "installer language"
+            "select setup language", "installer language", "intel", "graphics", "driver"
         ]
         if any(g in title for g in generic_installer_titles):
             return True

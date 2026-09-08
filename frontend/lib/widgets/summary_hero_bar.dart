@@ -24,7 +24,7 @@ class SummaryHeroBar extends StatelessWidget {
         color: isDark ? const Color(0xFF131D33) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark ? const Color(0xFF22304E) : const Color(0xFFE2E8F0),
+          color: isDark ? const Color(0xFF2D3F5E) : const Color(0xFFE2E8F0),
         ),
         boxShadow: [
           BoxShadow(
@@ -40,7 +40,7 @@ class SummaryHeroBar extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
+              color: color.withValues(alpha: isDark ? 0.18 : 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 16, color: color),
@@ -55,7 +55,7 @@ class SummaryHeroBar extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF64748B),
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

@@ -14,15 +14,16 @@ class AppTheme {
   static const Color lightTextSecondary = Color(0xFF475569);
   static const Color lightTextMuted = Color(0xFF94A3B8);
 
-  // Dark Palette (Optional Dark Mode)
+  // Dark Palette (High Contrast Modern Desktop Dark Theme)
   static const Color darkBackground = Color(0xFF0B1220);
   static const Color darkSurface = Color(0xFF111C2E);
   static const Color darkCard = Color(0xFF162238);
-  static const Color darkBorder = Color(0xFF263752);
-  static const Color darkBorderSubtle = Color(0xFF1D2C42);
+  static const Color darkCardSelected = Color(0xFF1E2E4A);
+  static const Color darkBorder = Color(0xFF2D3F5E);
+  static const Color darkBorderSubtle = Color(0xFF1F2D44);
   static const Color darkTextPrimary = Color(0xFFF8FAFC);
-  static const Color darkTextSecondary = Color(0xFF94A3B8);
-  static const Color darkTextMuted = Color(0xFF64748B);
+  static const Color darkTextSecondary = Color(0xFFCBD5E1);
+  static const Color darkTextMuted = Color(0xFF94A3B8);
 
   // Semantic Status Colors
   static const Color statusSuccess = Color(0xFF10B981);
@@ -165,7 +166,36 @@ class AppTheme {
       ),
       checkboxTheme: CheckboxThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        side: const BorderSide(color: Color(0xFF94A3B8), width: 1.5),
+        side: const BorderSide(color: Color(0xFF94A3B8), width: 1.8),
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return primary;
+          }
+          return Colors.transparent;
+        }),
+        checkColor: const WidgetStatePropertyAll(Colors.white),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return Colors.white;
+          }
+          return const Color(0xFF64748B);
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return primary;
+          }
+          return const Color(0xFFE2E8F0);
+        }),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return primary;
+          }
+          return const Color(0xFF94A3B8);
+        }),
       ),
     );
   }
@@ -221,7 +251,42 @@ class AppTheme {
       ),
       checkboxTheme: CheckboxThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        side: const BorderSide(color: Color(0xFF64748B), width: 1.5),
+        side: const BorderSide(color: Color(0xFF94A3B8), width: 1.8),
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return primary;
+          }
+          return Colors.transparent;
+        }),
+        checkColor: const WidgetStatePropertyAll(Colors.white),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return Colors.white;
+          }
+          return const Color(0xFF94A3B8);
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return primary;
+          }
+          return const Color(0xFF1E293B);
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return primary;
+          }
+          return const Color(0xFF334155);
+        }),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return primary;
+          }
+          return const Color(0xFF94A3B8);
+        }),
       ),
     );
   }

@@ -230,11 +230,14 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
               final isBatch = softwareCtrl.isBatchInstalling.value;
               final batchStatus = softwareCtrl.batchStatus.value;
 
+              final isOfficeInstalled = systemCtrl.systemInfo.value?.officeActivation.installed ?? info.officeActivation.installed;
+
               return PackagesCard(
                 packages: pkgRes.packages,
                 summary: pkgRes.summary,
                 packagesDirectory: pkgRes.packagesDirectory,
                 directoryExists: pkgRes.directoryExists,
+                isOfficeInstalled: isOfficeInstalled,
                 onScan: () => softwareCtrl.scanPackages(),
                 onChangeDirectory: () => softwareCtrl.changePackagesDirectory(context),
                 isScanning: isScanning,

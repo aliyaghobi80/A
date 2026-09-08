@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 class SystemInfo {
   final String status;
   final String timestamp;
@@ -747,6 +749,12 @@ class MotherboardInfo {
   final String serial;
   final String uuid;
   final String version;
+  final String brand;
+  final String brandFa;
+  final String cleanModel;
+  final String chipset;
+  final String formFactor;
+  final String displayName;
 
   MotherboardInfo({
     required this.manufacturer,
@@ -754,6 +762,12 @@ class MotherboardInfo {
     required this.serial,
     this.uuid = '-',
     this.version = '-',
+    this.brand = '',
+    this.brandFa = '',
+    this.cleanModel = '',
+    this.chipset = '',
+    this.formFactor = '',
+    this.displayName = '',
   });
 
   factory MotherboardInfo.fromJson(Map<String, dynamic> json) {
@@ -763,7 +777,129 @@ class MotherboardInfo {
       serial: json['serial'] ?? '-',
       uuid: json['uuid'] ?? '-',
       version: json['version'] ?? '-',
+      brand: json['brand'] ?? '',
+      brandFa: json['brand_fa'] ?? '',
+      cleanModel: json['clean_model'] ?? '',
+      chipset: json['chipset'] ?? '',
+      formFactor: json['form_factor'] ?? '',
+      displayName: json['display_name'] ?? '',
     );
+  }
+
+  String get effectiveBrand {
+    if (brand.isNotEmpty && brand != 'Unknown' && brand != 'Not available') return brand;
+    final combined = '$manufacturer $model'.toLowerCase();
+    if (combined.contains('asustek') || combined.contains('asus') || combined.contains('rog') || combined.contains('tuf')) return 'ASUS';
+    if (combined.contains('gigabyte') || combined.contains('giga-byte') || combined.contains('aorus')) return 'GIGABYTE';
+    if (combined.contains('micro-star') || combined.contains('msi')) return 'MSI';
+    if (combined.contains('asrock')) return 'ASRock';
+    if (combined.contains('biostar')) return 'BIOSTAR';
+    if (combined.contains('colorful')) return 'Colorful';
+    if (combined.contains('maxsun')) return 'MAXSUN';
+    if (combined.contains('nzxt')) return 'NZXT';
+    if (combined.contains('evga')) return 'EVGA';
+    if (combined.contains('dell') || combined.contains('alienware')) return 'Dell';
+    if (combined.contains('lenovo') || combined.contains('thinkcentre') || combined.contains('legion')) return 'Lenovo';
+    if (combined.contains('hp') || combined.contains('hewlett-packard') || combined.contains('omen')) return 'HP';
+    if (combined.contains('acer') || combined.contains('predator')) return 'Acer';
+    if (combined.contains('machinist')) return 'Machinist';
+    if (combined.contains('huananzhi')) return 'Huananzhi';
+    if (combined.contains('jingsha')) return 'JingSha';
+    if (manufacturer.isNotEmpty && manufacturer != 'Not available') {
+      return manufacturer.replaceAll(RegExp(r'(?:,\s*)?(?:Co\.|Ltd\.|Inc\.|Corp\.|Corporation)\b', caseSensitive: false), '').trim();
+    }
+    return 'Standard';
+  }
+
+  String get effectiveBrandFa {
+    if (brandFa.isNotEmpty && brandFa != 'نامشخص') return brandFa;
+    final b = effectiveBrand.toUpperCase();
+    if (b.contains('ASUS')) return 'ایسوس';
+    if (b.contains('GIGABYTE') || b.contains('AORUS')) return 'گیگابایت';
+    if (b.contains('MSI')) return 'ام‌اس‌آی';
+    if (b.contains('ASROCK')) return 'ازراک';
+    if (b.contains('BIOSTAR')) return 'بایواستار';
+    if (b.contains('COLORFUL')) return 'کالرفول';
+    if (b.contains('MAXSUN')) return 'مکس‌سان';
+    if (b.contains('NZXT')) return 'ان‌زد‌اکس‌تی';
+    if (b.contains('EVGA')) return 'ای‌وی‌جی‌ای';
+    if (b.contains('DELL')) return 'دل';
+    if (b.contains('LENOVO')) return 'لنوو';
+    if (b.contains('HP')) return 'اچ‌پی';
+    if (b.contains('ACER')) return 'ایسر';
+    if (b.contains('MACHINIST')) return 'ماکینیست';
+    if (b.contains('HUANANZHI')) return 'هوانانژی';
+    return effectiveBrand;
+  }
+
+  Color get brandColor {
+    final b = effectiveBrand.toUpperCase();
+    if (b.contains('ASUS')) return const Color(0xFF0072C6);
+    if (b.contains('GIGABYTE') || b.contains('AORUS')) return const Color(0xFFF97316);
+    if (b.contains('MSI')) return const Color(0xFFEF4444);
+    if (b.contains('ASROCK')) return const Color(0xFF0EA5E9);
+    if (b.contains('BIOSTAR')) return const Color(0xFFF5A623);
+    if (b.contains('COLORFUL')) return const Color(0xFFE11D48);
+    if (b.contains('MAXSUN')) return const Color(0xFFD97706);
+    if (b.contains('NZXT')) return const Color(0xFF8B5CF6);
+    if (b.contains('DELL')) return const Color(0xFF0284C7);
+    if (b.contains('HP')) return const Color(0xFF0096D6);
+    if (b.contains('LENOVO')) return const Color(0xFF2563EB);
+    return const Color(0xFF7C3AED);
+  }
+
+  IconData get brandIcon {
+    final b = effectiveBrand.toUpperCase();
+    if (b.contains('ASUS')) return Icons.shield_rounded;
+    if (b.contains('GIGABYTE') || b.contains('AORUS')) return Icons.flash_on_rounded;
+    if (b.contains('MSI')) return Icons.sports_esports_rounded;
+    if (b.contains('ASROCK')) return Icons.auto_awesome_rounded;
+    if (b.contains('BIOSTAR')) return Icons.star_rounded;
+    if (b.contains('DELL') || b.contains('HP') || b.contains('LENOVO')) return Icons.business_rounded;
+    return Icons.developer_board_rounded;
+  }
+
+  String get effectiveCleanModel {
+    var res = cleanModel.isNotEmpty && cleanModel != 'Not available' ? cleanModel : model;
+    final b = effectiveBrand;
+    res = res.replaceAll(RegExp('^${RegExp.escape(b)}\\s+', caseSensitive: false), '');
+    res = res.replaceAll(RegExp('^${RegExp.escape(manufacturer)}\\s+', caseSensitive: false), '');
+    res = res.replaceAll(RegExp('\\s+${RegExp.escape(manufacturer)}\$', caseSensitive: false), '');
+    res = res.replaceAll(RegExp(r'\s+(?:Gigabyte|ASUS|ASUSTeK|MSI|Micro-Star|ASRock|Biostar|Colorful|Dell|HP|Lenovo)(?:\s+Technology|\s+Co\.|\s+Ltd\.|\s+INC\.)*$', caseSensitive: false), '');
+    return res.trim().isNotEmpty ? res.trim() : model;
+  }
+
+  String get fullDisplayName {
+    if (displayName.isNotEmpty && displayName != 'Not available') {
+      final hasSuffix = RegExp(r'\s+(?:Gigabyte|ASUS|ASUSTeK|MSI|Micro-Star|ASRock|Biostar|Colorful|Dell|HP|Lenovo)(?:\s+Technology|\s+Co\.|\s+Ltd\.|\s+INC\.)*$', caseSensitive: false).hasMatch(displayName);
+      if (!hasSuffix) return displayName;
+    }
+    final b = effectiveBrand;
+    final m = effectiveCleanModel;
+    if (m.toLowerCase().startsWith(b.toLowerCase())) return m;
+    if (b == 'Standard') return m;
+    return '$b $m';
+  }
+
+  String get effectiveChipset {
+    if (chipset.isNotEmpty && chipset != 'Not available') return chipset;
+    final text = '$model $manufacturer'.toUpperCase();
+    final intelMatch = RegExp(r'\b(Z890|B860|H810|Z790|B760|H770|H710|Z690|B660|H670|H610|Z590|B560|H570|H510|Z490|B460|H470|H410|W480|Z390|Z370|B365|B360|H370|H310|Z270|B250|H270|Z170|B150|H170|H110|Z97|H97|Z87|H87|B85|H81|Z77|H77|B75|Z68|H67|H61|X79|X99|X299)(?=[MIA\s\-_]|$)', caseSensitive: false).firstMatch(text);
+    if (intelMatch != null) return 'Intel ${intelMatch.group(1)}';
+
+    final amdMatch = RegExp(r'\b(X870E|X870|B850|B840|X670E|X670|B650E|B650|A620|X570S|X570|B550|A520|X470|B450|X370|B350|A320|WRX90|TRX50|WRX80|TRX40|X399)(?=[MIA\s\-_]|$)', caseSensitive: false).firstMatch(text);
+    if (amdMatch != null) return 'AMD ${amdMatch.group(1)}';
+
+    return '';
+  }
+
+  String get effectiveFormFactor {
+    if (formFactor.isNotEmpty && formFactor != 'Not available') return formFactor;
+    final text = model.toUpperCase();
+    if (text.contains('MINI-ITX') || RegExp(r'\b[A-Z0-9]+-ITX\b|\b[A-Z0-9]+-I\b|\b[A-Z0-9]{3,}I\b(?<!WIFI)').hasMatch(text)) return 'Mini-ITX';
+    if (text.contains('MICRO-ATX') || text.contains('MATX') || RegExp(r'\b[A-Z0-9]+M\b').hasMatch(text)) return 'Micro-ATX';
+    if (text.contains('E-ATX') || text.contains('EXTENDED-ATX')) return 'E-ATX';
+    return 'ATX';
   }
 }
 
@@ -1092,6 +1228,12 @@ class WindowsActivationInfo {
   final bool isPermanent;
   final bool toolAvailable;
   final String? toolPath;
+  final bool isGenuine;
+  final String genuineType;
+  final bool oa3xKeyPresent;
+  final bool needsActivation;
+  final String activationSummaryFa;
+  final String badgeLabel;
 
   WindowsActivationInfo({
     required this.installed,
@@ -1106,6 +1248,12 @@ class WindowsActivationInfo {
     required this.isPermanent,
     required this.toolAvailable,
     this.toolPath,
+    this.isGenuine = false,
+    this.genuineType = '',
+    this.oa3xKeyPresent = false,
+    this.needsActivation = false,
+    this.activationSummaryFa = '',
+    this.badgeLabel = '',
   });
 
   factory WindowsActivationInfo.empty() => WindowsActivationInfo(
@@ -1121,26 +1269,74 @@ class WindowsActivationInfo {
     isPermanent: true,
     toolAvailable: false,
     toolPath: null,
+    isGenuine: false,
+    genuineType: '',
+    oa3xKeyPresent: false,
+    needsActivation: true,
+    activationSummaryFa: '',
+    badgeLabel: '',
   );
 
   factory WindowsActivationInfo.fromJson(Map<String, dynamic> json) {
+    final act = json['activated'] as bool? ?? false;
+    final perm = json['is_permanent'] as bool? ?? (json['expiration'] == null);
+    final isGen = json['is_genuine'] as bool? ?? false;
+    final ed = (json['edition'] as String? ?? 'Windows').toLowerCase();
+    final ch = (json['channel'] as String? ?? '').toLowerCase();
+    final desc = (json['description'] as String? ?? '').toLowerCase();
+    final isHome = ed.contains('home') || ed.contains('core') || ed.contains('singlelanguage');
+    final isOem = ch.contains('oem') || desc.contains('oem');
+    final isRetail = ch.contains('retail') || desc.contains('retail');
+
+    final computedGenuine = isGen || (act && perm && (isHome || isOem || isRetail));
+
     return WindowsActivationInfo(
       installed: json['installed'] as bool? ?? true,
-      activated: json['activated'] as bool? ?? false,
-      statusCode: json['status_code'] as int? ?? 0,
+      activated: act,
+      statusCode: json['status_code'] as int? ?? (act ? 1 : 0),
       statusText:
           json['status_text'] ??
-          (json['activated'] == true ? 'Licensed' : 'Not Activated'),
+          (act ? 'Licensed' : 'Not Activated'),
       channel: json['channel'] ?? 'Not available',
       partialKey: json['partial_key'] ?? 'Not available',
       edition: json['edition'] ?? 'Windows',
       description: json['description'] ?? 'Not available',
       expiration: json['expiration'] as String?,
-      isPermanent:
-          json['is_permanent'] as bool? ?? (json['expiration'] == null),
+      isPermanent: perm,
       toolAvailable: json['tool_available'] as bool? ?? false,
       toolPath: json['tool_path'] as String?,
+      isGenuine: computedGenuine,
+      genuineType: json['genuine_type'] as String? ?? (computedGenuine ? 'OEM / Digital License' : ''),
+      oa3xKeyPresent: json['oa3x_key_present'] as bool? ?? false,
+      needsActivation: json['needs_activation'] as bool? ?? (!act || !perm),
+      activationSummaryFa: json['activation_summary_fa'] as String? ?? '',
+      badgeLabel: json['badge_label'] as String? ?? '',
     );
+  }
+
+  bool get isGenuineOriginal {
+    if (isGenuine) return true;
+    final ed = edition.toLowerCase();
+    final ch = channel.toLowerCase();
+    final desc = description.toLowerCase();
+    final isHome = ed.contains('home') || ed.contains('core') || ed.contains('singlelanguage');
+    final isOem = ch.contains('oem') || desc.contains('oem');
+    final isRetail = ch.contains('retail') || desc.contains('retail');
+    return activated && isPermanent && (isHome || isOem || isRetail || oa3xKeyPresent);
+  }
+
+  String get effectiveActivationSummaryFa {
+    if (activationSummaryFa.isNotEmpty) return activationSummaryFa;
+    if (isGenuineOriginal) return 'ویندوز اورجینال است و نیازی به فعال‌سازی ندارد.';
+    if (activated) return 'ویندوز با موفقیت فعال است.';
+    return 'ویندوز فعال نیست و نیاز به فعال‌سازی دارد.';
+  }
+
+  String get effectiveBadgeLabel {
+    if (badgeLabel.isNotEmpty) return badgeLabel;
+    if (isGenuineOriginal) return 'ویندوز اورجینال';
+    if (activated) return 'فعال شده';
+    return 'غیرفعال';
   }
 }
 
@@ -1158,6 +1354,11 @@ class OfficeActivationInfo {
   final String? expiration;
   final bool toolAvailable;
   final String? toolPath;
+  final bool isGenuine;
+  final String genuineType;
+  final bool needsActivation;
+  final String activationSummaryFa;
+  final String badgeLabel;
 
   OfficeActivationInfo({
     required this.installed,
@@ -1173,6 +1374,11 @@ class OfficeActivationInfo {
     this.expiration,
     required this.toolAvailable,
     this.toolPath,
+    this.isGenuine = false,
+    this.genuineType = '',
+    this.needsActivation = false,
+    this.activationSummaryFa = '',
+    this.badgeLabel = '',
   });
 
   factory OfficeActivationInfo.empty() => OfficeActivationInfo(
@@ -1189,11 +1395,23 @@ class OfficeActivationInfo {
     expiration: null,
     toolAvailable: false,
     toolPath: null,
+    isGenuine: false,
+    genuineType: '',
+    needsActivation: false,
+    activationSummaryFa: '',
+    badgeLabel: '',
   );
 
   factory OfficeActivationInfo.fromJson(Map<String, dynamic> json) {
     final isInst = json['installed'] as bool? ?? false;
     final isAct = json['activated'] as bool? ?? false;
+    final isGen = json['is_genuine'] as bool? ?? false;
+    final pr = (json['product'] as String? ?? '').toLowerCase();
+    final ch = (json['channel'] as String? ?? '').toLowerCase();
+    final isSub = pr.contains('365') || ch.contains('365') || pr.contains('subscription');
+    final isRetail = ch.contains('retail') || pr.contains('retail') || pr.contains('home & student') || pr.contains('home & business');
+    final computedGen = isGen || (isAct && (isSub || isRetail));
+
     return OfficeActivationInfo(
       installed: isInst,
       product:
@@ -1211,7 +1429,37 @@ class OfficeActivationInfo {
       expiration: json['expiration'] as String?,
       toolAvailable: json['tool_available'] as bool? ?? false,
       toolPath: json['tool_path'] as String?,
+      isGenuine: computedGen,
+      genuineType: json['genuine_type'] as String? ?? (computedGen ? 'Retail / Subscription' : ''),
+      needsActivation: json['needs_activation'] as bool? ?? (isInst && !isAct),
+      activationSummaryFa: json['activation_summary_fa'] as String? ?? '',
+      badgeLabel: json['badge_label'] as String? ?? '',
     );
+  }
+
+  bool get isGenuineOriginal {
+    if (isGenuine) return true;
+    final pr = product.toLowerCase();
+    final ch = channel.toLowerCase();
+    final isSub = pr.contains('365') || ch.contains('365') || pr.contains('subscription');
+    final isRetail = ch.contains('retail') || pr.contains('retail') || pr.contains('home & student') || pr.contains('home & business');
+    return activated && (isSub || isRetail);
+  }
+
+  String get effectiveActivationSummaryFa {
+    if (activationSummaryFa.isNotEmpty) return activationSummaryFa;
+    if (!installed) return 'مایکروسافت آفیس روی سیستم نصب نیست.';
+    if (isGenuineOriginal) return 'لایسنس آفیس اورجینال است و نیازی به فعال‌سازی ندارد.';
+    if (activated) return 'مایکروسافت آفیس با موفقیت فعال است.';
+    return 'آفیس فعال نیست و نیاز به فعال‌سازی دارد.';
+  }
+
+  String get effectiveBadgeLabel {
+    if (badgeLabel.isNotEmpty) return badgeLabel;
+    if (!installed) return 'نصب نیست';
+    if (isGenuineOriginal) return 'آفیس اورجینال';
+    if (activated) return 'فعال شده';
+    return 'غیرفعال';
   }
 }
 
@@ -1549,6 +1797,9 @@ class DriverInstallItem {
   final String status; // queued, installing, completed, failed, skipped
   final String message;
   final int? exitCode;
+  final String? packageId;
+  final String? displayName;
+  final String? failureReason;
 
   DriverInstallItem({
     required this.filename,
@@ -1558,17 +1809,23 @@ class DriverInstallItem {
     this.status = 'queued',
     this.message = '',
     this.exitCode,
+    this.packageId,
+    this.displayName,
+    this.failureReason,
   });
 
   factory DriverInstallItem.fromJson(Map<String, dynamic> json) {
     return DriverInstallItem(
-      filename: json['filename'] ?? '',
+      filename: json['filename'] ?? json['display_name'] ?? json['installer_file'] ?? '',
       relativePath: json['relative_path'] ?? '',
       type: json['type'] ?? 'exe',
       fileSizeDisplay: json['file_size_display'] ?? '',
       status: json['status'] ?? 'queued',
       message: json['message'] ?? '',
       exitCode: json['exit_code'] as int?,
+      packageId: json['package_id'] as String?,
+      displayName: json['display_name'] as String?,
+      failureReason: json['failure_reason'] as String?,
     );
   }
 }
@@ -1894,3 +2151,76 @@ class DriverScanResult {
     );
   }
 }
+
+class UsbDriveInfo {
+  final String driveLetter;
+  final String volumeName;
+  final String fileSystem;
+  final String vendor;
+  final String product;
+  final String serial;
+  final int totalBytes;
+  final int freeBytes;
+  final int usedBytes;
+  final double totalGb;
+  final double freeGb;
+  final double usedGb;
+  final double percentUsed;
+  final bool isRemovable;
+
+  UsbDriveInfo({
+    required this.driveLetter,
+    required this.volumeName,
+    required this.fileSystem,
+    required this.vendor,
+    required this.product,
+    this.serial = '',
+    this.totalBytes = 0,
+    this.freeBytes = 0,
+    this.usedBytes = 0,
+    required this.totalGb,
+    required this.freeGb,
+    required this.usedGb,
+    required this.percentUsed,
+    required this.isRemovable,
+  });
+
+  factory UsbDriveInfo.fromJson(Map<String, dynamic> json) {
+    final total = (json['total_gb'] as num?)?.toDouble() ?? 0.0;
+    final free = (json['free_gb'] as num?)?.toDouble() ?? 0.0;
+    final used = (json['used_gb'] as num?)?.toDouble() ?? (total > free ? (total - free) : 0.0);
+    final pct = (json['percent_used'] as num?)?.toDouble() ?? (total > 0 ? ((used / total) * 100.0) : 0.0);
+
+    return UsbDriveInfo(
+      driveLetter: (json['drive_letter'] ?? '').toString(),
+      volumeName: (json['volume_name'] ?? '').toString(),
+      fileSystem: (json['file_system'] ?? '').toString(),
+      vendor: (json['vendor'] ?? '').toString(),
+      product: (json['product'] ?? '').toString(),
+      serial: (json['serial'] ?? '').toString(),
+      totalBytes: (json['total_bytes'] as num?)?.toInt() ?? 0,
+      freeBytes: (json['free_bytes'] as num?)?.toInt() ?? 0,
+      usedBytes: (json['used_bytes'] as num?)?.toInt() ?? 0,
+      totalGb: total,
+      freeGb: free,
+      usedGb: used,
+      percentUsed: pct,
+      isRemovable: json['is_removable'] == true,
+    );
+  }
+
+  String get displayName {
+    final parts = <String>[];
+    if (vendor.isNotEmpty) parts.add(vendor);
+    if (product.isNotEmpty) parts.add(product);
+    if (parts.isNotEmpty) {
+      if (volumeName.isNotEmpty && volumeName != 'فلش مموری' && volumeName != 'USB Drive') {
+        return '${parts.join(' ')} ($volumeName)';
+      }
+      return parts.join(' ');
+    }
+    if (volumeName.isNotEmpty) return volumeName;
+    return 'فلش مموری $driveLetter';
+  }
+}
+

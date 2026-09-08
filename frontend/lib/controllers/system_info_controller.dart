@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +18,11 @@ class SystemInfoController extends GetxController {
   final RxBool isDisablingProxy = false.obs;
   final RxBool isRestarting = false.obs;
   final RxString errorMessage = ''.obs;
+
+  // Live USB flash drives
+  final RxList<UsbDriveInfo> usbDrives = <UsbDriveInfo>[].obs;
+  final RxBool isEjecting = false.obs;
+  Timer? _usbPollTimer;
 
   // Session-based installation & restart suggestion tracking
   final RxInt sessionInstalledSoftwareCount = 0.obs;
@@ -51,6 +57,16 @@ class SystemInfoController extends GetxController {
   void onInit() {
     super.onInit();
     _loadCacheAndFetch();
+    fetchUsbDrives();
+    _usbPollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      fetchUsbDrives();
+    });
+  }
+
+  @override
+  void onClose() {
+    _usbPollTimer?.cancel();
+    super.onClose();
   }
 
   Future<void> _loadCacheAndFetch() async {
@@ -553,5 +569,81 @@ class SystemInfoController extends GetxController {
         );
       }
     } catch (_) {}
+  }
+
+  // -------------------------------------------------------------
+  // Live USB Flash Drives & Safe Eject
+  // -------------------------------------------------------------
+
+  Future<void> fetchUsbDrives() async {
+    try {
+      final list = await _apiService.getConnectedUsbDrives();
+      usbDrives.assignAll(list);
+    } catch (e) {
+      debugPrint('[SystemInfoController] fetchUsbDrives error: $e');
+    }
+  }
+
+  Future<void> safeEjectDrive(BuildContext context, String driveLetter) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.eject_rounded, color: Color(0xFFEF4444)),
+            const SizedBox(width: 8),
+            Text(l10n.isPersian ? 'خروج ایمن فلش مموری' : 'Safely Eject USB Drive'),
+          ],
+        ),
+        content: Text(
+          l10n.isPersian
+              ? 'آیا از خروج ایمن فلش مموری $driveLetter مطمئن هستید؟\nارتباط فلش به صورت نرم‌افزاری متوقف شده و آماده جداسازی خواهد بود.'
+              : 'Are you sure you want to safely disconnect USB drive $driveLetter?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.isPersian ? 'انصراف' : 'Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.isPersian ? 'خروج ایمن (Eject)' : 'Eject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    isEjecting.value = true;
+    try {
+      final res = await _apiService.safeEjectDrive(driveLetter);
+      await fetchUsbDrives();
+      await fetchSystemInfo(forceRefresh: true);
+      if (context.mounted) {
+        final success = res['success'] == true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              res['message']?.toString() ??
+                  (success
+                      ? (l10n.isPersian ? '✓ فلش مموری با موفقیت خارج شد.' : '✓ Drive safely ejected.')
+                      : (l10n.isPersian ? 'خطا در خروج درایو' : 'Failed to eject drive')),
+            ),
+            backgroundColor: success ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      isEjecting.value = false;
+    }
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/qc_controller.dart';
+import '../controllers/theme_language_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../services/settings_service.dart';
 import 'dialogs/exit_dialog.dart';
@@ -38,6 +39,10 @@ class AppHeader extends StatelessWidget {
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    // Resolve accent color — falls back to colorScheme.primary if controller not yet registered
+    final accentColor = Get.isRegistered<ThemeLanguageController>()
+        ? Get.find<ThemeLanguageController>().currentAccentColor
+        : theme.colorScheme.primary;
 
     return Container(
       padding: const EdgeInsets.all(3),
@@ -70,7 +75,7 @@ class AppHeader extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? (isDark ? const Color(0xFF2563EB) : Colors.white)
+                      ? (isDark ? accentColor : Colors.white)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(7),
                   boxShadow: isSelected
@@ -93,9 +98,9 @@ class AppHeader extends StatelessWidget {
                         opt.icon,
                         size: 14,
                         color: isSelected
-                            ? (isDark ? Colors.white : const Color(0xFF2563EB))
+                            ? Colors.white
                             : (isDark
-                                  ? const Color(0xFF94A3B8)
+                                  ? const Color(0xFFCBD5E1)
                                   : const Color(0xFF64748B)),
                       ),
                       const SizedBox(width: 5),
@@ -108,10 +113,11 @@ class AppHeader extends StatelessWidget {
                             ? FontWeight.w700
                             : FontWeight.w600,
                         color: isSelected
-                            ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                            ? Colors.white
                             : (isDark
-                                  ? const Color(0xFF94A3B8)
+                                  ? const Color(0xFFCBD5E1)
                                   : const Color(0xFF64748B)),
+
                       ),
                     ),
                   ],

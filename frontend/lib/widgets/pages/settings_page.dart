@@ -68,19 +68,39 @@ class SettingsPage extends StatelessWidget {
                   return InkWell(
                     onTap: () => themeCtrl.setAccentColor(colorName),
                     borderRadius: BorderRadius.circular(8),
-                    child: Container(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isSelected ? colorVal.withValues(alpha: isDark ? 0.25 : 0.12) : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC)),
+                        color: isSelected
+                            ? colorVal
+                            : (isDark ? AppTheme.darkCard : const Color(0xFFF8FAFC)),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: isSelected ? colorVal : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder), width: isSelected ? 1.8 : 1.2),
+                        border: Border.all(
+                          color: isSelected ? colorVal : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                          width: isSelected ? 2.0 : 1.2,
+                        ),
+                        boxShadow: isSelected
+                            ? [BoxShadow(color: colorVal.withValues(alpha: 0.35), blurRadius: 8, spreadRadius: 0)]
+                            : [],
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(width: 16, height: 16, decoration: BoxDecoration(color: colorVal, shape: BoxShape.circle)),
+                          Container(width: 16, height: 16, decoration: BoxDecoration(
+                            color: isSelected ? Colors.white.withValues(alpha: 0.3) : colorVal,
+                            shape: BoxShape.circle,
+                            border: isSelected ? Border.all(color: Colors.white, width: 1.5) : null,
+                          )),
                           const SizedBox(width: 8),
-                          Text(colorName, style: TextStyle(fontSize: 13, fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500)),
+                          Text(
+                            colorName,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                              color: isSelected ? Colors.white : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextPrimary),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -218,18 +238,34 @@ class SettingsPage extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: isSelected ? accent.withValues(alpha: isDark ? 0.22 : 0.12) : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC)),
+            color: isSelected
+                ? (isDark ? accent.withValues(alpha: 0.20) : accent.withValues(alpha: 0.10))
+                : (isDark ? AppTheme.darkCard : const Color(0xFFF8FAFC)),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: isSelected ? accent : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder), width: isSelected ? 1.8 : 1.2),
+            border: Border.all(
+              color: isSelected ? accent : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+              width: isSelected ? 2.0 : 1.2,
+            ),
+            boxShadow: isSelected
+                ? [BoxShadow(color: accent.withValues(alpha: 0.25), blurRadius: 10, spreadRadius: 0)]
+                : [],
           ),
           child: Column(
             children: [
-              Icon(icon, size: 24, color: isSelected ? accent : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted)),
+              Icon(icon, size: 24, color: isSelected ? accent : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextMuted)),
               const SizedBox(height: 6),
-              Text(label, style: TextStyle(fontSize: 13, fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? (isDark ? accent : accent) : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextPrimary),
+                ),
+              ),
             ],
           ),
         ),

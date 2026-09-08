@@ -2,7 +2,7 @@
 ; Production Installer Generation for Windows 64-bit
 
 #define MyAppName "Markazi System Checker"
-#define MyAppVersion "1.1.3"
+#define MyAppVersion "1.1.5"
 #define MyAppPublisher "Markazi System"
 #define MyAppExeName "MarkaziSystemChecker.exe"
 
@@ -28,7 +28,7 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=10.0.17763
+MinVersion=6.1
 PrivilegesRequired=admin
 DisableProgramGroupPage=no
 CloseApplications=no

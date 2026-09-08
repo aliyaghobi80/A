@@ -45,6 +45,7 @@ def build_backend(output_dir: str = None):
         "hardware.ram",
         "hardware.gpu",
         "hardware.motherboard",
+        "hardware.normalizer",
         "hardware.storage",
         "hardware.bios",
         "hardware.battery",
@@ -66,6 +67,12 @@ def build_backend(output_dir: str = None):
         "packages.auto_wizard",
         "packages.brand_icons",
         "drivers.driver_installer",
+        "drivers.archive_extractor",
+        "drivers.package_inspector",
+        "drivers.hardware_matcher",
+        "drivers.deduplicator",
+        "drivers.queue_manager",
+        "drivers.history_store",
     ]
 
     cmd = [

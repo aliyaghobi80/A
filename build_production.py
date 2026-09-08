@@ -17,7 +17,7 @@ import zipfile
 import subprocess
 import urllib.request
 
-APP_VERSION = "1.1.3"
+APP_VERSION = "1.1.5"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
 STAGE_DIR = os.path.join(DIST_DIR, f"MarkaziSystemChecker-{APP_VERSION}")
@@ -73,7 +73,7 @@ def step_build_flutter():
     print("[2/6] Building Flutter Windows Release...")
     print("==================================================")
     flutter_bin = shutil.which("flutter.bat") or shutil.which("flutter") or "flutter"
-    flutter_cmd = f'"{flutter_bin}" build windows --release'
+    flutter_cmd = f'"{flutter_bin}" build windows --release --no-pub'
     print(f"[*] Running: {flutter_cmd} in {FRONTEND_DIR}")
     res = subprocess.run(flutter_cmd, cwd=FRONTEND_DIR, shell=True)
     if res.returncode != 0:
@@ -188,7 +188,7 @@ def step_sync_release_folder(backend_exe: str):
                 shutil.copy2(s_item, d_item)
         print(f" * Verified assets synchronized -> {dst_assets}")
 
-    # 2.5 Bundle Visual C++ Runtime & Universal C Runtime DLLs for fresh Windows compatibility
+    # 2.5 Bundle Visual C++ Runtime & Universal C Runtime DLLs for fresh & legacy Windows compatibility
     system32 = os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32")
     vc_dlls = [
         "vcruntime140.dll",
@@ -200,6 +200,7 @@ def step_sync_release_folder(backend_exe: str):
         "msvcp140_codecvt_ids.dll",
         "vcomp140.dll",
         "ucrtbase.dll",
+        "d3dcompiler_47.dll",
     ]
     for dll in vc_dlls:
         src_dll = os.path.join(system32, dll)
@@ -207,14 +208,23 @@ def step_sync_release_folder(backend_exe: str):
             shutil.copy2(src_dll, os.path.join(FLUTTER_RELEASE_DIR, dll))
             shutil.copy2(src_dll, os.path.join(dest_backend_dir, dll))
 
-    # Also copy api-ms-win-* DLLs from backend _internal to root application folder
+    # Bundle api-ms-win-core-path-l1-1-0.dll for Windows 7 / 8.1 Python 3.9+ compatibility
+    win7_path_dll = os.path.join(ROOT_DIR, "installer", "compatibility", "x64", "api-ms-win-core-path-l1-1-0.dll")
     backend_internal = os.path.join(dest_backend_dir, "_internal")
+    if os.path.isfile(win7_path_dll):
+        shutil.copy2(win7_path_dll, os.path.join(FLUTTER_RELEASE_DIR, "api-ms-win-core-path-l1-1-0.dll"))
+        shutil.copy2(win7_path_dll, os.path.join(dest_backend_dir, "api-ms-win-core-path-l1-1-0.dll"))
+        if os.path.isdir(backend_internal):
+            shutil.copy2(win7_path_dll, os.path.join(backend_internal, "api-ms-win-core-path-l1-1-0.dll"))
+
+    # Also copy api-ms-win-* DLLs from backend _internal to root application folder & backend folder
     if os.path.isdir(backend_internal):
         for f in os.listdir(backend_internal):
             if f.lower().startswith("api-ms-win-") and f.lower().endswith(".dll"):
                 shutil.copy2(os.path.join(backend_internal, f), os.path.join(FLUTTER_RELEASE_DIR, f))
+                shutil.copy2(os.path.join(backend_internal, f), os.path.join(dest_backend_dir, f))
 
-    print(f" * Bundled Visual C++ & Universal C Runtime DLLs for 100% clean-machine Windows compatibility.")
+    print(f" * Bundled Visual C++, Universal C Runtime & Windows 7/8.1 compatibility DLLs.")
 
     # 3. Create clean logs folder without lingering log files
     logs_dir = os.path.join(FLUTTER_RELEASE_DIR, "logs")
@@ -261,7 +271,10 @@ def step_create_portable_zip():
                     continue
                 abs_file = os.path.join(root, file)
                 rel_file = os.path.relpath(abs_file, os.path.dirname(STAGE_DIR))
-                zf.write(abs_file, rel_file)
+                try:
+                    zf.write(abs_file, rel_file)
+                except Exception as e:
+                    print(f"[*] Warning: Skipped unreadable/locked file {rel_file}: {e}")
 
     size_mb = os.path.getsize(zip_path) / (1024 * 1024)
     print(f"[OK] Portable ZIP created: {zip_path} ({size_mb:.2f} MB)")

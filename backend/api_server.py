@@ -25,12 +25,15 @@ from drivers.driver_installer import (
     get_driver_directory_config,
     set_driver_directory_config,
     load_driver_history,
+    launch_interactive_driver_installer,
+    open_driver_package_folder,
 )
 from activation.windows_activation import get_windows_activation_info
 from activation.office_activation import get_office_activation_info
 from activation.activation_tools import execute_activation_tool, set_tools_directory, get_tool_status, get_tools_directory_status
 from files.checker import set_file_requirement_path, check_required_files
 from hardware.battery import get_battery_info
+from hardware.storage import get_connected_usb_drives, safe_eject_drive
 from qc.qc_engine import evaluate_system_qc
 
 logger = logging.getLogger(__name__)
@@ -248,6 +251,16 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps(reboot_info, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/system/usb-drives":
+            logger.debug("Scanning connected USB flash drives...")
+            drives = get_connected_usb_drives()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "success", "usb_drives": drives}, indent=2).encode("utf-8"))
             return
 
         elif path == "/api/packages/batch-status":
@@ -561,6 +574,25 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
             return
 
+        elif path == "/api/system/eject-drive":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+            drive_letter = str(payload.get("drive_letter") or "").strip()
+            logger.info(f"Safely ejecting drive {drive_letter}...")
+            result = safe_eject_drive(drive_letter)
+            with _cache_lock:
+                _cached_data = None
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode("utf-8"))
+            return
+
         elif path == "/api/packages/batch-install":
             content_len = int(self.headers.get("Content-Length", 0))
             body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
@@ -622,6 +654,40 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
 
         elif path in ("/api/drivers/queue/cancel", "/api/drivers/batch-cancel"):
             result = cancel_driver_batch_install()
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/drivers/install-interactive":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+            package_id = payload.get("package_id", "")
+            folder_path = payload.get("folder_path", None)
+            result = launch_interactive_driver_installer(package_id, custom_dir=folder_path)
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/drivers/open-folder":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+            package_id = payload.get("package_id", "")
+            folder_path = payload.get("folder_path", None)
+            result = open_driver_package_folder(package_id, custom_dir=folder_path)
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()

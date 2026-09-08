@@ -409,5 +409,85 @@ void main() {
     expect(match.status, 'needs_install');
     expect(match.recommendation, 'recommended');
   });
+
+  test('MotherboardInfo handles brand detection, fallback colors, and display names', () {
+    final mbGigabyte = MotherboardInfo.fromJson({
+      'manufacturer': 'Gigabyte Technology Co., Ltd.',
+      'model': 'H610M K DDR4',
+      'serial': 'SN123456',
+    });
+    expect(mbGigabyte.effectiveBrand, 'GIGABYTE');
+    expect(mbGigabyte.effectiveBrandFa, 'گیگابایت');
+    expect(mbGigabyte.effectiveChipset, 'Intel H610');
+    expect(mbGigabyte.effectiveFormFactor, 'Micro-ATX');
+    expect(mbGigabyte.fullDisplayName, 'GIGABYTE H610M K DDR4');
+    expect(mbGigabyte.brandColor.toARGB32(), 0xFFF97316);
+
+    final mbAsus = MotherboardInfo.fromJson({
+      'manufacturer': 'ASUSTeK COMPUTER INC.',
+      'model': 'ROG STRIX B650-A GAMING WIFI',
+      'serial': 'SN998877',
+    });
+    expect(mbAsus.effectiveBrand, 'ASUS');
+    expect(mbAsus.effectiveBrandFa, 'ایسوس');
+    expect(mbAsus.effectiveChipset, 'AMD B650');
+    expect(mbAsus.fullDisplayName, 'ASUS ROG STRIX B650-A GAMING WIFI');
+    expect(mbAsus.brandColor.toARGB32(), 0xFF0072C6);
+
+    final mbMsi = MotherboardInfo.fromJson({
+      'manufacturer': 'Micro-Star International Co., Ltd.',
+      'model': 'MAG B760 TOMAHAWK WIFI',
+      'serial': 'SN554433',
+    });
+    expect(mbMsi.effectiveBrand, 'MSI');
+    expect(mbMsi.effectiveBrandFa, 'ام‌اس‌آی');
+    expect(mbMsi.effectiveChipset, 'Intel B760');
+    expect(mbMsi.fullDisplayName, 'MSI MAG B760 TOMAHAWK WIFI');
+    expect(mbMsi.brandColor.toARGB32(), 0xFFEF4444);
+
+    final mbAsrock = MotherboardInfo.fromJson({
+      'manufacturer': 'ASRock',
+      'model': 'B550M Pro4',
+      'serial': 'SN112233',
+    });
+    expect(mbAsrock.effectiveBrand, 'ASRock');
+    expect(mbAsrock.effectiveBrandFa, 'ازراک');
+    expect(mbAsrock.effectiveChipset, 'AMD B550');
+    expect(mbAsrock.effectiveFormFactor, 'Micro-ATX');
+    expect(mbAsrock.fullDisplayName, 'ASRock B550M Pro4');
+    expect(mbAsrock.brandColor.toARGB32(), 0xFF0EA5E9);
+  });
+
+  test('UsbDriveInfo.fromJson parses USB flash drive details and calculates percent properly', () {
+    final usb = UsbDriveInfo.fromJson({
+      'drive_letter': 'H:',
+      'volume_name': 'aliyaghobi',
+      'file_system': 'NTFS',
+      'vendor': 'SanDisk',
+      'product': 'Cruzer Blade',
+      'serial': '2004432432075A52F543',
+      'total_bytes': 31481360384,
+      'free_bytes': 10957152256,
+      'used_bytes': 20524208128,
+      'total_gb': 29.32,
+      'free_gb': 10.2,
+      'used_gb': 19.11,
+      'percent_used': 65.2,
+      'is_removable': true,
+    });
+
+    expect(usb.driveLetter, 'H:');
+    expect(usb.volumeName, 'aliyaghobi');
+    expect(usb.fileSystem, 'NTFS');
+    expect(usb.vendor, 'SanDisk');
+    expect(usb.product, 'Cruzer Blade');
+    expect(usb.totalGb, 29.32);
+    expect(usb.freeGb, 10.2);
+    expect(usb.usedGb, 19.11);
+    expect(usb.percentUsed, 65.2);
+    expect(usb.isRemovable, true);
+    expect(usb.displayName, 'SanDisk Cruzer Blade (aliyaghobi)');
+  });
 }
+
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../common/hardware_illustrations.dart';
+import '../../theme/app_theme.dart';
 
 /// Modern, minimal, and expandable card wrapper for Advanced Mode.
 /// Supports vector illustrations, concise summary subtitles, and smooth accordion expansion.
@@ -99,15 +100,15 @@ class _CardWrapperState extends State<CardWrapper> with SingleTickerProviderStat
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF131D33) : Colors.white,
+        color: isDark ? AppTheme.darkSurface : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0xFF22304E) : const Color(0xFFE2E8F0),
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

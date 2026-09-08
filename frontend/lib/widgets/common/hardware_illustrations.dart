@@ -467,6 +467,7 @@ class StorageIllustration extends StatelessWidget {
   final String? storageType;
   final String? busType;
   final String? model;
+  final String? typeDescription;
   final bool? isM2;
   final bool? isSata;
   final bool? isHdd;
@@ -478,6 +479,7 @@ class StorageIllustration extends StatelessWidget {
     this.storageType,
     this.busType,
     this.model,
+    this.typeDescription,
     this.isM2,
     this.isSata,
     this.isHdd,
@@ -489,24 +491,44 @@ class StorageIllustration extends StatelessWidget {
     if (isHdd == true) return 'assets/Parts/hdd.png';
     if (isSata == true) return 'assets/Parts/ssd_sata.png';
 
+    final td = (typeDescription ?? '').toLowerCase();
     final st = (storageType ?? '').toLowerCase();
     final bt = (busType ?? '').toLowerCase();
     final md = (model ?? '').toLowerCase();
 
-    // 1. Check for NVMe / M.2
-    if (st.contains('nvme') || bt.contains('nvme') || md.contains('nvme') || md.contains('m.2') || md.contains('m2') || md.contains('pcie')) {
+    // 0. Check typeDescription first — most reliable (set by backend normalizer)
+    if (td.contains('usb') || td.contains('removable')) {
+      return 'assets/Parts/usb_flash.png';
+    }
+    if (td.contains('nvme') || td.contains('m.2') || td.contains('pcie')) {
       return 'assets/Parts/ssd_m2.png';
     }
+    if (td.contains('hdd') || td.contains('hard disk')) {
+      return 'assets/Parts/hdd.png';
+    }
+    if (td.contains('ssd') || td.contains('sata')) {
+      return 'assets/Parts/ssd_sata.png';
+    }
 
-    // 2. Check for HDD
-    if (st.contains('hdd') || st.contains('hard') || md.contains('wd') || md.contains('seagate') || md.contains('toshiba') || md.contains('barracuda') || md.contains('caviar')) {
+    // 1. Fallback: raw storageType / busType / model string checks
+    if (st.contains('usb') || bt.contains('usb') || md.contains('usb') ||
+        st.contains('removable') || md.contains('sandisk') ||
+        md.contains('cruzer') || md.contains('flash')) {
+      return 'assets/Parts/usb_flash.png';
+    }
+    if (st.contains('nvme') || bt.contains('nvme') || md.contains('nvme') ||
+        md.contains('m.2') || md.contains('m2') || md.contains('pcie')) {
+      return 'assets/Parts/ssd_m2.png';
+    }
+    if (st.contains('hdd') || st.contains('hard') || md.contains('wd') ||
+        md.contains('seagate') || md.contains('toshiba') ||
+        md.contains('barracuda') || md.contains('caviar')) {
       if (!md.contains('ssd') && !st.contains('ssd')) {
         return 'assets/Parts/hdd.png';
       }
     }
-
-    // 3. Check for SATA SSD / Generic SSD
-    if (st.contains('ssd') || md.contains('ssd') || md.contains('sata') || md.contains('evo') || md.contains('crucial')) {
+    if (st.contains('ssd') || md.contains('ssd') || md.contains('sata') ||
+        md.contains('evo') || md.contains('crucial')) {
       return 'assets/Parts/ssd_sata.png';
     }
 
@@ -859,3 +881,35 @@ class _BatteryPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+// -------------------------------------------------------------
+// 8. USB Flash Drive Illustration (SanDisk / Removable USB)
+// -------------------------------------------------------------
+class UsbFlashIllustration extends StatelessWidget {
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+
+  const UsbFlashIllustration({
+    super.key,
+    this.width,
+    this.height,
+    this.fit = BoxFit.contain,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/Parts/usb_flash.png',
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => const Icon(
+        Icons.usb_rounded,
+        size: 40,
+        color: Color(0xFFEF4444),
+      ),
+    );
+  }
+}
+

@@ -281,6 +281,73 @@ RTL8168.DeviceDesc="Realtek PCIe GbE Family Controller"
         actual_order = [p["category"] for p in sorted_queue]
         self.assertEqual(actual_order, expected_order)
 
+    # -------------------------------------------------------------------------
+    # Test K: Archive auto-unpack into isolated subfolders
+    # -------------------------------------------------------------------------
+    def test_k_archive_auto_unpack(self):
+        from drivers.archive_extractor import auto_unpack_driver_archives
+
+        mb_folder = os.path.join(self.test_dir, "ASUS_B660M")
+        os.makedirs(mb_folder, exist_ok=True)
+
+        # Create a sample ZIP archive inside the motherboard folder
+        zip_path = os.path.join(mb_folder, "Intel_LAN_Driver.zip")
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("setup.exe", b"MZDummySetupContent")
+            zf.writestr("info.txt", "Intel LAN Driver")
+
+        extracted_dirs = auto_unpack_driver_archives(mb_folder)
+        self.assertEqual(len(extracted_dirs), 1)
+        expected_target = os.path.join(mb_folder, "Intel_LAN_Driver")
+        self.assertEqual(os.path.abspath(extracted_dirs[0]), os.path.abspath(expected_target))
+        self.assertTrue(os.path.exists(os.path.join(expected_target, "setup.exe")))
+
+    # -------------------------------------------------------------------------
+    # Test L: Clear Persian failure reason diagnosis
+    # -------------------------------------------------------------------------
+    def test_l_failure_reason_diagnosis(self):
+        from drivers.queue_manager import _format_driver_failure_reason
+
+        # Incompatible exit code 1603
+        r1603 = _format_driver_failure_reason(1603, "setup_exe", "", {})
+        self.assertIn("سازگار نیست", r1603)
+
+        # Architecture mismatch 1633
+        r1633 = _format_driver_failure_reason(1633, "setup_exe", "", {})
+        self.assertIn("معماری", r1633)
+
+        # Low confidence hardware ID mismatch
+        r_hw = _format_driver_failure_reason(1, "setup_exe", "", {"confidence": "LOW"})
+        self.assertIn("سخت‌افزار", r_hw)
+
+        # PnPUtil device not present
+        r_pnp = _format_driver_failure_reason(2, "inf_pnputil", "No device matching driver", {})
+        self.assertIn("سخت‌افزار متناظر", r_pnp)
+
+    # -------------------------------------------------------------------------
+    # Test M: Motherboard container directory collection
+    # -------------------------------------------------------------------------
+    def test_m_motherboard_container_collection(self):
+        from drivers.driver_installer import _collect_driver_candidates
+
+        mb_root = os.path.join(self.test_dir, "GIGABYTE_Z790_AORUS")
+        # Subdirectories for each component
+        audio_sub = os.path.join(mb_root, "Realtek_Audio")
+        chipset_sub = os.path.join(mb_root, "Intel_Chipset")
+        os.makedirs(audio_sub, exist_ok=True)
+        os.makedirs(chipset_sub, exist_ok=True)
+
+        with open(os.path.join(audio_sub, "Setup.exe"), "wb") as f:
+            f.write(b"MZ" + b"\x00" * 500)
+        with open(os.path.join(chipset_sub, "SetupChipset.exe"), "wb") as f:
+            f.write(b"MZ" + b"\x00" * 500)
+
+        candidates = _collect_driver_candidates(mb_root)
+        candidate_basenames = [os.path.basename(c) for c in candidates]
+        self.assertIn("Realtek_Audio", candidate_basenames)
+        self.assertIn("Intel_Chipset", candidate_basenames)
+
 
 if __name__ == "__main__":
     unittest.main()
+
