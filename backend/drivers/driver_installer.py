@@ -356,15 +356,17 @@ def start_intelligent_driver_install(
     else:
         target_pkgs = [
             p for p in all_pkgs
-            if p.get("match", {}).get("recommendation") == "recommended"
-            and p.get("match", {}).get("confidence") in ("HIGH", "MEDIUM")
-            and p.get("match", {}).get("status") in ("needs_install", "update_available")
+            if p.get("is_valid", True)
+            and p.get("match", {}).get("recommendation") != "skip"
         ]
+        # Robust fallback: if nothing met strict filter, take all valid packages
+        if not target_pkgs:
+            target_pkgs = [p for p in all_pkgs if p.get("is_valid", True)]
 
     if not target_pkgs:
         return {
             "success": False,
-            "message": "هیچ بسته درایور واجد شرایط و سازگاری برای نصب خودکار یافت نشد.",
+            "message": "هیچ بسته درایور معتبری برای نصب یافت نشد.",
         }
 
     return start_driver_queue(target_pkgs)

@@ -180,39 +180,33 @@ def match_package_to_hardware(
                 score = 2
             elif "intel" in pkg_name and "intel" in name_lower:
                 score = 2
+            elif any(w in name_lower for w in ("basic display", "vga", "video controller", "display")):
+                score = 2
         elif pkg_category == "audio" and dev_class in ("media", "audioendpoint"):
             if "realtek" in pkg_name and "realtek" in name_lower:
                 score = 2
             elif "smart sound" in pkg_name and "smart sound" in name_lower:
                 score = 2
+            elif any(w in name_lower for w in ("high definition audio", "audio controller", "multimedia")):
+                score = 2
         elif pkg_category == "lan" and dev_class == "net":
-            if any(w in name_lower for w in ("ethernet", "gbe", "gigabit", "lan")):
-                if "realtek" in pkg_name and "realtek" in name_lower:
-                    score = 2
-                elif "intel" in pkg_name and "intel" in name_lower:
-                    score = 2
+            if any(w in name_lower for w in ("ethernet", "gbe", "gigabit", "lan", "network controller")):
+                score = 2
         elif pkg_category == "wifi" and dev_class == "net":
-            if any(w in name_lower for w in ("wi-fi", "wifi", "wireless", "802.11")):
-                if "intel" in pkg_name and "intel" in name_lower:
-                    score = 2
-                elif "realtek" in pkg_name and "realtek" in name_lower:
-                    score = 2
-                elif "mediatek" in pkg_name and "mediatek" in name_lower:
-                    score = 2
-                elif "qualcomm" in pkg_name and "qualcomm" in name_lower:
-                    score = 2
+            if any(w in name_lower for w in ("wi-fi", "wifi", "wireless", "802.11", "network controller")):
+                score = 2
         elif pkg_category == "bluetooth" and dev_class == "bluetooth":
             score = 2
         elif pkg_category == "chipset" and dev_class == "system":
-            if any(w in name_lower for w in ("chipset", "smbus", "lpss", "serial io", "spi", "i2c")):
+            if any(w in name_lower for w in ("chipset", "smbus", "lpss", "serial io", "spi", "i2c", "pci", "unknown device")):
                 score = 2
         elif pkg_category == "system_mei" and dev_class == "system":
-            if any(w in name_lower for w in ("management engine", "mei", "heci")):
+            if any(w in name_lower for w in ("management engine", "mei", "heci", "pci simple communications controller")):
                 score = 2
 
-        # Prioritize problem devices (Code 28 missing driver)
-        if dev_prob in (28, 10, 43) and score >= 1:
-            score += 1
+        # Prioritize problem devices (Code 28 missing driver, Code 10, Code 43)
+        if dev_prob in (28, 10, 43):
+            score += 2
 
         if score > best_match_score:
             best_match_score = score

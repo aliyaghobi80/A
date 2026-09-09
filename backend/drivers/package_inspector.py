@@ -461,6 +461,51 @@ def _resolve_installer_entrypoint(root_dir: str) -> Tuple[str, str, List[str], L
             alts = [c for c in candidates_exe if c != exe]
             return exe, "asus_setup", ["-s", "-norestart"], alts
 
+def get_driver_exe_silent_args(file_path: str) -> List[str]:
+    """Returns vendor-specific silent switches for driver executables (matching 1.1.3)."""
+    name_l = os.path.basename(file_path).lower()
+    if "dpinst" in name_l:
+        return ["/q", "/se", "/sa", "/sw"]
+    elif "nvidia" in name_l:
+        return ["-s", "-noreboot"]
+    elif any(t in name_l for t in ("amd", "radeon", "ati")):
+        return ["-INSTALL", "-OUTPUT", "screen", "-NORESTART"]
+    elif any(t in name_l for t in ("intel", "rst", "asus", "asussetup")):
+        return ["-s", "-norestart"]
+    elif any(t in name_l for t in ("realtek", "lenovo", "audio", "lan", "wlan", "wifi", "bluetooth", "touchpad", "chipset")):
+        return ["/s", "/norestart"]
+    return ["/s", "/norestart"]
+
+
+def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], List[str]]:
+    """
+    Finds the best installer entrypoint inside a directory or extracted archive:
+    Returns (installer_file, method, silent_args, alternative_files).
+    """
+    candidates_exe = []
+    candidates_msi = []
+    candidates_inf = []
+    candidates_script = []
+
+    for r, _, files in os.walk(root_dir):
+        for f in files:
+            full = os.path.join(r, f)
+            ext = os.path.splitext(f)[1].lower()
+            if ext == ".exe":
+                candidates_exe.append(full)
+            elif ext == ".msi":
+                candidates_msi.append(full)
+            elif ext == ".inf":
+                candidates_inf.append(full)
+            elif ext in (".cmd", ".bat"):
+                candidates_script.append(full)
+
+    # 1. ASUS Setup
+    for exe in candidates_exe:
+        if os.path.basename(exe).lower() == "asussetup.exe":
+            alts = [c for c in candidates_exe if c != exe]
+            return exe, "asus_setup", ["-s", "-norestart"], alts
+
     # 2. Recognized standard vendor setups
     known_setups = (
         "setup.exe", "installer.exe", "setuprst.exe", "setupchipset.exe",
@@ -469,17 +514,7 @@ def _resolve_installer_entrypoint(root_dir: str) -> Tuple[str, str, List[str], L
     for exe in candidates_exe:
         if os.path.basename(exe).lower() in known_setups:
             alts = [c for c in candidates_exe if c != exe]
-            name_l = os.path.basename(exe).lower()
-            if "dpinst" in name_l:
-                args = ["/q", "/se", "/sa", "/sw"]
-            elif "nvidia" in name_l:
-                args = ["-s", "-noreboot"]
-            elif any(t in name_l for t in ("amd", "radeon")):
-                args = ["-INSTALL", "-OUTPUT", "screen", "-NORESTART"]
-            elif "intel" in name_l or "rst" in name_l:
-                args = ["-s", "-norestart"]
-            else:
-                args = ["/s", "/norestart"]
+            args = get_driver_exe_silent_args(exe)
             return exe, "setup_exe", args, alts
 
     # 3. Trusted vendor scripts (SilentInstall.cmd, etc.)
@@ -493,7 +528,7 @@ def _resolve_installer_entrypoint(root_dir: str) -> Tuple[str, str, List[str], L
         # Sort by depth
         candidates_exe.sort(key=lambda p: len(os.path.relpath(p, root_dir).replace("\\", "/").split("/")))
         primary = candidates_exe[0]
-        return primary, "setup_exe", ["/s", "/norestart"], candidates_exe[1:]
+        return primary, "setup_exe", get_driver_exe_silent_args(primary), candidates_exe[1:]
 
     # 5. MSI
     if candidates_msi:
@@ -591,7 +626,7 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
     elif package_type == "self_extracting_exe":
         installer_file = entry_path
         install_method = "setup_exe"
-        silent_args = ["/s", "/norestart"]
+        silent_args = get_driver_exe_silent_args(entry_path)
         alts = []
     elif package_type == "inf":
         installer_file = entry_path

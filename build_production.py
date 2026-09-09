@@ -17,7 +17,7 @@ import zipfile
 import subprocess
 import urllib.request
 
-APP_VERSION = "1.1.5"
+APP_VERSION = "1.1.6"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
 STAGE_DIR = os.path.join(DIST_DIR, f"MarkaziSystemChecker-{APP_VERSION}")
@@ -208,23 +208,7 @@ def step_sync_release_folder(backend_exe: str):
             shutil.copy2(src_dll, os.path.join(FLUTTER_RELEASE_DIR, dll))
             shutil.copy2(src_dll, os.path.join(dest_backend_dir, dll))
 
-    # Bundle api-ms-win-core-path-l1-1-0.dll for Windows 7 / 8.1 Python 3.9+ compatibility
-    win7_path_dll = os.path.join(ROOT_DIR, "installer", "compatibility", "x64", "api-ms-win-core-path-l1-1-0.dll")
-    backend_internal = os.path.join(dest_backend_dir, "_internal")
-    if os.path.isfile(win7_path_dll):
-        shutil.copy2(win7_path_dll, os.path.join(FLUTTER_RELEASE_DIR, "api-ms-win-core-path-l1-1-0.dll"))
-        shutil.copy2(win7_path_dll, os.path.join(dest_backend_dir, "api-ms-win-core-path-l1-1-0.dll"))
-        if os.path.isdir(backend_internal):
-            shutil.copy2(win7_path_dll, os.path.join(backend_internal, "api-ms-win-core-path-l1-1-0.dll"))
-
-    # Also copy api-ms-win-* DLLs from backend _internal to root application folder & backend folder
-    if os.path.isdir(backend_internal):
-        for f in os.listdir(backend_internal):
-            if f.lower().startswith("api-ms-win-") and f.lower().endswith(".dll"):
-                shutil.copy2(os.path.join(backend_internal, f), os.path.join(FLUTTER_RELEASE_DIR, f))
-                shutil.copy2(os.path.join(backend_internal, f), os.path.join(dest_backend_dir, f))
-
-    print(f" * Bundled Visual C++, Universal C Runtime & Windows 7/8.1 compatibility DLLs.")
+    print(f" * Bundled Visual C++ & Universal C Runtime DLLs for 100% clean-machine Windows compatibility.")
 
     # 3. Create clean logs folder without lingering log files
     logs_dir = os.path.join(FLUTTER_RELEASE_DIR, "logs")

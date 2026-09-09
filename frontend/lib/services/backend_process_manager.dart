@@ -262,13 +262,15 @@ class BackendProcessManager {
       return false;
     }
 
-    // 4. Fast targeted polling for backend startup (starts @ 50ms intervals, scaling up)
-    for (int i = 0; i < 90; i++) {
-      final delayMs = i < 10 ? 50 : (i < 25 ? 120 : 300);
+    // 4. Resilient adaptive polling for backend startup (supports slow laptops & HDDs on fresh Windows)
+    for (int i = 0; i < 70; i++) {
+      final delayMs = i < 8 ? 100 : (i < 20 ? 300 : 500);
       await Future.delayed(Duration(milliseconds: delayMs));
 
-      // Prioritize targetPort first with quick check
-      if (await isBackendRunningOnPort(targetPort, const Duration(milliseconds: 100))) {
+      final checkTimeout = i < 8 ? const Duration(milliseconds: 250) : const Duration(milliseconds: 1200);
+
+      // Prioritize targetPort first
+      if (await isBackendRunningOnPort(targetPort, checkTimeout)) {
         activePort = targetPort;
         debugPrint(
           '[BackendProcessManager] Backend is UP and healthy on port $activePort (iteration $i).',
@@ -276,11 +278,11 @@ class BackendProcessManager {
         return true;
       }
 
-      // After 6 iterations (~400ms), check candidate ports in case backend auto-selected a fallback
-      if (i >= 6) {
+      // Check candidate ports in case backend auto-selected a fallback
+      if (i >= 4) {
         for (final port in candidatePorts) {
           if (port == targetPort) continue;
-          if (await isBackendRunningOnPort(port, const Duration(milliseconds: 100))) {
+          if (await isBackendRunningOnPort(port, checkTimeout)) {
             activePort = port;
             debugPrint(
               '[BackendProcessManager] Backend is UP on fallback port $activePort (iteration $i).',

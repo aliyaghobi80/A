@@ -782,6 +782,12 @@ def _is_portable_tool(
     stem = os.path.splitext(filename)[0]
     bare_stem = re.sub(r'[_\-\.\s]*(x64|x86|64bit|32bit|v?[\d]+[\d\.]*)[_\-\.\s]*$', '', stem)
 
+    # If filename clearly indicates an installer/setup, it is NOT a portable tool
+    if any(k in stem for k in ("setup", "install", "installer", "silent", "update")):
+        # Only override if explicit portable tool stem (e.g. update_blocker)
+        if not any(stem.startswith(s) for s in ("wub", "update_blocker", "updateblocker")):
+            return False
+
     if stem in _PORTABLE_TOOL_STEMS or bare_stem in _PORTABLE_TOOL_STEMS:
         return True
 
@@ -792,7 +798,7 @@ def _is_portable_tool(
         return True
 
     parent_dir = os.path.basename(os.path.dirname(file_path)).lower()
-    if parent_dir in ("portable", "ابزار", "ابزارها", "tools", "utilities", "wub", "kms") or "portable" in parent_dir or "wub" in parent_dir:
+    if parent_dir in ("portable", "wub", "kms") or "portable" in parent_dir:
         return True
 
     if metadata:
@@ -1534,9 +1540,9 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "detection_source": "portable_tool" if is_portable else detection["detection_source"],
             "is_portable_tool": is_portable,
             "can_open_tool": is_portable or bool(validation.get("can_open_tool", False)),
-            "install_allowed": False if is_portable else bool(validation["is_valid"] and validation["manual_install_supported"]),
-            "auto_install_supported": False if is_portable else bool(validation["auto_install_supported"]),
-            "manual_install_supported": False if is_portable else bool(validation["manual_install_supported"]),
+            "install_allowed": bool(validation["is_valid"] and validation["manual_install_supported"]),
+            "auto_install_supported": bool(validation["auto_install_supported"]),
+            "manual_install_supported": bool(validation["manual_install_supported"]),
             "has_icon": icon_data is not None,
             "icon_base64": icon_data,
             "silent_arguments": silent_args,
