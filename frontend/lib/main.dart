@@ -12,6 +12,7 @@ import 'controllers/theme_language_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/backend_process_manager.dart';
 import 'services/settings_service.dart';
+import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/common/app_sidebar.dart';
 import 'widgets/common/global_app_header.dart';
@@ -86,7 +87,7 @@ class CentralSystemCheckerApp extends StatelessWidget {
             child: child ?? const SizedBox.shrink(),
           );
         },
-        home: const DashboardScreen(),
+        home: const SplashScreen(),
       );
     });
   }
