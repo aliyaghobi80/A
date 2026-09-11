@@ -7,6 +7,32 @@ from packages import manager
 
 
 class PackageManagerTests(unittest.TestCase):
+    def test_adobe_msi_install_command_is_normalized_to_uninstall(self):
+        entry = {
+            "command": "MsiExec.exe /I{AC76BA86-1033-1033-7760-BC15014EA700}",
+            "product_code": "{AC76BA86-1033-1033-7760-BC15014EA700}",
+            "windows_installer": True,
+        }
+        executable, arguments = manager._build_uninstall_invocation(entry)
+
+        self.assertTrue(executable.lower().endswith(r"system32\msiexec.exe"))
+        self.assertIn("/x", arguments.lower())
+        self.assertNotIn("/i{", arguments.lower())
+        self.assertIn(entry["product_code"], arguments)
+        self.assertIn("/passive", arguments.lower())
+        self.assertIn("/norestart", arguments.lower())
+        self.assertIn("REBOOT=ReallySuppress", arguments)
+
+    def test_unquoted_exe_uninstall_path_with_spaces_stays_intact(self):
+        executable, arguments = manager._build_uninstall_invocation(
+            {
+                "command": r"C:\Program Files\Vendor App\uninstall.exe --remove",
+                "windows_installer": False,
+            }
+        )
+        self.assertEqual(executable, r"C:\Program Files\Vendor App\uninstall.exe")
+        self.assertEqual(arguments, "--remove")
+
     def test_blocks_renamed_windows_binary(self):
         result = manager._validate_installer(
             r"C:\Packages\vlc.exe",

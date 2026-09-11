@@ -2630,35 +2630,21 @@ def uninstall_package(target_identifier: str, custom_dir: Optional[str] = None) 
     if not target_pkg.get("is_installed", False):
         return {"success": False, "message": f"{pkg_name} روی سیستم نصب نیست."}
 
-    # Search registry for UninstallString matching this app
-    uninstall_cmd = _find_uninstall_string(pkg_name)
+    # Resolve the installed application's official registry entry. Never use
+    # the setup file from Packages as an uninstaller.
+    uninstall_entry = _find_uninstall_entry(pkg_name)
 
-    if not uninstall_cmd:
+    if not uninstall_entry:
         return {
             "success": False,
             "message": f"رشته حذف (UninstallString) برای {pkg_name} در رجیستری ویندوز یافت نشد.",
         }
 
+    uninstall_cmd = uninstall_entry["command"]
     logger.info(f"Uninstalling {pkg_name} via: {uninstall_cmd}")
 
     try:
-        # Parse uninstall command - it may be an exe with args, or msiexec
-        uninstall_cmd_stripped = uninstall_cmd.strip()
-
-        # Handle quoted paths: "C:\path\unins000.exe" /SILENT
-        if uninstall_cmd_stripped.startswith('"'):
-            end_quote = uninstall_cmd_stripped.index('"', 1)
-            exe_path = uninstall_cmd_stripped[1:end_quote]
-            args = uninstall_cmd_stripped[end_quote + 1:].strip()
-        else:
-            parts = uninstall_cmd_stripped.split(" ", 1)
-            exe_path = parts[0]
-            args = parts[1] if len(parts) > 1 else ""
-
-        # For MsiExec.exe, pass the full args
-        if exe_path.lower().endswith("msiexec.exe") or "msiexec" in exe_path.lower():
-            exe_path = "msiexec.exe"
-            # Keep original args (e.g. /X{GUID})
+        exe_path, args = _build_uninstall_invocation(uninstall_entry)
 
         work_dir = os.path.dirname(exe_path) if os.path.exists(os.path.dirname(exe_path)) else ""
 
@@ -2692,10 +2678,88 @@ def uninstall_package(target_identifier: str, custom_dir: Optional[str] = None) 
         }
 
 
-def _find_uninstall_string(app_display_name: str) -> Optional[str]:
+_MSI_PRODUCT_CODE_RE = re.compile(
+    r"^\{[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\}$",
+    re.IGNORECASE,
+)
+
+
+def _split_uninstall_command(command: str) -> tuple[str, str]:
+    """Split a Windows uninstall command without breaking unquoted EXE paths."""
+    stripped = os.path.expandvars(command.strip())
+    if not stripped:
+        raise ValueError("فرمان حذف خالی است.")
+    if stripped.startswith('"'):
+        end_quote = stripped.find('"', 1)
+        if end_quote < 0:
+            raise ValueError("مسیر نقل‌قول‌شدهٔ حذف‌کننده ناقص است.")
+        return stripped[1:end_quote], stripped[end_quote + 1:].strip()
+
+    msi_match = re.match(r"(?i)^\s*(?:[^\s]*\\)?msiexec(?:\.exe)?\b(.*)$", stripped)
+    if msi_match:
+        return "msiexec.exe", msi_match.group(1).strip()
+
+    exe_match = re.match(r"(?is)^\s*(.+?\.exe)\b(.*)$", stripped)
+    if exe_match:
+        return exe_match.group(1).strip(' "'), exe_match.group(2).strip()
+
+    parts = stripped.split(" ", 1)
+    return parts[0].strip('"'), parts[1].strip() if len(parts) > 1 else ""
+
+
+def _build_uninstall_invocation(entry: Dict[str, Any]) -> tuple[str, str]:
+    """Build a safe, no-restart invocation from an official uninstall entry."""
+    command = str(entry.get("command") or "").strip()
+    product_code = str(entry.get("product_code") or "").strip()
+    windows_installer = bool(entry.get("windows_installer"))
+    exe_path, args = _split_uninstall_command(command)
+    is_msiexec = os.path.basename(exe_path).lower() in {"msiexec", "msiexec.exe"}
+
+    if windows_installer and _MSI_PRODUCT_CODE_RE.fullmatch(product_code):
+        target = product_code
+    elif is_msiexec:
+        product_match = re.search(
+            r"\{[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\}",
+            args,
+            re.IGNORECASE,
+        )
+        target = product_match.group(0) if product_match else ""
+    else:
+        target = ""
+
+    if windows_installer or is_msiexec:
+        system_root = os.environ.get("SystemRoot", r"C:\Windows")
+        exe_path = os.path.join(system_root, "System32", "msiexec.exe")
+        if target:
+            # Vendors such as Adobe register /I (maintenance) instead of /X.
+            # Product-code based /X reliably performs an uninstall.
+            args = subprocess.list2cmdline([
+                "/x",
+                target,
+                "/passive",
+                "/norestart",
+                "REBOOT=ReallySuppress",
+            ])
+        else:
+            args = re.sub(
+                r"(?i)(^|\s)/i(?=\s|\{|\"|$)",
+                r"\1/x",
+                args,
+                count=1,
+            )
+            if not re.search(r"(?i)(^|\s)/(?:quiet|qn|qb|passive)\b", args):
+                args += " /passive"
+            if not re.search(r"(?i)(^|\s)/norestart\b", args):
+                args += " /norestart"
+            if "REBOOT=" not in args.upper():
+                args += " REBOOT=ReallySuppress"
+
+    return exe_path, args.strip()
+
+
+def _find_uninstall_entry(app_display_name: str) -> Optional[Dict[str, Any]]:
     """
-    Search Windows registry for UninstallString matching the given display name.
-    Checks QuietUninstallString first, then UninstallString.
+    Find the exact installed-app registry entry and its official uninstall data.
     """
     roots = [
         (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", winreg.KEY_WOW64_64KEY),
@@ -2726,16 +2790,27 @@ def _find_uninstall_string(app_display_name: str) -> Optional[str]:
 
                             # Match by normalized name
                             if dname.lower().strip() == target_lower:
-                                # Prefer QuietUninstallString for silent removal
+                                # Prefer the vendor-provided quiet command when present.
                                 quiet = get_val("QuietUninstallString")
-                                if quiet:
-                                    return quiet
                                 uninstall = get_val("UninstallString")
-                                if uninstall:
-                                    return uninstall
+                                command = quiet or uninstall
+                                if command:
+                                    return {
+                                        "command": command,
+                                        "display_name": dname,
+                                        "product_code": kname,
+                                        "windows_installer": get_val("WindowsInstaller") == "1",
+                                        "quiet": bool(quiet),
+                                    }
                     except Exception:
                         pass
         except Exception:
             pass
 
     return None
+
+
+def _find_uninstall_string(app_display_name: str) -> Optional[str]:
+    """Compatibility wrapper returning only the registered command."""
+    entry = _find_uninstall_entry(app_display_name)
+    return str(entry["command"]) if entry else None
