@@ -76,15 +76,20 @@ class DeviceActionSafetyTests(unittest.TestCase):
         ])
 
     def test_disable_startup_apps_uses_elevated_toggle_and_opens_settings(self):
-        completed = MagicMock(returncode=0, stdout="", stderr="")
+        completed = MagicMock(returncode=0, stdout='{"success":true,"registry_changed":3,"packaged_changed":2}', stderr="")
         with patch.object(device_settings.os, "name", "nt"), patch.object(device_settings, "_run_elevated_powershell", return_value=completed) as runner, patch.object(device_settings, "_open_settings", return_value=True) as opener:
             result = device_settings.disable_all_startup_apps()
         self.assertTrue(result["success"])
         script = runner.call_args.args[0]
         self.assertIn("StartupApproved", script)
         self.assertIn("StartupFolder", script)
+        self.assertIn("SystemAppData", script)
+        self.assertIn("$state -eq 2", script)
         self.assertIn("$bytes[0] = 3", script)
+        self.assertIn("return ,$bytes", script)
+        self.assertIn("[byte[]]$disabledValue", script)
         self.assertNotIn("RunOnce", script)
+        self.assertEqual(result["changed_count"], 5)
         opener.assert_called_once_with("ms-settings:startupapps")
 
     def test_background_apps_action_is_blocked_on_windows_11(self):

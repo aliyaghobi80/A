@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import base64
 import ctypes
+import json
 import os
 import platform
 import subprocess
+import tempfile
 from ctypes import wintypes
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -18,6 +20,28 @@ from typing import Any, Dict, Optional
 
 CREATE_NO_WINDOW = 0x08000000
 SW_HIDE = 0
+SEE_MASK_NOCLOSEPROCESS = 0x00000040
+ERROR_CANCELLED = 1223
+
+
+class _SHELLEXECUTEINFOW(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("fMask", wintypes.ULONG),
+        ("hwnd", wintypes.HWND),
+        ("lpVerb", wintypes.LPCWSTR),
+        ("lpFile", wintypes.LPCWSTR),
+        ("lpParameters", wintypes.LPCWSTR),
+        ("lpDirectory", wintypes.LPCWSTR),
+        ("nShow", ctypes.c_int),
+        ("hInstApp", wintypes.HINSTANCE),
+        ("lpIDList", wintypes.LPVOID),
+        ("lpClass", wintypes.LPCWSTR),
+        ("hkeyClass", wintypes.HKEY),
+        ("dwHotKey", wintypes.DWORD),
+        ("hIconOrMonitor", wintypes.HANDLE),
+        ("hProcess", wintypes.HANDLE),
+    ]
 
 
 class SYSTEM_POWER_STATUS(ctypes.Structure):
@@ -59,16 +83,84 @@ def _powershell_encoded(script: str, timeout: int = 30) -> subprocess.CompletedP
     )
 
 
-def _run_elevated_powershell(script: str, timeout: int = 120) -> subprocess.CompletedProcess[str]:
-    """Run one encoded PowerShell payload elevated and wait for completion."""
-    inner = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-    outer = (
+def _wrap_elevated_payload(script: str, result_path: str) -> str:
+    literal_path = "'" + result_path.replace("'", "''") + "'"
+    return (
         "$ErrorActionPreference='Stop';"
-        f"$a=@('-NoProfile','-NonInteractive','-ExecutionPolicy','RemoteSigned','-EncodedCommand','{inner}');"
-        "try{$p=Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $a -PassThru -Wait;exit $p.ExitCode}"
-        "catch{if($_.Exception.NativeErrorCode -eq 1223){exit 1223};exit 1}"
+        f"$resultPath={literal_path};"
+        "try{& {"
+        + script
+        + "};"
+        "$payload=[ordered]@{success=$true;registry_changed=[int]$script:RegistryChanged;packaged_changed=[int]$script:PackagedChanged};"
+        "$payload|ConvertTo-Json -Compress|Set-Content -LiteralPath $resultPath -Encoding UTF8;exit 0}"
+        "catch{$payload=[ordered]@{success=$false;error=$_.Exception.Message};"
+        "$payload|ConvertTo-Json -Compress|Set-Content -LiteralPath $resultPath -Encoding UTF8;exit 1}"
     )
-    return _powershell_encoded(outer, timeout=timeout)
+
+
+def _run_elevated_powershell(script: str, timeout: int = 120) -> subprocess.CompletedProcess[str]:
+    """Run an encoded payload directly through ShellExecuteEx and capture a clean result."""
+    fd, result_path = tempfile.mkstemp(prefix="msc-startup-", suffix=".json")
+    os.close(fd)
+    try:
+        wrapped = _wrap_elevated_payload(script, result_path)
+        encoded = base64.b64encode(wrapped.encode("utf-16le")).decode("ascii")
+        command = [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "RemoteSigned",
+            "-EncodedCommand",
+            encoded,
+        ]
+        info = _SHELLEXECUTEINFOW()
+        info.cbSize = ctypes.sizeof(_SHELLEXECUTEINFOW)
+        info.fMask = SEE_MASK_NOCLOSEPROCESS
+        info.lpVerb = "runas"
+        info.lpFile = command[0]
+        info.lpParameters = subprocess.list2cmdline(command[1:])
+        info.lpDirectory = str(Path.cwd())
+        info.nShow = SW_HIDE
+
+        shell = ctypes.windll.shell32
+        shell.ShellExecuteExW.argtypes = [ctypes.POINTER(_SHELLEXECUTEINFOW)]
+        shell.ShellExecuteExW.restype = wintypes.BOOL
+        kernel = ctypes.windll.kernel32
+        kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel.WaitForSingleObject.restype = wintypes.DWORD
+        kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
+        ctypes.set_last_error(0)
+        if not shell.ShellExecuteExW(ctypes.byref(info)):
+            error = ctypes.get_last_error() or ctypes.windll.kernel32.GetLastError()
+            return subprocess.CompletedProcess(command, ERROR_CANCELLED if error == ERROR_CANCELLED else -int(error or 1), "", "")
+        if not info.hProcess:
+            return subprocess.CompletedProcess(command, -4, "", "پردازش مدیریتی ایجاد نشد.")
+
+        try:
+            wait_result = kernel.WaitForSingleObject(info.hProcess, timeout * 1000)
+            if wait_result != 0:
+                return subprocess.CompletedProcess(command, -2, "", "عملیات در زمان تعیین‌شده کامل نشد.")
+            exit_code = wintypes.DWORD()
+            if not kernel.GetExitCodeProcess(info.hProcess, ctypes.byref(exit_code)):
+                return subprocess.CompletedProcess(command, -3, "", "وضعیت پایان عملیات خوانده نشد.")
+            output = ""
+            try:
+                with open(result_path, "r", encoding="utf-8-sig") as stream:
+                    output = stream.read().strip()
+            except OSError:
+                pass
+            return subprocess.CompletedProcess(command, int(exit_code.value), output, "")
+        finally:
+            kernel.CloseHandle(info.hProcess)
+    finally:
+        try:
+            os.remove(result_path)
+        except OSError:
+            pass
 
 
 def _open_settings(uri: str) -> bool:
@@ -97,12 +189,16 @@ $ErrorActionPreference = 'Stop'
 $approvedRoot = 'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved'
 $runRoot = 'Software\Microsoft\Windows\CurrentVersion\Run'
 $run32Root = 'Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run'
+$script:RegistryChanged = 0
+$script:PackagedChanged = 0
 
 function New-DisabledValue {
     $bytes = New-Object byte[] 12
     $bytes[0] = 3
     [BitConverter]::GetBytes([DateTime]::UtcNow.ToFileTimeUtc()).CopyTo($bytes, 4)
-    return $bytes
+    # PowerShell enumerates arrays written to the pipeline. The leading comma
+    # preserves byte[] so RegistryKey.SetValue receives REG_BINARY, not Object[].
+    return ,$bytes
 }
 
 function Disable-ApprovedEntries($hive, [string]$approvedName, [string]$sourcePath) {
@@ -121,7 +217,9 @@ function Disable-ApprovedEntries($hive, [string]$approvedName, [string]$sourcePa
     if ($names.Count -gt 0) {
         $target = $hive.CreateSubKey($approvedPath, $true)
         foreach ($name in $names) {
-            $target.SetValue($name, (New-DisabledValue), [Microsoft.Win32.RegistryValueKind]::Binary)
+            [byte[]]$disabledValue = New-DisabledValue
+            $target.SetValue([string]$name, $disabledValue, [Microsoft.Win32.RegistryValueKind]::Binary)
+            $script:RegistryChanged++
         }
         $target.Close()
     }
@@ -141,7 +239,9 @@ function Disable-StartupFolder($hive, [string]$folderPath) {
     if ($names.Count -gt 0) {
         $target = $hive.CreateSubKey($approvedPath, $true)
         foreach ($name in $names) {
-            $target.SetValue($name, (New-DisabledValue), [Microsoft.Win32.RegistryValueKind]::Binary)
+            [byte[]]$disabledValue = New-DisabledValue
+            $target.SetValue([string]$name, $disabledValue, [Microsoft.Win32.RegistryValueKind]::Binary)
+            $script:RegistryChanged++
         }
         $target.Close()
     }
@@ -155,6 +255,23 @@ Disable-ApprovedEntries $lm 'Run' $runRoot
 Disable-ApprovedEntries $lm 'Run32' $run32Root
 Disable-StartupFolder $cu ([Environment]::GetFolderPath('Startup'))
 Disable-StartupFolder $lm ([Environment]::GetFolderPath('CommonStartup'))
+
+# Packaged applications (MSIX/UWP/Desktop Bridge) keep StartupTask state in
+# SystemAppData rather than Explorer\StartupApproved. State 2 means Enabled;
+# State 1 is DisabledByUser and remains reversible in Windows Settings.
+$appModelRoot = 'Registry::HKEY_CURRENT_USER\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData'
+if (Test-Path -LiteralPath $appModelRoot) {
+    foreach ($packageKey in Get-ChildItem -LiteralPath $appModelRoot -ErrorAction SilentlyContinue) {
+        foreach ($taskKey in Get-ChildItem -LiteralPath $packageKey.PSPath -ErrorAction SilentlyContinue) {
+            $state = $taskKey.GetValue('State', $null)
+            if ($state -eq 2) {
+                Set-ItemProperty -LiteralPath $taskKey.PSPath -Name 'State' -Value 1
+                Set-ItemProperty -LiteralPath $taskKey.PSPath -Name 'UserEnabledStartupOnce' -Value 0 -ErrorAction SilentlyContinue
+                $script:PackagedChanged++
+            }
+        }
+    }
+}
 """
 
 
@@ -167,12 +284,28 @@ def disable_all_startup_apps() -> Dict[str, Any]:
         return {"success": False, "cancelled": True, "message": "درخواست دسترسی مدیر لغو شد؛ تغییری اعمال نشد."}
     if result.returncode != 0:
         details = (result.stderr or result.stdout).strip()
+        try:
+            parsed = json.loads(result.stdout)
+            details = str(parsed.get("error") or details)
+        except Exception:
+            pass
         return {"success": False, "message": details or "خاموش‌کردن Startup Apps انجام نشد."}
+    registry_changed = 0
+    packaged_changed = 0
+    try:
+        parsed = json.loads(result.stdout)
+        registry_changed = int(parsed.get("registry_changed") or 0)
+        packaged_changed = int(parsed.get("packaged_changed") or 0)
+    except Exception:
+        pass
     opened = _open_settings("ms-settings:startupapps")
     return {
         "success": True,
         "settings_opened": opened,
-        "message": "برنامه‌های Startup خاموش شدند و صفحهٔ بررسی Startup Apps باز شد؛ نیازی به ری‌استارت فوری نیست.",
+        "registry_changed": registry_changed,
+        "packaged_changed": packaged_changed,
+        "changed_count": registry_changed + packaged_changed,
+        "message": f"همهٔ ورودی‌های قابل‌کنترل Startup خاموش شدند ({registry_changed + packaged_changed} مورد) و صفحهٔ بررسی باز شد؛ نیازی به ری‌استارت فوری نیست.",
     }
 
 
