@@ -1,35 +1,45 @@
 import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
 import '../controllers/startup_controller.dart';
 import '../main.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, this.connect, this.onReady});
+
   final Future<bool> Function()? connect;
   final VoidCallback? onReady;
+
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _animation;
+    with TickerProviderStateMixin {
+  late final AnimationController _entrance;
+  late final AnimationController _rgb;
   late final StartupController _startup;
   late final Worker _statusWorker;
   Timer? _minimumTimer;
   bool _minimumElapsed = false;
   bool _navigated = false;
+  bool? _reducedMotion;
 
   @override
   void initState() {
     super.initState();
     _startup = StartupController(connect: widget.connect);
-    _animation = AnimationController(
+    _entrance = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
     )..forward();
+    _rgb = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
     _statusWorker = ever(_startup.status, (_) => _navigateIfReady());
     _minimumTimer = Timer(const Duration(seconds: 4), () {
       if (!mounted) return;
@@ -37,6 +47,19 @@ class _SplashScreenState extends State<SplashScreen>
       _navigateIfReady();
     });
     unawaited(_startup.connect());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    if (_reducedMotion == reduced) return;
+    _reducedMotion = reduced;
+    if (reduced) {
+      _rgb.stop();
+    } else {
+      _rgb.repeat();
+    }
   }
 
   void _navigateIfReady() {
@@ -60,253 +83,340 @@ class _SplashScreenState extends State<SplashScreen>
     _minimumTimer?.cancel();
     _statusWorker.dispose();
     _startup.onDelete();
-    _animation.dispose();
+    _entrance.dispose();
+    _rgb.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
     final reducedMotion = MediaQuery.disableAnimationsOf(context);
+
     return Scaffold(
-      backgroundColor: colors.surface,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AnimatedBuilder(
-                    animation: _animation,
-                    builder: (context, _) {
-                      final progress = reducedMotion ? 1.0 : _animation.value;
-                      final entrance = Curves.easeOutCubic.transform(
-                        (progress / 0.3).clamp(0.0, 1.0),
-                      );
-                      final pulse = reducedMotion
-                          ? 0.5
-                          : (math.sin(progress * math.pi * 5) + 1) / 2;
-                      return Column(
-                        children: [
-                          Opacity(
-                            opacity: entrance,
-                            child: SizedBox(
-                              width: 156,
-                              height: 156,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Container(
-                                    width: 148,
-                                    height: 148,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: colors.primary.withValues(
-                                            alpha: 0.10 + pulse * 0.08,
-                                          ),
-                                          blurRadius: 24 + pulse * 10,
-                                          spreadRadius: 2,
-                                        ),
-                                      ],
-                                    ),
+      backgroundColor: dark ? const Color(0xFF050816) : const Color(0xFFF5F7FF),
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: const Alignment(0, -0.16),
+            radius: 1.05,
+            colors: dark
+                ? const [Color(0xFF121A3C), Color(0xFF050816)]
+                : const [Color(0xFFFFFFFF), Color(0xFFEEF2FF)],
+          ),
+        ),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final shortest = math.min(
+                constraints.maxWidth,
+                constraints.maxHeight,
+              );
+              final logoSize = (shortest * 0.38).clamp(190.0, 284.0);
+              final dropDistance = math.min(
+                constraints.maxHeight * 0.52,
+                360.0,
+              );
+
+              return Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 20,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([_entrance, _rgb]),
+                      builder: (context, _) {
+                        final progress = reducedMotion ? 1.0 : _entrance.value;
+                        final rgbProgress = reducedMotion ? 0.18 : _rgb.value;
+                        final landing = Curves.easeOutBack.transform(
+                          (progress / 0.34).clamp(0.0, 1.0),
+                        );
+                        final logoOpacity = Curves.easeOut.transform(
+                          (progress / 0.16).clamp(0.0, 1.0),
+                        );
+                        final englishPhase = Curves.easeOutCubic.transform(
+                          ((progress - 0.64) / 0.17).clamp(0.0, 1.0),
+                        );
+                        final loaderPhase = Curves.easeOutCubic.transform(
+                          ((progress - 0.73) / 0.16).clamp(0.0, 1.0),
+                        );
+
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Opacity(
+                              opacity: logoOpacity,
+                              child: Transform.translate(
+                                key: const ValueKey('splash-logo-drop'),
+                                offset: Offset(
+                                  0,
+                                  -(1 - landing) * dropDistance,
+                                ),
+                                child: Transform.scale(
+                                  scale: 0.88 + (landing * 0.12),
+                                  child: _CoverLogo(
+                                    size: logoSize,
+                                    glowPhase: rgbProgress,
+                                    dark: dark,
                                   ),
-                                  Transform.rotate(
-                                    angle: reducedMotion
-                                        ? 0
-                                        : progress * math.pi * 1.2,
-                                    child: Container(
-                                      width: 142,
-                                      height: 142,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: colors.primary.withValues(
-                                            alpha: 0.22,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Align(
-                                        alignment: Alignment.topCenter,
-                                        child: Container(
-                                          width: 8,
-                                          height: 8,
-                                          decoration: BoxDecoration(
-                                            color: colors.primary,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Transform.scale(
-                                    scale: 0.88 + 0.12 * entrance,
-                                    child: Container(
-                                      width: 118,
-                                      height: 118,
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: colors.surface,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: colors.primary.withValues(
-                                            alpha: 0.16,
-                                          ),
-                                        ),
-                                      ),
-                                      child: ClipOval(
-                                        child: Image.asset(
-                                          'assets/logo/camputermarkazi.png',
-                                          semanticLabel: 'لوگوی مارکازی',
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) => Icon(
-                                            Icons.computer_rounded,
-                                            size: 82,
-                                            color: colors.primary,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 26),
-                          Semantics(
-                            label: 'مرکزی سیستم چکر',
-                            excludeSemantics: true,
-                            child: Directionality(
-                              textDirection: TextDirection.rtl,
-                              child: Wrap(
-                                alignment: WrapAlignment.center,
-                                spacing: 8,
-                                children: List.generate(3, (index) {
-                                  final phase = Curves.easeOutBack.transform(
-                                    ((progress - 0.18 - index * 0.13) / 0.28)
-                                        .clamp(0.0, 1.0),
-                                  );
-                                  return Opacity(
-                                    opacity: phase.clamp(0.0, 1.0),
-                                    child: Transform.translate(
-                                      offset: Offset(
-                                        (1 - phase) * (index - 1) * 28,
-                                        (1 - phase) * 14,
-                                      ),
-                                      child: Transform.scale(
-                                        scale: 0.92 + phase * 0.08,
-                                        child: Text(
-                                          ['مرکزی', 'سیستم', 'چکر'][index],
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .headlineSmall
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w800,
-                                                letterSpacing: -0.4,
-                                              ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Opacity(
-                            opacity: Curves.easeOut.transform(
-                              ((progress - 0.58) / 0.18).clamp(0.0, 1.0),
-                            ),
-                            child: Text(
-                              'Markazi System Checker',
-                              textDirection: TextDirection.ltr,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    color: colors.onSurfaceVariant,
-                                    letterSpacing: 0.4,
-                                  ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Container(
-                            width: 176,
-                            height: 4,
-                            clipBehavior: Clip.antiAlias,
-                            decoration: BoxDecoration(
-                              color: colors.primary.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                            alignment: Alignment.centerLeft,
-                            child: FractionallySizedBox(
-                              widthFactor: Curves.easeInOutCubic.transform(
-                                progress,
-                              ),
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      colors.primary.withValues(alpha: 0.55),
-                                      colors.primary,
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(99),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
+                            const SizedBox(height: 28),
+                            Semantics(
+                              label: 'مرکزی سیستم چکر',
+                              excludeSemantics: true,
+                              child: Directionality(
+                                textDirection: TextDirection.rtl,
+                                child: Wrap(
+                                  alignment: WrapAlignment.center,
+                                  spacing: 10,
+                                  runSpacing: 6,
+                                  children: List.generate(3, (index) {
+                                    final phase = Curves.easeOutBack.transform(
+                                      ((progress - 0.35 - index * 0.095) / 0.2)
+                                          .clamp(0.0, 1.0),
+                                    );
+                                    return Opacity(
+                                      opacity: phase.clamp(0.0, 1.0),
+                                      child: Transform.translate(
+                                        offset: Offset(0, (1 - phase) * 22),
+                                        child: Transform.scale(
+                                          scale: 0.86 + phase * 0.14,
+                                          child: Text(
+                                            ['مرکزی', 'سیستم', 'چکر'][index],
+                                            style: theme
+                                                .textTheme
+                                                .headlineMedium
+                                                ?.copyWith(
+                                                  color: colors.onSurface,
+                                                  fontWeight: FontWeight.w900,
+                                                  letterSpacing: -0.6,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Opacity(
+                              opacity: englishPhase,
+                              child: Transform.translate(
+                                offset: Offset(0, (1 - englishPhase) * 12),
+                                child: Text(
+                                  'Markazi System Checker',
+                                  textDirection: TextDirection.ltr,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            Opacity(
+                              opacity: loaderPhase,
+                              child: Transform.scale(
+                                scaleX: 0.72 + loaderPhase * 0.28,
+                                child: RepaintBoundary(
+                                  child: CustomPaint(
+                                    key: const ValueKey('splash-rgb-loader'),
+                                    size: const Size(236, 24),
+                                    painter: _RgbLoadingPainter(
+                                      phase: rgbProgress,
+                                      trackColor: colors.onSurface.withValues(
+                                        alpha: dark ? 0.14 : 0.09,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            _StartupStatus(
+                              startup: _startup,
+                              minimumElapsed: _minimumElapsed,
+                              onContinue: _continue,
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
-                  const SizedBox(height: 40),
-                  Obx(() {
-                    final status = _startup.status.value;
-                    if (status == StartupStatus.failed) {
-                      return Column(
-                        children: [
-                          const Icon(Icons.error_outline_rounded),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'سرویس برنامه آماده نشد. می‌توانید دوباره تلاش کنید یا برای بررسی خطا وارد برنامه شوید.',
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 8,
-                            alignment: WrapAlignment.center,
-                            children: [
-                              FilledButton.icon(
-                                onPressed: _startup.connect,
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('تلاش مجدد'),
-                              ),
-                              OutlinedButton(
-                                onPressed: _minimumElapsed ? _continue : null,
-                                child: const Text('ورود برای بررسی'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      );
-                    }
-                    return Text(
-                      status == StartupStatus.ready
-                          ? 'آمادهٔ شروع'
-                          : 'در حال آماده‌سازی برنامه…',
-                      textAlign: TextAlign.center,
-                    );
-                  }),
-                ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CoverLogo extends StatelessWidget {
+  const _CoverLogo({
+    required this.size,
+    required this.glowPhase,
+    required this.dark,
+  });
+
+  final double size;
+  final double glowPhase;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final hue = glowPhase * 360;
+    final glow = HSVColor.fromAHSV(0.32, hue, 0.82, 1).toColor();
+    final cornerRadius = BorderRadius.circular(size * 0.16);
+    return Semantics(
+      image: true,
+      label: 'لوگوی کامپیوتر مرکزی',
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: cornerRadius,
+          boxShadow: [
+            BoxShadow(color: glow, blurRadius: 34, spreadRadius: dark ? 1 : -2),
+          ],
+        ),
+        child: ClipRRect(
+          key: const ValueKey('splash-logo-rounded-cover'),
+          borderRadius: cornerRadius,
+          child: Transform.scale(
+            // The source PNG has baked-in black margins. Cropping into its blue
+            // field produces a true cover treatment without altering the logo.
+            scale: 1.36,
+            child: Image.asset(
+              'assets/logo/camputermarkazi.png',
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.high,
+              excludeFromSemantics: true,
+              errorBuilder: (_, _, _) => ColoredBox(
+                color: const Color(0xFF071735),
+                child: Icon(
+                  Icons.computer_rounded,
+                  size: size * 0.52,
+                  color: const Color(0xFF38BDF8),
+                ),
               ),
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+class _RgbLoadingPainter extends CustomPainter {
+  const _RgbLoadingPainter({required this.phase, required this.trackColor});
+
+  final double phase;
+  final Color trackColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bar = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, 9, size.width, 6),
+      const Radius.circular(99),
+    );
+    canvas.drawRRect(bar, Paint()..color = trackColor);
+
+    final colors = List<Color>.generate(7, (index) {
+      final hue = (phase * 360 + index * 60) % 360;
+      return HSVColor.fromAHSV(1, hue, 0.82, 1).toColor();
+    });
+    final shader = LinearGradient(colors: colors).createShader(bar.outerRect);
+    canvas.drawRRect(
+      bar,
+      Paint()
+        ..shader = shader
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    );
+    canvas.drawRRect(bar, Paint()..shader = shader);
+
+    final scannerX = (size.width + 44) * phase - 22;
+    final scanner = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(scannerX, 12), width: 44, height: 4),
+      const Radius.circular(99),
+    );
+    canvas.save();
+    canvas.clipRRect(bar);
+    canvas.drawRRect(
+      scanner,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.7)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _RgbLoadingPainter oldDelegate) {
+    return oldDelegate.phase != phase || oldDelegate.trackColor != trackColor;
+  }
+}
+
+class _StartupStatus extends StatelessWidget {
+  const _StartupStatus({
+    required this.startup,
+    required this.minimumElapsed,
+    required this.onContinue,
+  });
+
+  final StartupController startup;
+  final bool minimumElapsed;
+  final VoidCallback onContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final status = startup.status.value;
+      if (status == StartupStatus.failed) {
+        return Column(
+          children: [
+            const Icon(Icons.error_outline_rounded),
+            const SizedBox(height: 8),
+            const Text(
+              'سرویس برنامه آماده نشد. می‌توانید دوباره تلاش کنید یا برای بررسی خطا وارد برنامه شوید.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                FilledButton.icon(
+                  onPressed: startup.connect,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('تلاش مجدد'),
+                ),
+                OutlinedButton(
+                  onPressed: minimumElapsed ? onContinue : null,
+                  child: const Text('ورود برای بررسی'),
+                ),
+              ],
+            ),
+          ],
+        );
+      }
+      return Text(
+        status == StartupStatus.ready
+            ? 'آمادهٔ شروع'
+            : 'در حال آماده‌سازی برنامه…',
+        textAlign: TextAlign.center,
+      );
+    });
   }
 }
