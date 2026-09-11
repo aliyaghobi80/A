@@ -2632,12 +2632,36 @@ def uninstall_package(target_identifier: str, custom_dir: Optional[str] = None) 
 
     # Resolve the installed application's official registry entry. Never use
     # the setup file from Packages as an uninstaller.
-    uninstall_entry = _find_uninstall_entry(pkg_name)
+    known_key = _known_detection_key(
+        pkg_name,
+        target_pkg.get("filename", ""),
+        target_pkg.get("publisher", ""),
+        target_pkg.get("detection_id", ""),
+    )
+    aliases = [
+        pkg_name,
+        target_pkg.get("matched_app_name", ""),
+        target_pkg.get("product_name", ""),
+    ]
+    if known_key:
+        aliases.extend(_KNOWN_PACKAGE_DETECTION[known_key].get("aliases", []))
+    uninstall_entry = _find_uninstall_entry(
+        pkg_name,
+        aliases=aliases,
+        publisher=target_pkg.get("publisher", ""),
+        install_location=target_pkg.get("install_location", ""),
+    )
 
     if not uninstall_entry:
+        opened = _open_installed_apps_settings()
         return {
-            "success": False,
-            "message": f"رشته حذف (UninstallString) برای {pkg_name} در رجیستری ویندوز یافت نشد.",
+            "success": opened,
+            "manual_required": opened,
+            "message": (
+                f"حذف‌کنندهٔ مطمئن برای {pkg_name} پیدا نشد؛ بخش Installed Apps ویندوز برای حذف دستی باز شد."
+                if opened
+                else f"رشته حذف (UninstallString) برای {pkg_name} در رجیستری ویندوز یافت نشد."
+            ),
         }
 
     uninstall_cmd = uninstall_entry["command"]
@@ -2757,7 +2781,85 @@ def _build_uninstall_invocation(entry: Dict[str, Any]) -> tuple[str, str]:
     return exe_path, args.strip()
 
 
-def _find_uninstall_entry(app_display_name: str) -> Optional[Dict[str, Any]]:
+_UNINSTALL_NAME_SUFFIX_RE = re.compile(
+    r"\s*[\(\[]\s*(?:remove|uninstall)\s+only\s*[\)\]]\s*$",
+    re.IGNORECASE,
+)
+
+
+def _canonical_uninstall_name(value: str) -> str:
+    """Normalize safe ARP qualifiers without reducing names to substrings."""
+    value = _UNINSTALL_NAME_SUFFIX_RE.sub("", value or "")
+    value = re.sub(r"\s+-\s+[a-z]{2}(?:-[a-z]{2})?\s*$", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"\bprofessional\b", "pro", value, flags=re.IGNORECASE)
+    return _normalize_identity(value)
+
+
+def _uninstall_match_score(
+    candidate: Dict[str, Any],
+    aliases: List[str],
+    publisher: str = "",
+    install_location: str = "",
+) -> int:
+    candidate_name = str(candidate.get("display_name") or "")
+    candidate_raw = candidate_name.casefold().strip()
+    candidate_canonical = _canonical_uninstall_name(candidate_name)
+    candidate_tokens = _identity_tokens(candidate_canonical)
+    score = 0
+
+    for alias in aliases:
+        if not alias:
+            continue
+        alias_raw = str(alias).casefold().strip()
+        alias_canonical = _canonical_uninstall_name(str(alias))
+        alias_tokens = _identity_tokens(alias_canonical)
+        if alias_raw == candidate_raw:
+            score = max(score, 1000)
+        elif alias_canonical and alias_canonical == candidate_canonical:
+            score = max(score, 950)
+        elif alias_tokens and alias_tokens == candidate_tokens:
+            score = max(score, 900)
+        elif (
+            len(alias_tokens) >= 2
+            and alias_tokens.issubset(candidate_tokens)
+            and candidate_tokens - alias_tokens <= {"remove", "only", "uninstall"}
+        ):
+            score = max(score, 850)
+
+    if score == 0:
+        return 0
+
+    publisher_tokens = _identity_tokens(publisher)
+    candidate_publisher_tokens = _identity_tokens(str(candidate.get("publisher") or ""))
+    if publisher_tokens and publisher_tokens & candidate_publisher_tokens:
+        score += 30
+
+    wanted_location = os.path.normcase(os.path.normpath(install_location)) if install_location else ""
+    candidate_location = str(candidate.get("install_location") or "")
+    normalized_location = os.path.normcase(os.path.normpath(candidate_location)) if candidate_location else ""
+    if wanted_location and normalized_location and wanted_location == normalized_location:
+        score += 50
+    return score
+
+
+def _open_installed_apps_settings() -> bool:
+    try:
+        os.startfile("ms-settings:appsfeatures")
+        return True
+    except Exception:
+        try:
+            subprocess.Popen(["explorer.exe", "ms-settings:appsfeatures"])
+            return True
+        except Exception:
+            return False
+
+
+def _find_uninstall_entry(
+    app_display_name: str,
+    aliases: Optional[List[str]] = None,
+    publisher: str = "",
+    install_location: str = "",
+) -> Optional[Dict[str, Any]]:
     """
     Find the exact installed-app registry entry and its official uninstall data.
     """
@@ -2767,7 +2869,9 @@ def _find_uninstall_entry(app_display_name: str) -> Optional[Dict[str, Any]]:
         (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall", 0),
     ]
 
-    target_lower = app_display_name.lower().strip()
+    match_aliases = [app_display_name]
+    match_aliases.extend(value for value in (aliases or []) if value)
+    candidates: List[Dict[str, Any]] = []
 
     for root_hive, subkey, flags in roots:
         try:
@@ -2788,26 +2892,53 @@ def _find_uninstall_entry(app_display_name: str) -> Optional[Dict[str, Any]]:
                             if not dname:
                                 continue
 
-                            # Match by normalized name
-                            if dname.lower().strip() == target_lower:
-                                # Prefer the vendor-provided quiet command when present.
-                                quiet = get_val("QuietUninstallString")
-                                uninstall = get_val("UninstallString")
-                                command = quiet or uninstall
-                                if command:
-                                    return {
-                                        "command": command,
-                                        "display_name": dname,
-                                        "product_code": kname,
-                                        "windows_installer": get_val("WindowsInstaller") == "1",
-                                        "quiet": bool(quiet),
-                                    }
+                            if get_val("SystemComponent") == "1" or get_val("NoRemove") == "1":
+                                continue
+                            quiet = get_val("QuietUninstallString")
+                            uninstall = get_val("UninstallString")
+                            command = quiet or uninstall
+                            if command:
+                                entry = {
+                                    "command": command,
+                                    "display_name": dname,
+                                    "publisher": get_val("Publisher"),
+                                    "install_location": get_val("InstallLocation"),
+                                    "product_code": kname,
+                                    "windows_installer": get_val("WindowsInstaller") == "1",
+                                    "quiet": bool(quiet),
+                                }
+                                score = _uninstall_match_score(
+                                    entry,
+                                    match_aliases,
+                                    publisher=publisher,
+                                    install_location=install_location,
+                                )
+                                if score:
+                                    entry["match_score"] = score
+                                    candidates.append(entry)
                     except Exception:
                         pass
         except Exception:
             pass
 
-    return None
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: int(item["match_score"]), reverse=True)
+    best = candidates[0]
+    if len(candidates) > 1:
+        second = candidates[1]
+        if (
+            int(second["match_score"]) == int(best["match_score"])
+            and second["command"] != best["command"]
+        ):
+            logger.warning(
+                "Ambiguous uninstall match for %s: %s and %s",
+                app_display_name,
+                best["display_name"],
+                second["display_name"],
+            )
+            return None
+    return best
 
 
 def _find_uninstall_string(app_display_name: str) -> Optional[str]:

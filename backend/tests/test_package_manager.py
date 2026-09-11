@@ -33,6 +33,47 @@ class PackageManagerTests(unittest.TestCase):
         self.assertEqual(executable, r"C:\Program Files\Vendor App\uninstall.exe")
         self.assertEqual(arguments, "--remove")
 
+    def test_kmplayer_remove_only_suffix_matches_safely(self):
+        candidate = {
+            "display_name": "KMPlayer 64X (remove only)",
+            "publisher": "PandoraTV",
+            "install_location": r"C:\Program Files\KMPlayer 64X",
+        }
+        score = manager._uninstall_match_score(
+            candidate,
+            ["KMPlayer 64X", "kmplayer"],
+            publisher="PandoraTV",
+            install_location=r"C:\Program Files\KMPlayer 64X",
+        )
+        self.assertGreaterEqual(score, 1000)
+
+    def test_unrelated_partial_name_is_not_accepted_for_uninstall(self):
+        candidate = {
+            "display_name": "KMPlayer Codec Pack",
+            "publisher": "Unknown",
+            "install_location": r"C:\Program Files\Other",
+        }
+        score = manager._uninstall_match_score(candidate, ["KMPlayer 64X"])
+        self.assertEqual(score, 0)
+
+    def test_manual_fallback_opens_installed_apps_when_no_safe_match(self):
+        package = {
+            "id": "sample",
+            "relative_path": "Sample/Setup.exe",
+            "filename": "Setup.exe",
+            "name": "Sample App",
+            "is_installed": True,
+        }
+        with (
+            mock.patch.object(manager, "scan_packages", return_value={"packages": [package]}),
+            mock.patch.object(manager, "_find_uninstall_entry", return_value=None),
+            mock.patch.object(manager, "_open_installed_apps_settings", return_value=True) as opener,
+        ):
+            result = manager.uninstall_package("Sample/Setup.exe")
+        self.assertTrue(result["success"])
+        self.assertTrue(result["manual_required"])
+        opener.assert_called_once_with()
+
     def test_blocks_renamed_windows_binary(self):
         result = manager._validate_installer(
             r"C:\Packages\vlc.exe",
