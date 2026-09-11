@@ -92,6 +92,75 @@ class DeviceSettingsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
+            _ActionCard(
+              icon: Icons.rocket_launch_rounded,
+              iconColor: const Color(0xFFF59E0B),
+              title: 'Startup Apps',
+              description:
+                  'همهٔ برنامه‌های بخش Startup خاموش می‌شوند تا ورود به ویندوز سریع‌تر شود؛ سپس صفحهٔ Startup برای بررسی نتیجه باز می‌شود.',
+              isDark: isDark,
+              trailing: FilledButton.icon(
+                onPressed: controller.isDisablingStartup.value
+                    ? null
+                    : () => controller.disableStartupApps(context),
+                icon: controller.isDisablingStartup.value
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.power_off_rounded, size: 18),
+                label: Text(
+                  controller.isDisablingStartup.value
+                      ? 'در حال خاموش‌کردن...'
+                      : 'خاموش‌کردن همه',
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFD97706),
+                  minimumSize: const Size(170, 46),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _ActionCard(
+              icon: Icons.layers_clear_rounded,
+              iconColor: controller.isWindows10.value
+                  ? const Color(0xFF0EA5E9)
+                  : const Color(0xFF64748B),
+              title: 'Background Apps ویندوز ۱۰',
+              description: controller.isWindows10.value
+                  ? 'اجرای پس‌زمینهٔ برنامه‌های Microsoft Store خاموش می‌شود تا مصرف RAM، باتری و اینترنت کمتر شود؛ سپس صفحهٔ Background Apps باز می‌شود.'
+                  : 'این قابلیت مخصوص Windows 10 و برای بالابردن سرعت دستگاه است؛ تنظیم سراسری Background Apps در Windows 11 وجود ندارد.',
+              isDark: isDark,
+              trailing: OutlinedButton.icon(
+                onPressed:
+                    !controller.isWindows10.value ||
+                        controller.isDisablingBackgroundApps.value
+                    ? null
+                    : () => controller.disableBackgroundApps(context),
+                icon: controller.isDisablingBackgroundApps.value
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        controller.isWindows10.value
+                            ? Icons.block_rounded
+                            : Icons.lock_outline_rounded,
+                        size: 18,
+                      ),
+                label: Text(
+                  controller.isDisablingBackgroundApps.value
+                      ? 'در حال اعمال...'
+                      : (controller.isWindows10.value
+                            ? 'خاموش‌کردن Background Apps'
+                            : 'فقط Windows 10'),
+                ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(210, 46),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),

@@ -75,6 +75,25 @@ class DeviceActionSafetyTests(unittest.TestCase):
             ["powercfg.exe", "/change", "hibernate-timeout-dc", "0"],
         ])
 
+    def test_disable_startup_apps_uses_elevated_toggle_and_opens_settings(self):
+        completed = MagicMock(returncode=0, stdout="", stderr="")
+        with patch.object(device_settings.os, "name", "nt"), patch.object(device_settings, "_run_elevated_powershell", return_value=completed) as runner, patch.object(device_settings, "_open_settings", return_value=True) as opener:
+            result = device_settings.disable_all_startup_apps()
+        self.assertTrue(result["success"])
+        script = runner.call_args.args[0]
+        self.assertIn("StartupApproved", script)
+        self.assertIn("StartupFolder", script)
+        self.assertIn("$bytes[0] = 3", script)
+        self.assertNotIn("RunOnce", script)
+        opener.assert_called_once_with("ms-settings:startupapps")
+
+    def test_background_apps_action_is_blocked_on_windows_11(self):
+        with patch.object(device_settings, "get_windows_identity", return_value={"generation": "Windows 11", "label": "Windows 11 Pro"}), patch.object(device_settings, "_open_settings") as opener:
+            result = device_settings.disable_windows10_background_apps()
+        self.assertFalse(result["success"])
+        self.assertTrue(result["unsupported"])
+        opener.assert_not_called()
+
     def test_office_shortcuts_are_created_for_all_three_apps(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             desktop = Path(temp_dir) / "Desktop"

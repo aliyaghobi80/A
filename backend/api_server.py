@@ -14,7 +14,7 @@ if _backend_dir not in sys.path:
 
 from collector import collect_all_system_info
 from packages.manager import scan_packages, install_package, open_package, open_office_folder, get_package_icon_path, set_packages_directory, get_current_packages_directory, pin_package_to_taskbar, set_windows_update_state
-from windows.device_settings import get_device_settings_status, pin_windows_security, set_sleep_never
+from windows.device_settings import get_device_settings_status, pin_windows_security, set_sleep_never, disable_all_startup_apps, disable_windows10_background_apps
 from packages.office_shortcuts import ensure_office_desktop_shortcuts
 from packages.batch_installer import start_batch_install, get_batch_status, cancel_batch_install
 from drivers.driver_installer import (
@@ -104,7 +104,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.11",
+                "version": "1.1.12",
                 "phase": 4,
                 "api_contract_version": 2,
             }
@@ -507,6 +507,24 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/device-settings/sleep-never":
             result = set_sleep_never()
             self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/device-settings/disable-startup-apps":
+            result = disable_all_startup_apps()
+            self.send_response(200 if (result.get("success") or result.get("cancelled")) else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/device-settings/disable-background-apps":
+            result = disable_windows10_background_apps()
+            self.send_response(200 if (result.get("success") or result.get("unsupported")) else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
             self.end_headers()

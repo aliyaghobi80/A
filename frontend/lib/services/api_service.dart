@@ -206,6 +206,14 @@ class ApiService {
     return _postJson('/api/device-settings/sleep-never', {});
   }
 
+  Future<Map<String, dynamic>> disableAllStartupApps() async {
+    return _postJson('/api/device-settings/disable-startup-apps', {});
+  }
+
+  Future<Map<String, dynamic>> disableWindows10BackgroundApps() async {
+    return _postJson('/api/device-settings/disable-background-apps', {});
+  }
+
   Future<Map<String, dynamic>> createOfficeDesktopShortcuts() async {
     return _postJson('/api/packages/office-shortcuts', {});
   }
