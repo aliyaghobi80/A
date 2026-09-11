@@ -2,21 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:central_system_checker/controllers/activation_controller.dart';
-import 'package:central_system_checker/controllers/driver_install_controller.dart';
-import 'package:central_system_checker/controllers/qc_controller.dart';
-import 'package:central_system_checker/controllers/software_controller.dart';
-import 'package:central_system_checker/controllers/system_info_controller.dart';
-import 'package:central_system_checker/controllers/theme_language_controller.dart';
-import 'package:central_system_checker/l10n/app_localizations.dart';
-import 'package:central_system_checker/models/system_info.dart';
-import 'package:central_system_checker/widgets/loading_view.dart';
-import 'package:central_system_checker/widgets/cards/cpu_card.dart';
-import 'package:central_system_checker/widgets/cards/ram_card.dart';
-import 'package:central_system_checker/widgets/cards/driver_card.dart';
-import 'package:central_system_checker/widgets/cards/office_card.dart';
-import 'package:central_system_checker/widgets/cards/packages_card.dart';
-import 'package:central_system_checker/widgets/simple_mode_view.dart';
+import 'package:markazi_system_checker/controllers/activation_controller.dart';
+import 'package:markazi_system_checker/controllers/driver_install_controller.dart';
+import 'package:markazi_system_checker/controllers/qc_controller.dart';
+import 'package:markazi_system_checker/controllers/software_controller.dart';
+import 'package:markazi_system_checker/controllers/system_info_controller.dart';
+import 'package:markazi_system_checker/controllers/theme_language_controller.dart';
+import 'package:markazi_system_checker/l10n/app_localizations.dart';
+import 'package:markazi_system_checker/models/system_info.dart';
+import 'package:markazi_system_checker/widgets/loading_view.dart';
+import 'package:markazi_system_checker/widgets/cards/cpu_card.dart';
+import 'package:markazi_system_checker/widgets/cards/ram_card.dart';
+import 'package:markazi_system_checker/widgets/cards/driver_card.dart';
+import 'package:markazi_system_checker/widgets/cards/office_card.dart';
+import 'package:markazi_system_checker/widgets/cards/packages_card.dart';
+import 'package:markazi_system_checker/widgets/simple_mode_view.dart';
 
 Widget buildTestableWidget(Widget child, {Locale locale = const Locale('fa')}) {
   return GetMaterialApp(
@@ -52,7 +52,7 @@ void main() {
         buildTestableWidget(const LoadingView(), locale: const Locale('en')),
       );
 
-      expect(find.text('Central System Checker'), findsOneWidget);
+      expect(find.text('Markazi System Checker'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
 
       // Persian test
@@ -554,4 +554,3 @@ void main() {
     },
   );
 }
-

@@ -2,7 +2,7 @@
 ; Production Installer Generation for Windows 64-bit
 
 #define MyAppName "Markazi System Checker"
-#define MyAppVersion "1.1.6"
+#define MyAppVersion "1.1.11"
 #define MyAppPublisher "Markazi System"
 #define MyAppExeName "MarkaziSystemChecker.exe"
 
@@ -28,7 +28,7 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=6.1
+MinVersion=10.0
 PrivilegesRequired=admin
 DisableProgramGroupPage=no
 CloseApplications=no
@@ -51,6 +51,8 @@ Source: "..\config\*"; DestDir: "{app}\config"; Flags: ignoreversion recursesubd
 [InstallDelete]
 ; Remove the obsolete one-file backend and any stale native runtime from 1.1.0.
 Type: files; Name: "{app}\backend_server.exe"
+Type: files; Name: "{app}\ucrtbase.dll"
+Type: files; Name: "{app}\d3dcompiler_47.dll"
 Type: filesandordirs; Name: "{app}\backend"
 
 [Dirs]

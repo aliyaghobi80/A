@@ -57,25 +57,40 @@ class _DriverCardState extends State<DriverCard> {
     final recs = summary.recommendations;
 
     final isAllHealthy = summary.allHealthy && summary.problemCount == 0;
-    final badgeColor = isAllHealthy ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final badgeColor = isAllHealthy
+        ? const Color(0xFF10B981)
+        : const Color(0xFFEF4444);
 
     // Filter drivers based on selected tab
     final filteredDrivers = drivers.where((drv) {
       if (_selectedCategory == 'all') return true;
       if (_selectedCategory == 'problem') return !drv.isHealthy;
       if (_selectedCategory == 'display') return drv.category == 'Display';
-      if (_selectedCategory == 'network') return drv.category == 'Wi-Fi' || drv.category == 'Ethernet' || drv.category == 'Bluetooth';
+      if (_selectedCategory == 'network') {
+        return drv.category == 'Wi-Fi' ||
+            drv.category == 'Ethernet' ||
+            drv.category == 'Bluetooth';
+      }
       if (_selectedCategory == 'audio') return drv.category == 'Audio';
-      if (_selectedCategory == 'chipset') return drv.category == 'Chipset & System' || drv.category == 'Storage Controller';
+      if (_selectedCategory == 'chipset') {
+        return drv.category == 'Chipset & System' ||
+            drv.category == 'Storage Controller';
+      }
       return true;
     }).toList();
 
     return CardWrapper(
       icon: Icons.developer_board_rounded,
-      title: l10n.isPersian ? 'بررسی جامع درایورهای سخت‌افزاری' : 'Hardware Drivers Inspection',
+      title: l10n.isPersian
+          ? 'بررسی جامع درایورهای سخت‌افزاری'
+          : 'Hardware Drivers Inspection',
       summarySubtitle: isAllHealthy
-          ? (l10n.isPersian ? '${summary.healthyCount} درایور سالم و آماده' : '${summary.healthyCount} Drivers Healthy')
-          : (l10n.isPersian ? '${summary.problemCount} درایور نیازمند نصب / بررسی' : '${summary.problemCount} Drivers Need Attention'),
+          ? (l10n.isPersian
+                ? '${summary.healthyCount} درایور سالم و آماده'
+                : '${summary.healthyCount} Drivers Healthy')
+          : (l10n.isPersian
+                ? '${summary.problemCount} درایور نیازمند نصب / بررسی'
+                : '${summary.problemCount} Drivers Need Attention'),
       illustration: const MotherboardIllustration(color: Color(0xFF0D9488)),
       iconColor: const Color(0xFF0D9488),
       trailing: Row(
@@ -83,25 +98,40 @@ class _DriverCardState extends State<DriverCard> {
         children: [
           if (widget.onAutoInstallDrivers != null) ...[
             ElevatedButton.icon(
-              onPressed: widget.isBatchInstalling ? null : widget.onAutoInstallDrivers,
+              onPressed: widget.isBatchInstalling
+                  ? null
+                  : widget.onAutoInstallDrivers,
               icon: widget.isBatchInstalling
                   ? const SizedBox(
                       width: 12,
                       height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
-                  : const Icon(Icons.drive_file_rename_outline_rounded, size: 13),
+                  : const Icon(
+                      Icons.drive_file_rename_outline_rounded,
+                      size: 13,
+                    ),
               label: Text(
                 widget.isBatchInstalling
                     ? (l10n.isPersian ? 'در حال نصب...' : 'Installing...')
-                    : (l10n.isPersian ? 'نصب خودکار از پوشه' : 'Auto Install Drivers'),
+                    : (l10n.isPersian
+                          ? 'نصب خودکار از پوشه'
+                          : 'Auto Install Drivers'),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0D9488),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
               ),
             ),
             const SizedBox(width: 6),
@@ -117,15 +147,21 @@ class _DriverCardState extends State<DriverCard> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  isAllHealthy ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                  isAllHealthy
+                      ? Icons.check_circle_rounded
+                      : Icons.warning_amber_rounded,
                   size: 14,
                   color: badgeColor,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   isAllHealthy
-                      ? (l10n.isPersian ? '${summary.healthyCount} سالم' : '${summary.healthyCount} OK')
-                      : (l10n.isPersian ? '${summary.problemCount} ناقص' : '${summary.problemCount} Issues'),
+                      ? (l10n.isPersian
+                            ? '${summary.healthyCount} سالم'
+                            : '${summary.healthyCount} OK')
+                      : (l10n.isPersian
+                            ? '${summary.problemCount} ناقص'
+                            : '${summary.problemCount} Issues'),
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -141,32 +177,48 @@ class _DriverCardState extends State<DriverCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Driver Batch Progress Card
-          if (widget.batchStatus != null && (widget.batchStatus!.isRunning || (widget.isBatchInstalling && widget.batchStatus!.items.isNotEmpty))) ...[
+          if (widget.batchStatus != null &&
+              (widget.batchStatus!.isRunning ||
+                  (widget.isBatchInstalling &&
+                      widget.batchStatus!.items.isNotEmpty))) ...[
             _buildDriverBatchProgress(context, isDark, l10n),
             const SizedBox(height: 14),
           ],
           // 0. Pending Reboot Suggestion Banner (Only shown after driver install in this session)
-          if (widget.batchStatus?.rebootRequired == true || (widget.batchStatus != null && !widget.batchStatus!.isRunning && widget.batchStatus!.completed > 0)) ...[
+          if (widget.batchStatus?.rebootRequired == true ||
+              (widget.batchStatus != null &&
+                  !widget.batchStatus!.isRunning &&
+                  widget.batchStatus!.completed > 0)) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 14),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withValues(alpha: isDark ? 0.15 : 0.08),
+                color: const Color(
+                  0xFF6366F1,
+                ).withValues(alpha: isDark ? 0.15 : 0.08),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: const Color(0xFF6366F1).withValues(alpha: isDark ? 0.5 : 0.3),
+                  color: const Color(
+                    0xFF6366F1,
+                  ).withValues(alpha: isDark ? 0.5 : 0.3),
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.restart_alt_rounded, color: Color(0xFF6366F1), size: 22),
+                  const Icon(
+                    Icons.restart_alt_rounded,
+                    color: Color(0xFF6366F1),
+                    size: 22,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          l10n.isPersian ? 'پیشنهاد ری‌استارت پس از اتمام نصب درایورها' : 'Restart Recommended After Driver Install',
+                          l10n.isPersian
+                              ? 'پیشنهاد ری‌استارت پس از اتمام نصب درایورها'
+                              : 'Restart Recommended After Driver Install',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -180,7 +232,9 @@ class _DriverCardState extends State<DriverCard> {
                               : 'After installing driver packages, restart the system to finalize full hardware detection.',
                           style: TextStyle(
                             fontSize: 11,
-                            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                            color: isDark
+                                ? const Color(0xFFCBD5E1)
+                                : const Color(0xFF475569),
                           ),
                         ),
                       ],
@@ -191,13 +245,23 @@ class _DriverCardState extends State<DriverCard> {
                     ElevatedButton.icon(
                       onPressed: widget.onRestart,
                       icon: const Icon(Icons.restart_alt_rounded, size: 14),
-                      label: Text(l10n.isPersian ? 'ری‌استارت سیستم' : 'Restart System'),
+                      label: Text(
+                        l10n.isPersian ? 'ری‌استارت سیستم' : 'Restart System',
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF6366F1),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
                   ],
@@ -217,13 +281,42 @@ class _DriverCardState extends State<DriverCard> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildFilterChip('all', l10n.isPersian ? 'همه درایورها (${drivers.length})' : 'All (${drivers.length})', isDark),
+                _buildFilterChip(
+                  'all',
+                  l10n.isPersian
+                      ? 'همه درایورها (${drivers.length})'
+                      : 'All (${drivers.length})',
+                  isDark,
+                ),
                 if (summary.problemCount > 0)
-                  _buildFilterChip('problem', l10n.isPersian ? 'ناقص / نیازمند نصب (${summary.problemCount})' : 'Missing / Issues (${summary.problemCount})', isDark, isAlert: true),
-                _buildFilterChip('display', l10n.isPersian ? 'کارت گرافیک' : 'Graphics', isDark),
-                _buildFilterChip('network', l10n.isPersian ? 'شبکه و وای‌فای' : 'Network & Wi-Fi', isDark),
-                _buildFilterChip('audio', l10n.isPersian ? 'صدا و مالتی‌مدیا' : 'Audio', isDark),
-                _buildFilterChip('chipset', l10n.isPersian ? 'چیپست و کنترلرها' : 'Chipset & Storage', isDark),
+                  _buildFilterChip(
+                    'problem',
+                    l10n.isPersian
+                        ? 'ناقص / نیازمند نصب (${summary.problemCount})'
+                        : 'Missing / Issues (${summary.problemCount})',
+                    isDark,
+                    isAlert: true,
+                  ),
+                _buildFilterChip(
+                  'display',
+                  l10n.isPersian ? 'کارت گرافیک' : 'Graphics',
+                  isDark,
+                ),
+                _buildFilterChip(
+                  'network',
+                  l10n.isPersian ? 'شبکه و وای‌فای' : 'Network & Wi-Fi',
+                  isDark,
+                ),
+                _buildFilterChip(
+                  'audio',
+                  l10n.isPersian ? 'صدا و مالتی‌مدیا' : 'Audio',
+                  isDark,
+                ),
+                _buildFilterChip(
+                  'chipset',
+                  l10n.isPersian ? 'چیپست و کنترلرها' : 'Chipset & Storage',
+                  isDark,
+                ),
               ],
             ),
           ),
@@ -238,7 +331,9 @@ class _DriverCardState extends State<DriverCard> {
                   l10n.notAvailable,
                   style: TextStyle(
                     fontSize: 13,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
                   ),
                 ),
               ),
@@ -267,7 +362,9 @@ class _DriverCardState extends State<DriverCard> {
     AppLocalizations l10n,
   ) {
     final hasIssues = recs.hasMissing;
-    final boxColor = hasIssues ? const Color(0xFFF59E0B) : const Color(0xFF0D9488);
+    final boxColor = hasIssues
+        ? const Color(0xFFF59E0B)
+        : const Color(0xFF0D9488);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -285,7 +382,9 @@ class _DriverCardState extends State<DriverCard> {
           Row(
             children: [
               Icon(
-                hasIssues ? Icons.lightbulb_rounded : Icons.verified_user_rounded,
+                hasIssues
+                    ? Icons.lightbulb_rounded
+                    : Icons.verified_user_rounded,
                 color: boxColor,
                 size: 20,
               ),
@@ -298,7 +397,9 @@ class _DriverCardState extends State<DriverCard> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                    color: isDark
+                        ? const Color(0xFFF8FAFC)
+                        : const Color(0xFF0F172A),
                   ),
                 ),
               ),
@@ -306,7 +407,9 @@ class _DriverCardState extends State<DriverCard> {
           ),
           const SizedBox(height: 8),
           Text(
-            l10n.isPersian ? recs.techTipsFa : 'Search the exact model below on official manufacturer support portal.',
+            l10n.isPersian
+                ? recs.techTipsFa
+                : 'Search the exact model below on official manufacturer support portal.',
             style: TextStyle(
               fontSize: 11,
               height: 1.4,
@@ -322,12 +425,18 @@ class _DriverCardState extends State<DriverCard> {
               color: (isDark ? const Color(0xFF0F172A) : Colors.white),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                color: (isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFE2E8F0)),
               ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.search_rounded, size: 16, color: Color(0xFF3B82F6)),
+                const Icon(
+                  Icons.search_rounded,
+                  size: 16,
+                  color: Color(0xFF3B82F6),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Directionality(
@@ -338,7 +447,9 @@ class _DriverCardState extends State<DriverCard> {
                         fontFamily: 'Consolas',
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF1D4ED8),
+                        color: isDark
+                            ? const Color(0xFF93C5FD)
+                            : const Color(0xFF1D4ED8),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -347,16 +458,23 @@ class _DriverCardState extends State<DriverCard> {
                 ),
                 const SizedBox(width: 8),
                 Tooltip(
-                  message: l10n.isPersian ? 'کپی عبارت جستجو در گوگل' : 'Copy Search Query',
+                  message: l10n.isPersian
+                      ? 'کپی عبارت جستجو در گوگل'
+                      : 'Copy Search Query',
                   child: InkWell(
                     onTap: () => _copyToClipboard(
                       context,
                       recs.mainSearchQuery,
-                      l10n.isPersian ? 'عبارت جستجوی رسمی درایور کپی شد' : 'Search query copied',
+                      l10n.isPersian
+                          ? 'عبارت جستجوی رسمی درایور کپی شد'
+                          : 'Search query copied',
                     ),
                     borderRadius: BorderRadius.circular(6),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
@@ -364,7 +482,11 @@ class _DriverCardState extends State<DriverCard> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.copy_rounded, size: 12, color: Color(0xFF3B82F6)),
+                          const Icon(
+                            Icons.copy_rounded,
+                            size: 12,
+                            color: Color(0xFF3B82F6),
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             l10n.copy,
@@ -387,9 +509,16 @@ class _DriverCardState extends State<DriverCard> {
     );
   }
 
-  Widget _buildFilterChip(String key, String label, bool isDark, {bool isAlert = false}) {
+  Widget _buildFilterChip(
+    String key,
+    String label,
+    bool isDark, {
+    bool isAlert = false,
+  }) {
     final isSelected = _selectedCategory == key;
-    Color activeColor = isAlert ? const Color(0xFFEF4444) : const Color(0xFF0D9488);
+    Color activeColor = isAlert
+        ? const Color(0xFFEF4444)
+        : const Color(0xFF0D9488);
 
     return Padding(
       padding: const EdgeInsets.only(left: 6, right: 6),
@@ -407,7 +536,9 @@ class _DriverCardState extends State<DriverCard> {
             border: Border.all(
               color: isSelected
                   ? activeColor
-                  : (isDark ? const Color(0xFF2D3F5E) : const Color(0xFFE2E8F0)),
+                  : (isDark
+                        ? const Color(0xFF2D3F5E)
+                        : const Color(0xFFE2E8F0)),
             ),
           ),
           child: Text(
@@ -417,7 +548,9 @@ class _DriverCardState extends State<DriverCard> {
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
               color: isSelected
                   ? Colors.white
-                  : (isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569)),
+                  : (isDark
+                        ? const Color(0xFFCBD5E1)
+                        : const Color(0xFF475569)),
             ),
           ),
         ),
@@ -425,7 +558,12 @@ class _DriverCardState extends State<DriverCard> {
     );
   }
 
-  Widget _buildDriverRow(BuildContext context, DriverItem drv, bool isDark, AppLocalizations l10n) {
+  Widget _buildDriverRow(
+    BuildContext context,
+    DriverItem drv,
+    bool isDark,
+    AppLocalizations l10n,
+  ) {
     final isPresent = drv.isPresent;
     final isHealthy = drv.isHealthy;
     final isProblem = isPresent && !isHealthy;
@@ -445,8 +583,12 @@ class _DriverCardState extends State<DriverCard> {
     } else {
       statusColor = const Color(0xFFEF4444);
       statusText = drv.problemCode == 28
-          ? (l10n.isPersian ? 'درایور نصب نشده (کد ۲۸)' : 'Driver Missing (Code 28)')
-          : (l10n.isPersian ? 'خطای درایور (کد ${drv.problemCode})' : 'Driver Error (Code ${drv.problemCode})');
+          ? (l10n.isPersian
+                ? 'درایور نصب نشده (کد ۲۸)'
+                : 'Driver Missing (Code 28)')
+          : (l10n.isPersian
+                ? 'خطای درایور (کد ${drv.problemCode})'
+                : 'Driver Error (Code ${drv.problemCode})');
       statusIcon = Icons.error_outline_rounded;
     }
 
@@ -486,8 +628,8 @@ class _DriverCardState extends State<DriverCard> {
           color: (!isPresent)
               ? (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0))
               : isHealthy
-                  ? statusColor.withValues(alpha: isDark ? 0.3 : 0.2)
-                  : const Color(0xFFEF4444).withValues(alpha: 0.5),
+              ? statusColor.withValues(alpha: isDark ? 0.3 : 0.2)
+              : const Color(0xFFEF4444).withValues(alpha: 0.5),
           width: isProblem ? 1.4 : 1.0,
         ),
       ),
@@ -519,19 +661,28 @@ class _DriverCardState extends State<DriverCard> {
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                                color: isDark
+                                    ? const Color(0xFFF8FAFC)
+                                    : const Color(0xFF0F172A),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
-                        if (drv.manufacturer.isNotEmpty && drv.manufacturer != 'Unknown' && drv.manufacturer != 'N/A') ...[
+                        if (drv.manufacturer.isNotEmpty &&
+                            drv.manufacturer != 'Unknown' &&
+                            drv.manufacturer != 'N/A') ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
-                              color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                              color: (isDark
+                                  ? const Color(0xFF1E293B)
+                                  : const Color(0xFFE2E8F0)),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -539,7 +690,9 @@ class _DriverCardState extends State<DriverCard> {
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
-                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF475569),
                               ),
                             ),
                           ),
@@ -550,9 +703,14 @@ class _DriverCardState extends State<DriverCard> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0D9488).withValues(alpha: 0.1),
+                            color: const Color(
+                              0xFF0D9488,
+                            ).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -567,13 +725,17 @@ class _DriverCardState extends State<DriverCard> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            l10n.isPersian ? drv.statusDescription : drv.statusDescriptionEn,
+                            l10n.isPersian
+                                ? drv.statusDescription
+                                : drv.statusDescriptionEn,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
                               color: isProblem
                                   ? const Color(0xFFEF4444)
-                                  : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                  : (isDark
+                                        ? const Color(0xFF94A3B8)
+                                        : const Color(0xFF64748B)),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -590,9 +752,7 @@ class _DriverCardState extends State<DriverCard> {
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: statusColor.withValues(alpha: 0.3),
-                  ),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -619,7 +779,9 @@ class _DriverCardState extends State<DriverCard> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF3B82F6).withValues(alpha: isDark ? 0.15 : 0.08),
+                color: const Color(
+                  0xFF3B82F6,
+                ).withValues(alpha: isDark ? 0.15 : 0.08),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
                   color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
@@ -627,7 +789,11 @@ class _DriverCardState extends State<DriverCard> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.download_for_offline_rounded, size: 14, color: Color(0xFF3B82F6)),
+                  const Icon(
+                    Icons.download_for_offline_rounded,
+                    size: 14,
+                    color: Color(0xFF3B82F6),
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -635,7 +801,9 @@ class _DriverCardState extends State<DriverCard> {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF1D4ED8),
+                        color: isDark
+                            ? const Color(0xFF93C5FD)
+                            : const Color(0xFF1D4ED8),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -646,19 +814,30 @@ class _DriverCardState extends State<DriverCard> {
                     onTap: () => _copyToClipboard(
                       context,
                       rec.searchQuery,
-                      l10n.isPersian ? 'عبارت جستجوی درایور کپی شد' : 'Driver search query copied',
+                      l10n.isPersian
+                          ? 'عبارت جستجوی درایور کپی شد'
+                          : 'Driver search query copied',
                     ),
                     borderRadius: BorderRadius.circular(4),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
-                        color: (isDark ? const Color(0xFF1E293B) : Colors.white),
+                        color: (isDark
+                            ? const Color(0xFF1E293B)
+                            : Colors.white),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.copy_rounded, size: 10, color: Color(0xFF3B82F6)),
+                          const Icon(
+                            Icons.copy_rounded,
+                            size: 10,
+                            color: Color(0xFF3B82F6),
+                          ),
                           const SizedBox(width: 3),
                           Text(
                             l10n.copy,
@@ -681,7 +860,11 @@ class _DriverCardState extends State<DriverCard> {
     );
   }
 
-  Widget _buildDriverBatchProgress(BuildContext context, bool isDark, AppLocalizations l10n) {
+  Widget _buildDriverBatchProgress(
+    BuildContext context,
+    bool isDark,
+    AppLocalizations l10n,
+  ) {
     final b = widget.batchStatus!;
     final isRunning = b.isRunning;
     final total = b.total;
@@ -689,7 +872,9 @@ class _DriverCardState extends State<DriverCard> {
     final currentFile = b.currentFile;
     final failed = b.failed;
 
-    Color color = isRunning ? const Color(0xFF0D9488) : (failed == 0 ? const Color(0xFF0D9488) : const Color(0xFFF59E0B));
+    Color color = isRunning
+        ? const Color(0xFF0D9488)
+        : (failed == 0 ? const Color(0xFF0D9488) : const Color(0xFFF59E0B));
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -710,10 +895,15 @@ class _DriverCardState extends State<DriverCard> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0D9488)),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF0D9488),
+                      ),
                     )
                   : Icon(
-                      failed == 0 ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                      failed == 0
+                          ? Icons.check_circle_rounded
+                          : Icons.warning_amber_rounded,
                       color: color,
                       size: 18,
                     ),
@@ -722,13 +912,15 @@ class _DriverCardState extends State<DriverCard> {
                 child: Text(
                   isRunning
                       ? (currentFile != null
-                          ? 'نصب خودکار: $currentFile (${b.currentIndex + 1} از $total)'
-                          : 'در حال نصب خودکار درایورها...')
+                            ? 'نصب خودکار: $currentFile (${b.currentIndex + 1} از $total)'
+                            : 'در حال نصب خودکار درایورها...')
                       : b.summaryMessage,
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                    color: isDark
+                        ? const Color(0xFFF1F5F9)
+                        : const Color(0xFF0F172A),
                   ),
                 ),
               ),
@@ -745,7 +937,11 @@ class _DriverCardState extends State<DriverCard> {
                 IconButton(
                   onPressed: widget.onCancelBatch,
                   tooltip: 'لغو',
-                  icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFFEF4444)),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: Color(0xFFEF4444),
+                  ),
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(4),
                     minimumSize: Size.zero,
@@ -760,7 +956,9 @@ class _DriverCardState extends State<DriverCard> {
             child: LinearProgressIndicator(
               value: total > 0 ? (percent / 100.0).clamp(0.0, 1.0) : null,
               minHeight: 5,
-              backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+              backgroundColor: isDark
+                  ? const Color(0xFF1E293B)
+                  : const Color(0xFFE2E8F0),
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
@@ -772,7 +970,9 @@ class _DriverCardState extends State<DriverCard> {
                 color: (isDark ? const Color(0xFF0F172A) : Colors.white),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                  color: (isDark
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFFE2E8F0)),
                 ),
               ),
               child: ListView.separated(
@@ -781,7 +981,9 @@ class _DriverCardState extends State<DriverCard> {
                 itemCount: b.items.length,
                 separatorBuilder: (context, index) => Divider(
                   height: 1,
-                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                  color: isDark
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFFF1F5F9),
                 ),
                 itemBuilder: (context, index) {
                   final item = b.items[index];
@@ -793,10 +995,10 @@ class _DriverCardState extends State<DriverCard> {
                   Color itemColor = isItemDone
                       ? const Color(0xFF10B981)
                       : (isItemFailed
-                          ? const Color(0xFFEF4444)
-                          : (isItemRunning
-                              ? const Color(0xFF0D9488)
-                              : const Color(0xFF94A3B8)));
+                            ? const Color(0xFFEF4444)
+                            : (isItemRunning
+                                  ? const Color(0xFF0D9488)
+                                  : const Color(0xFF94A3B8)));
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -809,21 +1011,29 @@ class _DriverCardState extends State<DriverCard> {
                               const SizedBox(
                                 width: 12,
                                 height: 12,
-                                child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF0D9488)),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: Color(0xFF0D9488),
+                                ),
                               )
                             else
                               Icon(
                                 isItemDone
                                     ? Icons.check_circle_rounded
                                     : (isItemFailed
-                                        ? Icons.cancel_rounded
-                                        : (isItemSkipped ? Icons.skip_next_rounded : Icons.schedule_rounded)),
+                                          ? Icons.cancel_rounded
+                                          : (isItemSkipped
+                                                ? Icons.skip_next_rounded
+                                                : Icons.schedule_rounded)),
                                 size: 14,
                                 color: itemColor,
                               ),
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 1,
+                              ),
                               decoration: BoxDecoration(
                                 color: itemColor.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(4),
@@ -845,8 +1055,12 @@ class _DriverCardState extends State<DriverCard> {
                                   item.filename,
                                   style: TextStyle(
                                     fontSize: 11,
-                                    fontWeight: isItemRunning ? FontWeight.w700 : FontWeight.w500,
-                                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                                    fontWeight: isItemRunning
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    color: isDark
+                                        ? const Color(0xFFF1F5F9)
+                                        : const Color(0xFF0F172A),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -859,13 +1073,16 @@ class _DriverCardState extends State<DriverCard> {
                                 item.fileSizeDisplay,
                                 style: TextStyle(
                                   fontSize: 9,
-                                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                                  color: isDark
+                                      ? const Color(0xFF64748B)
+                                      : const Color(0xFF94A3B8),
                                 ),
                               ),
                             ],
                           ],
                         ),
-                        if (item.message.isNotEmpty && (isItemFailed || isItemDone)) ...[
+                        if (item.message.isNotEmpty &&
+                            (isItemFailed || isItemDone)) ...[
                           const SizedBox(height: 2),
                           Padding(
                             padding: const EdgeInsets.only(right: 20, left: 6),
@@ -873,10 +1090,14 @@ class _DriverCardState extends State<DriverCard> {
                               item.message,
                               style: TextStyle(
                                 fontSize: 9.5,
-                                fontWeight: isItemFailed ? FontWeight.w600 : FontWeight.w500,
+                                fontWeight: isItemFailed
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
                                 color: isItemFailed
                                     ? const Color(0xFFEF4444)
-                                    : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                    : (isDark
+                                          ? const Color(0xFF94A3B8)
+                                          : const Color(0xFF64748B)),
                               ),
                             ),
                           ),

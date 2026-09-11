@@ -24,6 +24,18 @@ logger = logging.getLogger(__name__)
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
+# HWND/WPARAM/LPARAM are pointer-sized on 64-bit Windows.
+user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+user32.SendMessageW.restype = ctypes.c_ssize_t
+user32.IsWindowVisible.argtypes = [wintypes.HWND]
+user32.IsWindowEnabled.argtypes = [wintypes.HWND]
+user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+user32.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
+user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
+
 # Win32 Constants
 BM_CLICK = 0x00F5
 BM_GETCHECK = 0x00F0
@@ -35,6 +47,9 @@ BST_INDETERMINATE = 0x0002
 WM_COMMAND = 0x0111
 WM_CLOSE = 0x0010
 BN_CLICKED = 0
+GWL_STYLE = -16
+BS_TYPEMASK = 0x0000000F
+_CHECKABLE_BUTTON_TYPES = {2, 3, 4, 5, 6, 9}
 CB_GETCOUNT = 0x0146
 CB_SETCURSEL = 0x014E
 
@@ -93,9 +108,28 @@ _ACCEPT_CHECKBOX_KEYWORDS = [
     "accept the terms",
     "accept the license",
     "agree to the terms",
+    "read and agree",
+    "have read and agree",
+    "terms of the license agreement",
+    "accept all terms",
+    "yes, i agree",
+    "license agreement and privacy policy",
+    "eula",
     "موافقم",
     "قوانین را می‌پذیرم",
     "پذیرش قوانین",
+]
+
+_LICENSE_PAGE_KEYWORDS = [
+    "license agreement",
+    "licence agreement",
+    "end user license",
+    "terms and conditions",
+    "terms of use",
+    "eula",
+    "توافقنامه مجوز",
+    "شرایط استفاده",
+    "قوانین و مقررات",
 ]
 
 _REBOOT_LATER_KEYWORDS = [
@@ -171,22 +205,8 @@ class InstallerAutoPilot:
         if self.target_pids and w_pid in self.target_pids:
             return True
 
-        title = _get_window_text(hwnd).lower()
-        if not title:
-            return False
-
-        # If title matches software keyword
-        if any(k in title for k in self.target_title_keywords):
-            return True
-
-        # Generic installer windows
-        generic_installer_titles = [
-            "setup", "installer", "installation", "wizard", "language", "نصب",
-            "select setup language", "installer language", "intel", "graphics", "driver"
-        ]
-        if any(g in title for g in generic_installer_titles):
-            return True
-
+        # Never interact with another installer's or application's window.
+        # A title is not ownership evidence.
         return False
 
     def _get_child_windows(self, parent_hwnd: int) -> List[Tuple[int, str, str]]:
@@ -223,21 +243,57 @@ class InstallerAutoPilot:
         current = user32.SendMessageW(hwnd, BM_GETCHECK, 0, 0)
         target = BST_CHECKED if check else BST_UNCHECKED
         if current != target:
-            user32.SendMessageW(hwnd, BM_SETCHECK, target, 0)
             user32.SendMessageW(hwnd, BM_CLICK, 0, 0)
-            return True
+            return user32.SendMessageW(hwnd, BM_GETCHECK, 0, 0) == target
         return False
+
+    @staticmethod
+    def _is_checkable_control(hwnd: int, class_name: str) -> bool:
+        cls = class_name.lower()
+        if any(token in cls for token in ("checkbox", "radiobutton", "newradiobutton", "newcheckbox")):
+            return True
+        if "button" not in cls:
+            return False
+        try:
+            style = int(user32.GetWindowLongPtrW(hwnd, GWL_STYLE))
+            return (style & BS_TYPEMASK) in _CHECKABLE_BUTTON_TYPES
+        except Exception:
+            return False
 
     def process_window(self, hwnd: int) -> bool:
         children = self._get_child_windows(hwnd)
         if not children:
             return False
 
+        texts = " ".join(text.lower().replace("&", "") for _, text, _ in children)
+        license_page = any(keyword in texts for keyword in _LICENSE_PAGE_KEYWORDS)
+        reboot_dialog = any(word in texts for word in (
+            "restart", "reboot", "ری‌استارت", "ری استارت",
+            "راه‌اندازی مجدد", "راه اندازی مجدد"))
+        reboot_later_selected = False
+        if reboot_dialog:
+            later_controls = [
+                (control, text, cls) for control, text, cls in children
+                if any(word in text.lower() for word in _REBOOT_LATER_KEYWORDS)
+                and user32.IsWindowEnabled(control)
+            ]
+            # Never press Finish/OK on a reboot dialog until an explicit
+            # "restart later" choice exists and has been selected.
+            if not later_controls:
+                return False
+            for control, text, cls in later_controls:
+                if user32.SendMessageW(control, BM_GETCHECK, 0, 0) == BST_CHECKED:
+                    reboot_later_selected = True
+                    break
+                if self._click_button(control, text):
+                    logger.info(f"[AutoPilot] Selected Reboot Later: '{text}'")
+                    return True
+
         handled = False
 
         # 1. First pass: Handle Checkboxes and Radio Buttons (License agreement, Reboot options)
         for c_hwnd, c_text, c_cls in children:
-            c_text_lower = c_text.lower()
+            c_text_lower = c_text.lower().replace("&", "").strip()
             if not user32.IsWindowEnabled(c_hwnd):
                 continue
 
@@ -248,16 +304,32 @@ class InstallerAutoPilot:
                         logger.info(f"[AutoPilot] Checked agreement: '{c_text}'")
                         handled = True
 
-            # Reboot later option
-            if any(k in c_text_lower for k in _REBOOT_LATER_KEYWORDS):
+            # Reboot later option outside a recognized reboot page
+            if not reboot_dialog and any(k in c_text_lower for k in _REBOOT_LATER_KEYWORDS):
                 if self._check_control(c_hwnd, True):
                     logger.info(f"[AutoPilot] Selected Reboot Later: '{c_text}'")
                     handled = True
 
-            # Uncheck Reboot now option if present
-            if any(k in c_text_lower for k in _REBOOT_NOW_KEYWORDS):
-                if not any(k in c_text_lower for k in _REBOOT_LATER_KEYWORDS):
-                    self._check_control(c_hwnd, False)
+        # Some OEM wrappers expose the agreement text as a separate Static
+        # control and leave the actual checkbox/radio label empty. Select it
+        # only when the whole page is clearly a license page and there is a
+        # single unambiguous enabled checkable control.
+        if license_page and not handled:
+            unlabeled_checkables = [
+                (control, text, cls)
+                for control, text, cls in children
+                if user32.IsWindowEnabled(control)
+                and self._is_checkable_control(control, cls)
+                and not any(neg in text.lower() for neg in _NEVER_CLICK_BUTTONS)
+            ]
+            positive = [
+                item for item in unlabeled_checkables
+                if any(k in item[1].lower() for k in _ACCEPT_CHECKBOX_KEYWORDS)
+            ]
+            candidates = positive or ([unlabeled_checkables[0]] if len(unlabeled_checkables) == 1 else [])
+            if candidates and self._check_control(candidates[0][0], True):
+                logger.info("[AutoPilot] Checked agreement control on detected license page")
+                handled = True
 
         # 2. Second pass: Find and click the best affirmative button
         # Button candidates in priority order: Finish/Close/Done > Install > I Agree > Next > OK
@@ -269,8 +341,18 @@ class InstallerAutoPilot:
             if "button" not in c_cls.lower():
                 continue
 
+            # Radio buttons and checkboxes must never enter the push-button
+            # pass: clicking an already accepted checkbox here toggled it off
+            # in some Lenovo/ASUS installers before Next was pressed.
+            if self._is_checkable_control(c_hwnd, c_cls):
+                continue
+
             c_text_lower = c_text.lower().replace("&", "").strip()
             if not c_text_lower:
+                continue
+            if any(k in c_text_lower for k in _REBOOT_NOW_KEYWORDS):
+                continue
+            if reboot_dialog and any(k in c_text_lower for k in _REBOOT_LATER_KEYWORDS):
                 continue
 
             # Never click cancel / back

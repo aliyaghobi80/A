@@ -52,11 +52,15 @@ class ErrorView extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              l10n.isPersian ? 'ارتباط با موتور سیستم برقرار نشد.' : 'Unable to connect to the system engine.',
+              l10n.isPersian
+                  ? 'ارتباط با موتور سیستم برقرار نشد.'
+                  : 'Unable to connect to the system engine.',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                color: isDark
+                    ? const Color(0xFFF8FAFC)
+                    : const Color(0xFF0F172A),
               ),
             ),
             const SizedBox(height: 10),
@@ -67,7 +71,9 @@ class ErrorView extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                color: isDark
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF64748B),
                 height: 1.5,
               ),
             ),
@@ -79,7 +85,10 @@ class ErrorView extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),

@@ -4,10 +4,7 @@ import '../l10n/app_localizations.dart';
 class LoadingView extends StatelessWidget {
   final String? message;
 
-  const LoadingView({
-    super.key,
-    this.message,
-  });
+  const LoadingView({super.key, this.message});
 
   @override
   Widget build(BuildContext context) {

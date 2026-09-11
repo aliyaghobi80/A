@@ -11,7 +11,6 @@ Filters redundant duplicates and retains the best / newest candidate.
 
 import hashlib
 import os
-import re
 from typing import Dict, Any, List, Tuple
 from .hardware_matcher import _compare_driver_versions
 
@@ -43,7 +42,7 @@ def generate_package_fingerprint(pkg: Dict[str, Any]) -> str:
 
 def deduplicate_driver_packages(packages: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
-    Groups packages by their functional target identity (category + target hardware or normalized name).
+    Groups packages only by canonical source path, never by hardware ID alone.
     When duplicates are found, chooses the optimal candidate:
     1. Higher driver version
     2. Extracted folder over ZIP archive
@@ -52,24 +51,14 @@ def deduplicate_driver_packages(packages: List[Dict[str, Any]]) -> Tuple[List[Di
     """
     groups: Dict[str, List[Dict[str, Any]]] = {}
 
-    for p in packages:
-        # Compute group key
-        cat = p.get("category", "other")
-        hw_ids = p.get("hardware_ids", [])
-        if hw_ids and len(hw_ids) > 0:
-            # Group by category + primary hardware vendor/device
-            primary_hw = sorted(hw_ids)[0]
-            # Strip minor subsystem suffix to group same device
-            m = re.match(r"(PCI\\VEN_[0-9A-Fa-f]{4}&DEV_[0-9A-Fa-f]{4}|USB\\VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4})", primary_hw)
-            if m:
-                grp_key = f"{cat}:{m.group(1).upper()}"
-            else:
-                grp_key = f"{cat}:{primary_hw[:20]}"
-        else:
-            # Group by normalized name
-            norm_name = re.sub(r"[\W_]+", "", p.get("display_name", "")).lower()
-            grp_key = f"{cat}:{norm_name}"
+    for index, p in enumerate(packages):
 
+        # Matching hardware is NOT proof of duplicate content: DCH base,
+        # extension, and software-component packages can target the same device.
+        # Only collapse the same source. Preserve distinct sources for inspection
+        # and let Windows perform driver ranking.
+        source = p.get("source_path")
+        grp_key = os.path.normcase(os.path.realpath(source)) if source else f"unresolved:{index}"
         if grp_key not in groups:
             groups[grp_key] = []
         groups[grp_key].append(p)

@@ -37,7 +37,8 @@ class CardWrapper extends StatefulWidget {
   State<CardWrapper> createState() => _CardWrapperState();
 }
 
-class _CardWrapperState extends State<CardWrapper> with SingleTickerProviderStateMixin {
+class _CardWrapperState extends State<CardWrapper>
+    with SingleTickerProviderStateMixin {
   late bool _expanded;
   late AnimationController _animController;
   late Animation<double> _iconTurns;
@@ -95,7 +96,9 @@ class _CardWrapperState extends State<CardWrapper> with SingleTickerProviderStat
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final effectiveColor = widget.iconColor ?? (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB));
+    final effectiveColor =
+        widget.iconColor ??
+        (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB));
     final iconBgColor = effectiveColor.withValues(alpha: isDark ? 0.15 : 0.1);
 
     return Container(
@@ -140,15 +143,13 @@ class _CardWrapperState extends State<CardWrapper> with SingleTickerProviderStat
                         color: iconBgColor,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: effectiveColor.withValues(alpha: isDark ? 0.4 : 0.2),
+                          color: effectiveColor.withValues(
+                            alpha: isDark ? 0.4 : 0.2,
+                          ),
                           width: 1,
                         ),
                       ),
-                      child: Icon(
-                        widget.icon,
-                        size: 20,
-                        color: effectiveColor,
-                      ),
+                      child: Icon(widget.icon, size: 20, color: effectiveColor),
                     ),
                   const SizedBox(width: 14),
 
@@ -164,10 +165,13 @@ class _CardWrapperState extends State<CardWrapper> with SingleTickerProviderStat
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.2,
-                            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                            color: isDark
+                                ? const Color(0xFFF1F5F9)
+                                : const Color(0xFF0F172A),
                           ),
                         ),
-                        if (widget.summarySubtitle != null && widget.summarySubtitle!.isNotEmpty) ...[
+                        if (widget.summarySubtitle != null &&
+                            widget.summarySubtitle!.isNotEmpty) ...[
                           const SizedBox(height: 3),
                           Directionality(
                             textDirection: TextDirection.ltr,
@@ -201,13 +205,17 @@ class _CardWrapperState extends State<CardWrapper> with SingleTickerProviderStat
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9)),
+                          color: (isDark
+                              ? const Color(0xFF1E293B)
+                              : const Color(0xFFF1F5F9)),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Icon(
                           Icons.keyboard_arrow_down_rounded,
                           size: 18,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
                         ),
                       ),
                     ),
@@ -225,7 +233,9 @@ class _CardWrapperState extends State<CardWrapper> with SingleTickerProviderStat
               mainAxisSize: MainAxisSize.min,
               children: [
                 Divider(
-                  color: isDark ? const Color(0xFF1E2C4A) : const Color(0xFFF1F5F9),
+                  color: isDark
+                      ? const Color(0xFF1E2C4A)
+                      : const Color(0xFFF1F5F9),
                   thickness: 1,
                   height: 1,
                 ),
@@ -235,7 +245,9 @@ class _CardWrapperState extends State<CardWrapper> with SingleTickerProviderStat
                 ),
               ],
             ),
-            crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
             duration: const Duration(milliseconds: 240),
           ),
         ],

@@ -1,91 +1,88 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
-import 'package:central_system_checker/controllers/theme_language_controller.dart';
-import 'package:central_system_checker/screens/splash_screen.dart';
-import 'package:central_system_checker/widgets/splash/splash_assembly.dart';
-import 'package:central_system_checker/widgets/splash/splash_brand_text.dart';
-import 'package:central_system_checker/widgets/splash/splash_component.dart';
-import 'package:central_system_checker/widgets/splash/splash_logo.dart';
+import 'package:markazi_system_checker/screens/splash_screen.dart';
 
 void main() {
-  setUp(() {
-    Get.reset();
-    final themeLangCtrl = Get.put(ThemeLanguageController());
-    themeLangCtrl.currentLocale.value = const Locale('fa');
+  testWidgets('ready backend still waits four seconds', (tester) async {
+    var transitions = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SplashScreen(
+          connect: () async => true,
+          onReady: () => transitions++,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 3999));
+    expect(transitions, 0);
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(transitions, 1);
+    expect(find.text('Markazi System Checker'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
-  tearDown(() {
-    Get.reset();
+  testWidgets('failed backend offers retry and can recover', (tester) async {
+    var attempts = 0;
+    var transitions = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SplashScreen(
+          connect: () async => ++attempts > 1,
+          onReady: () => transitions++,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 4));
+    expect(find.text('تلاش مجدد'), findsOneWidget);
+    expect(transitions, 0);
+    await tester.tap(find.text('تلاش مجدد'));
+    await tester.pump();
+    expect(transitions, 1);
+    await tester.pumpWidget(const SizedBox());
   });
 
-  group('Animated Splash Screen Tests', () {
-    testWidgets('SplashScreen renders properly with initial assembly phase',
-        (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1024, 768));
+  testWidgets('timeout is actionable and dispose ignores late completion', (
+    tester,
+  ) async {
+    final backend = Completer<bool>();
+    await tester.pumpWidget(
+      MaterialApp(home: SplashScreen(connect: () => backend.future)),
+    );
+    await tester.pump(const Duration(seconds: 46));
+    expect(find.text('ورود برای بررسی'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    backend.complete(true);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 
+  testWidgets(
+    'reduced motion respects minimum and large text fits narrow view',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(375, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      var transitions = 0;
       await tester.pumpWidget(
-        const GetMaterialApp(
-          home: SplashScreen(),
-        ),
-      );
-
-      // Verify that SplashScreen is mounted
-      expect(find.byType(SplashScreen), findsOneWidget);
-      expect(find.byType(SplashAssemblyWidget), findsOneWidget);
-      expect(find.byType(SplashLogoWidget), findsOneWidget);
-      expect(find.byType(SplashBrandTextWidget), findsOneWidget);
-
-      // Verify skip button is present
-      expect(find.text('رد کردن'), findsOneWidget);
-
-      // Initial progress has assembly components
-      expect(find.byType(SplashComponentWidget), findsAtLeastNWidgets(1));
-
-      // Advance animation partially
-      await tester.pump(const Duration(milliseconds: 1500));
-      expect(find.byType(SplashAssemblyWidget), findsOneWidget);
-    });
-
-    testWidgets('SplashBrandTextWidget renders Persian and English brand titles',
-        (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SplashBrandTextWidget(progress: 0.85),
-          ),
-        ),
-      );
-
-      expect(find.text('مرکزی سیستم چکر'), findsOneWidget);
-      expect(find.text('Markazi System Checker'), findsOneWidget);
-    });
-
-    testWidgets('SplashComponentWidget renders all hardware component types',
-        (tester) async {
-      for (final type in SplashComponentType.values) {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: SplashComponentWidget(type: type),
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              disableAnimations: true,
+              textScaler: TextScaler.linear(2),
+            ),
+            child: SplashScreen(
+              connect: () async => true,
+              onReady: () => transitions++,
             ),
           ),
-        );
-        expect(find.byType(SplashComponentWidget), findsOneWidget);
-      }
-    });
-
-    testWidgets('SplashLogoWidget renders properly during logo phase',
-        (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SplashLogoWidget(progress: 0.70),
-          ),
         ),
       );
-
-      expect(find.byType(SplashLogoWidget), findsOneWidget);
-    });
-  });
+      await tester.pump(const Duration(seconds: 3));
+      expect(transitions, 0);
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(seconds: 1));
+      expect(transitions, 1);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 }

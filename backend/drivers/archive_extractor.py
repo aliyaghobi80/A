@@ -158,15 +158,7 @@ def extract_driver_archive(archive_path: str, dest_dir: str) -> bool:
     if ext == ".zip":
         # 1. Try python zipfile
         success = _safe_extract_zip(archive_path, dest_dir)
-        # 2. If failed, fallback to tar or WinRAR
-        if not success:
-            tar_bin = _find_tar_exe()
-            if tar_bin:
-                success = _extract_with_tar(tar_bin, archive_path, dest_dir)
-        if not success:
-            rar_bin = _find_winrar_or_rar_exe()
-            if rar_bin:
-                success = _extract_with_rar(rar_bin, archive_path, dest_dir)
+        # A failed security/CRC check must not be bypassed by another extractor.
 
     elif ext == ".rar":
         # WinRAR / Rar.exe
@@ -204,7 +196,7 @@ def extract_driver_archive(archive_path: str, dest_dir: str) -> bool:
 def auto_unpack_driver_archives(target_dir: str) -> List[str]:
     """
     Recursively scans target_dir for compressed driver archives (.zip, .rar, .7z)
-    up to 2 levels deep (e.g. Drivers/*.zip, Drivers/MotherboardModel/*.zip).
+    at any directory depth, without following filesystem links.
     For each archive, creates a dedicated subfolder named after the archive file,
     and extracts all contents into it so driver files never mix together.
     Returns list of paths of all extracted driver directories.
@@ -217,12 +209,10 @@ def auto_unpack_driver_archives(target_dir: str) -> List[str]:
 
     try:
         for root, dirs, files in os.walk(target_dir):
-            dirs[:] = [d for d in dirs if d.lower() not in ignored_names and not d.startswith(".")]
-
-            rel = os.path.relpath(root, target_dir)
-            depth = len(rel.split(os.sep)) if rel != "." else 0
-            if depth > 2:
-                continue
+            dirs[:] = [d for d in dirs if d.lower() not in ignored_names
+                       and not d.startswith(".")
+                       and not os.path.islink(os.path.join(root, d))
+                       and not os.path.isjunction(os.path.join(root, d))]
 
             for f in files:
                 ext = os.path.splitext(f)[1].lower()

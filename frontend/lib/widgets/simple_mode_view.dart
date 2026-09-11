@@ -214,7 +214,10 @@ class SimpleModeView extends StatelessWidget {
               context: context,
               stepNumber: 4,
               categoryTitle: l10n.motherboard,
-              headerTrailing: MotherboardBrandBadge(motherboard: mb, compact: true),
+              headerTrailing: MotherboardBrandBadge(
+                motherboard: mb,
+                compact: true,
+              ),
               icon: mb.brandIcon,
               accentColor: mb.brandColor,
               illustration: const MotherboardIllustration(),
@@ -223,22 +226,24 @@ class SimpleModeView extends StatelessWidget {
                   : (mb.model != 'Not available' ? mb.model : mb.manufacturer),
               secondaryValue: mb.effectiveBrandFa.isNotEmpty
                   ? (mb.effectiveChipset.isNotEmpty
-                      ? '${mb.effectiveBrandFa} • چیپست ${mb.effectiveChipset}'
-                      : mb.effectiveBrandFa)
-                  : (mb.manufacturer != 'Not available' ? mb.manufacturer : null),
+                        ? '${mb.effectiveBrandFa} • چیپست ${mb.effectiveChipset}'
+                        : mb.effectiveBrandFa)
+                  : (mb.manufacturer != 'Not available'
+                        ? mb.manufacturer
+                        : null),
               specPills: [
                 if (mb.effectiveChipset.isNotEmpty)
                   'Chipset: ${mb.effectiveChipset}',
-                if (mb.effectiveFormFactor.isNotEmpty)
-                  mb.effectiveFormFactor,
+                if (mb.effectiveFormFactor.isNotEmpty) mb.effectiveFormFactor,
                 if (info.bios.manufacturer != 'Not available')
                   'BIOS: ${info.bios.manufacturer}',
                 if (info.bios.version != 'Not available') info.bios.version,
-                if (mb.uuid != '-' && mb.uuid.isNotEmpty)
-                  'UUID: ${mb.uuid}',
+                if (mb.uuid != '-' && mb.uuid.isNotEmpty) 'UUID: ${mb.uuid}',
               ],
               serialNumber: mbSerial,
-              copyValue: mb.fullDisplayName.isNotEmpty ? mb.fullDisplayName : mb.model,
+              copyValue: mb.fullDisplayName.isNotEmpty
+                  ? mb.fullDisplayName
+                  : mb.model,
               onCopy: (val) => systemCtrl.copyToClipboard(
                 context,
                 val,
@@ -532,7 +537,7 @@ class SimpleModeView extends StatelessWidget {
 
             final winAct = info.windowsActivation;
             final isWinActivated = winAct.activated;
-            final isWinGenuine = winAct.isGenuineOriginal;
+            final isWinGenuine = info.windows.isHomeEdition;
 
             final cardWindows = _buildProminentSpecCard(
               context: context,
@@ -556,10 +561,13 @@ class SimpleModeView extends StatelessWidget {
               headerTrailing: isWinGenuine
                   ? GenuineOriginalBadge(
                       compact: true,
-                      label: winAct.effectiveBadgeLabel,
+                      label: 'ویندوز اورجینال اصلی',
                     )
                   : Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color:
                             (isWinActivated
@@ -597,17 +605,26 @@ class SimpleModeView extends StatelessWidget {
               actionWidget: isWinGenuine
                   ? Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            const Color(0xFF10B981).withValues(alpha: isDark ? 0.2 : 0.1),
-                            const Color(0xFF059669).withValues(alpha: isDark ? 0.08 : 0.04),
+                            const Color(
+                              0xFF10B981,
+                            ).withValues(alpha: isDark ? 0.2 : 0.1),
+                            const Color(
+                              0xFF059669,
+                            ).withValues(alpha: isDark ? 0.08 : 0.04),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.4 : 0.25),
+                          color: const Color(
+                            0xFF10B981,
+                          ).withValues(alpha: isDark ? 0.4 : 0.25),
                         ),
                       ),
                       child: Row(
@@ -620,7 +637,7 @@ class SimpleModeView extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              winAct.effectiveActivationSummaryFa,
+                              'نسخهٔ Home ویندوز؛ ویندوز اورجینال اصلی',
                               style: TextStyle(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
@@ -663,8 +680,7 @@ class SimpleModeView extends StatelessWidget {
                   ? officeAct.product
                   : l10n.notInstalled,
               secondaryValue:
-                  officeInstalled &&
-                      officeAct.version != 'Not available'
+                  officeInstalled && officeAct.version != 'Not available'
                   ? '${officeAct.architecture} • ${officeAct.version}'
                   : null,
               specPills: officeInstalled
@@ -683,7 +699,10 @@ class SimpleModeView extends StatelessWidget {
                       label: officeAct.effectiveBadgeLabel,
                     )
                   : Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: officeStatusColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
@@ -709,17 +728,26 @@ class SimpleModeView extends StatelessWidget {
               actionWidget: officeIsGenuine
                   ? Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            const Color(0xFF10B981).withValues(alpha: isDark ? 0.2 : 0.1),
-                            const Color(0xFF059669).withValues(alpha: isDark ? 0.08 : 0.04),
+                            const Color(
+                              0xFF10B981,
+                            ).withValues(alpha: isDark ? 0.2 : 0.1),
+                            const Color(
+                              0xFF059669,
+                            ).withValues(alpha: isDark ? 0.08 : 0.04),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.4 : 0.25),
+                          color: const Color(
+                            0xFF10B981,
+                          ).withValues(alpha: isDark ? 0.4 : 0.25),
                         ),
                       ),
                       child: Row(
@@ -1288,7 +1316,12 @@ class SimpleModeView extends StatelessWidget {
                       softwareCtrl,
                     ),
                   ),
-                  if (!(systemCtrl.systemInfo.value?.officeActivation.installed ?? info.officeActivation.installed))
+                  if (!(systemCtrl
+                          .systemInfo
+                          .value
+                          ?.officeActivation
+                          .installed ??
+                      info.officeActivation.installed))
                     _buildOfficeReminderSection(
                       context,
                       isDark,
@@ -2217,7 +2250,10 @@ class SimpleModeView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 12),
-          ...drives.map((drive) => _buildUsbDriveCard(context, drive, isDark, l10n, systemCtrl)),
+          ...drives.map(
+            (drive) =>
+                _buildUsbDriveCard(context, drive, isDark, l10n, systemCtrl),
+          ),
         ],
       );
     });
@@ -2240,14 +2276,8 @@ class SimpleModeView extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [
-                  const Color(0xFF1E1E2E),
-                  const Color(0xFF181824),
-                ]
-              : [
-                  Colors.white,
-                  const Color(0xFFFFF5F5),
-                ],
+              ? [const Color(0xFF1E1E2E), const Color(0xFF181824)]
+              : [Colors.white, const Color(0xFFFFF5F5)],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
@@ -2298,19 +2328,28 @@ class SimpleModeView extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    l10n.isPersian ? 'فلش مموری متصل (Live USB)' : 'Connected USB Flash Drive',
+                    l10n.isPersian
+                        ? 'فلش مموری متصل (Live USB)'
+                        : 'Connected USB Flash Drive',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+                      color: isDark
+                          ? const Color(0xFFF1F5F9)
+                          : const Color(0xFF1E293B),
                     ),
                   ),
                   const Spacer(),
                   // File System Badge
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF2E384D) : const Color(0xFFE2E8F0),
+                      color: isDark
+                          ? const Color(0xFF2E384D)
+                          : const Color(0xFFE2E8F0),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -2318,16 +2357,23 @@ class SimpleModeView extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF475569),
                       ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   // Drive Letter Badge
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
-                      color: primaryColor.withValues(alpha: isDark ? 0.25 : 0.12),
+                      color: primaryColor.withValues(
+                        alpha: isDark ? 0.25 : 0.12,
+                      ),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
                         color: primaryColor.withValues(alpha: 0.5),
@@ -2359,10 +2405,14 @@ class SimpleModeView extends StatelessWidget {
                     height: 60,
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF12141C) : const Color(0xFFF8FAFC),
+                      color: isDark
+                          ? const Color(0xFF12141C)
+                          : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        color: isDark
+                            ? const Color(0xFF334155)
+                            : const Color(0xFFE2E8F0),
                       ),
                     ),
                     child: const UsbFlashIllustration(
@@ -2387,7 +2437,9 @@ class SimpleModeView extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w800,
-                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF0F172A),
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -2397,9 +2449,14 @@ class SimpleModeView extends StatelessWidget {
                                 drive.volumeName != 'USB Drive') ...[
                               const SizedBox(width: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1.5,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0D9488).withValues(alpha: 0.12),
+                                  color: const Color(
+                                    0xFF0D9488,
+                                  ).withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -2422,13 +2479,15 @@ class SimpleModeView extends StatelessWidget {
                           child: LinearProgressIndicator(
                             value: (drive.percentUsed / 100.0).clamp(0.0, 1.0),
                             minHeight: 7,
-                            backgroundColor: isDark ? const Color(0xFF262D3D) : const Color(0xFFE2E8F0),
+                            backgroundColor: isDark
+                                ? const Color(0xFF262D3D)
+                                : const Color(0xFFE2E8F0),
                             valueColor: AlwaysStoppedAnimation<Color>(
                               drive.percentUsed > 90
                                   ? const Color(0xFFEF4444)
                                   : (drive.percentUsed > 75
-                                      ? const Color(0xFFF59E0B)
-                                      : const Color(0xFF3B82F6)),
+                                        ? const Color(0xFFF59E0B)
+                                        : const Color(0xFF3B82F6)),
                             ),
                           ),
                         ),
@@ -2444,7 +2503,9 @@ class SimpleModeView extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
                               ),
                             ),
                             const Spacer(),
@@ -2469,7 +2530,10 @@ class SimpleModeView extends StatelessWidget {
                   ElevatedButton.icon(
                     onPressed: isEjecting
                         ? null
-                        : () => systemCtrl.safeEjectDrive(context, drive.driveLetter),
+                        : () => systemCtrl.safeEjectDrive(
+                            context,
+                            drive.driveLetter,
+                          ),
                     icon: isEjecting
                         ? const SizedBox(
                             width: 16,
@@ -2491,7 +2555,10 @@ class SimpleModeView extends StatelessWidget {
                       backgroundColor: const Color(0xFFDC2626),
                       foregroundColor: Colors.white,
                       elevation: 2,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -3561,11 +3628,22 @@ class SimpleModeView extends StatelessWidget {
                                 ? fname.substring(0, fname.lastIndexOf('.'))
                                 : fname;
                             const genericStems = {
-                              'setup', 'install', 'installer', 'autorun',
-                              'launch', 'run', 'execute',
+                              'setup',
+                              'install',
+                              'installer',
+                              'autorun',
+                              'launch',
+                              'run',
+                              'execute',
                             };
-                            final isGeneric = genericStems.contains(stem) ||
-                                genericStems.any((s) => stem == '${s}64' || stem == '${s}32' || stem.startsWith('${s}_'));
+                            final isGeneric =
+                                genericStems.contains(stem) ||
+                                genericStems.any(
+                                  (s) =>
+                                      stem == '${s}64' ||
+                                      stem == '${s}32' ||
+                                      stem.startsWith('${s}_'),
+                                );
                             if (isGeneric && pkg.folderName.isNotEmpty) {
                               return '${pkg.folderName}  /  ${pkg.filename}';
                             }
@@ -3945,8 +4023,12 @@ class SimpleModeView extends StatelessWidget {
     AppLocalizations l10n,
     SoftwareController softwareCtrl,
   ) {
-    final sysCtrl = Get.isRegistered<SystemInfoController>() ? Get.find<SystemInfoController>() : null;
-    final isOfficeInstalled = sysCtrl?.systemInfo.value?.officeActivation.installed ?? info.officeActivation.installed;
+    final sysCtrl = Get.isRegistered<SystemInfoController>()
+        ? Get.find<SystemInfoController>()
+        : null;
+    final isOfficeInstalled =
+        sysCtrl?.systemInfo.value?.officeActivation.installed ??
+        info.officeActivation.installed;
     if (isOfficeInstalled) {
       return const SizedBox.shrink();
     }
@@ -3965,7 +4047,9 @@ class SimpleModeView extends StatelessWidget {
                   gradient: LinearGradient(
                     colors: [
                       Colors.transparent,
-                      isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                      isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFCBD5E1),
                     ],
                   ),
                 ),
@@ -3979,7 +4063,9 @@ class SimpleModeView extends StatelessWidget {
                   Icon(
                     Icons.dashboard_customize_rounded,
                     size: 14,
-                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    color: isDark
+                        ? const Color(0xFF64748B)
+                        : const Color(0xFF94A3B8),
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -3987,7 +4073,9 @@ class SimpleModeView extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      color: isDark
+                          ? const Color(0xFF64748B)
+                          : const Color(0xFF94A3B8),
                     ),
                   ),
                 ],
@@ -3999,7 +4087,9 @@ class SimpleModeView extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                      isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFCBD5E1),
                       Colors.transparent,
                     ],
                   ),
@@ -4082,10 +4172,7 @@ class SimpleModeView extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        const Text(
-                          '📝',
-                          style: TextStyle(fontSize: 13),
-                        ),
+                        const Text('📝', style: TextStyle(fontSize: 13)),
                       ],
                     ),
                     const SizedBox(height: 3),

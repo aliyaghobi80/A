@@ -26,11 +26,7 @@ class AdvancedModeView extends StatefulWidget {
   final SystemInfo info;
   final PackagesResponse? initialPackages;
 
-  const AdvancedModeView({
-    super.key,
-    required this.info,
-    this.initialPackages,
-  });
+  const AdvancedModeView({super.key, required this.info, this.initialPackages});
 
   @override
   State<AdvancedModeView> createState() => _AdvancedModeViewState();
@@ -98,18 +94,28 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
                   height: 36,
                   child: TextField(
                     controller: _searchController,
-                    onChanged: (val) => setState(() => _searchFilter = val.trim().toLowerCase()),
+                    onChanged: (val) => setState(
+                      () => _searchFilter = val.trim().toLowerCase(),
+                    ),
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? Colors.white : Colors.black87,
                     ),
                     decoration: InputDecoration(
-                      hintText: l10n.isPersian ? 'جستجو در قطعات، درایورها و مشخصات...' : 'Search specs, drivers, hardware...',
+                      hintText: l10n.isPersian
+                          ? 'جستجو در قطعات، درایورها و مشخصات...'
+                          : 'Search specs, drivers, hardware...',
                       hintStyle: TextStyle(
                         fontSize: 11,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        color: isDark
+                            ? const Color(0xFF64748B)
+                            : const Color(0xFF94A3B8),
                       ),
-                      prefixIcon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF3B82F6)),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        size: 16,
+                        color: Color(0xFF3B82F6),
+                      ),
                       suffixIcon: _searchFilter.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear_rounded, size: 14),
@@ -119,24 +125,36 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
                               },
                             )
                           : null,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 0,
+                        horizontal: 10,
+                      ),
                       filled: true,
-                      fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                      fillColor: isDark
+                          ? const Color(0xFF0F172A)
+                          : const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(
-                          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : const Color(0xFFE2E8F0),
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(
-                          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : const Color(0xFFE2E8F0),
                         ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.2),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF3B82F6),
+                          width: 1.2,
+                        ),
                       ),
                     ),
                   ),
@@ -146,35 +164,63 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
 
               // Expand All / Collapse All Buttons
               Tooltip(
-                message: l10n.isPersian ? 'باز کردن تمامی کارت‌ها' : 'Expand All Cards',
+                message: l10n.isPersian
+                    ? 'باز کردن تمامی کارت‌ها'
+                    : 'Expand All Cards',
                 child: OutlinedButton.icon(
                   onPressed: () => _setGlobalExpanded(true),
                   icon: const Icon(Icons.unfold_more_rounded, size: 14),
                   label: Text(
                     l10n.isPersian ? 'باز کردن همه' : 'Expand All',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    side: BorderSide(color: isDark ? const Color(0xFF22304E) : const Color(0xFFCBD5E1)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    side: BorderSide(
+                      color: isDark
+                          ? const Color(0xFF22304E)
+                          : const Color(0xFFCBD5E1),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Tooltip(
-                message: l10n.isPersian ? 'بستن و خلاصه‌سازی تمامی کارت‌ها' : 'Collapse All Cards',
+                message: l10n.isPersian
+                    ? 'بستن و خلاصه‌سازی تمامی کارت‌ها'
+                    : 'Collapse All Cards',
                 child: OutlinedButton.icon(
                   onPressed: () => _setGlobalExpanded(false),
                   icon: const Icon(Icons.unfold_less_rounded, size: 14),
                   label: Text(
                     l10n.isPersian ? 'بستن همه' : 'Collapse All',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    side: BorderSide(color: isDark ? const Color(0xFF22304E) : const Color(0xFFCBD5E1)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    side: BorderSide(
+                      color: isDark
+                          ? const Color(0xFF22304E)
+                          : const Color(0xFFCBD5E1),
+                    ),
                   ),
                 ),
               ),
@@ -192,7 +238,10 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
             final cardCpu = CpuCard(cpu: info.cpu);
             final cardGpu = GpuCard(gpus: info.gpu);
             final cardStorage = StorageCard(storage: info.storage);
-            final cardSoftware = SoftwareCard(software: info.software, summary: info.softwareSummary);
+            final cardSoftware = SoftwareCard(
+              software: info.software,
+              summary: info.softwareSummary,
+            );
             final cardDrivers = Obx(() {
               final isDriverBatch = driverInstallCtrl.isBatchInstalling.value;
               final driverBatchStatus = driverInstallCtrl.batchStatus.value;
@@ -201,16 +250,20 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
                 summary: info.driverSummary,
                 reboot: info.reboot,
                 onRestart: () => systemCtrl.restartSystemInteractive(context),
-                onAutoInstallDrivers: () => driverInstallCtrl.selectFolderAndScan(context),
+                onAutoInstallDrivers: () =>
+                    driverInstallCtrl.selectFolderAndScan(context),
                 isBatchInstalling: isDriverBatch,
                 batchStatus: driverBatchStatus,
-                onCancelBatch: () => driverInstallCtrl.cancelDriverAutoInstall(context),
+                onCancelBatch: () =>
+                    driverInstallCtrl.cancelDriverAutoInstall(context),
               );
             });
             final cardBios = BiosCard(bios: info.bios);
 
             final cardRam = RamCard(ram: info.ram);
-            final cardMotherboard = MotherboardCard(motherboard: info.motherboard);
+            final cardMotherboard = MotherboardCard(
+              motherboard: info.motherboard,
+            );
             final cardWindows = WindowsCard(
               windows: info.windows,
               system: info.system,
@@ -221,7 +274,8 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
             final cardFiles = FilesCard(
               files: info.requiredFiles,
               summary: info.filesSummary,
-              onChangePath: (id, name) => systemCtrl.changeFileRequirementPath(context, id, name),
+              onChangePath: (id, name) =>
+                  systemCtrl.changeFileRequirementPath(context, id, name),
             );
 
             final cardPackages = Obx(() {
@@ -230,7 +284,9 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
               final isBatch = softwareCtrl.isBatchInstalling.value;
               final batchStatus = softwareCtrl.batchStatus.value;
 
-              final isOfficeInstalled = systemCtrl.systemInfo.value?.officeActivation.installed ?? info.officeActivation.installed;
+              final isOfficeInstalled =
+                  systemCtrl.systemInfo.value?.officeActivation.installed ??
+                  info.officeActivation.installed;
 
               return PackagesCard(
                 packages: pkgRes.packages,
@@ -239,23 +295,30 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
                 directoryExists: pkgRes.directoryExists,
                 isOfficeInstalled: isOfficeInstalled,
                 onScan: () => softwareCtrl.scanPackages(),
-                onChangeDirectory: () => softwareCtrl.changePackagesDirectory(context),
+                onChangeDirectory: () =>
+                    softwareCtrl.changePackagesDirectory(context),
                 isScanning: isScanning,
-                onAutoInstallAll: () => softwareCtrl.startAutoInstallAll(context),
+                onAutoInstallAll: () =>
+                    softwareCtrl.startAutoInstallAll(context),
                 isBatchInstalling: isBatch,
                 batchStatus: batchStatus,
-                onCancelBatch: () => softwareCtrl.cancelBatchInstallInteractive(context),
-                onInstallSilent: (pkg) => softwareCtrl.installPackageSilent(context, pkg),
+                onCancelBatch: () =>
+                    softwareCtrl.cancelBatchInstallInteractive(context),
+                onInstallSilent: (pkg) =>
+                    softwareCtrl.installPackageSilent(context, pkg),
                 onInstall: (packageId, name) {
                   final pkg = pkgRes.packages.firstWhereOrNull(
-                    (p) => (p.relativePath.isNotEmpty ? p.relativePath : p.id) == packageId,
+                    (p) =>
+                        (p.relativePath.isNotEmpty ? p.relativePath : p.id) ==
+                        packageId,
                   );
                   if (pkg != null) {
                     softwareCtrl.installPackageInteractive(context, pkg);
                   }
                 },
                 onOpen: (pkg) => softwareCtrl.openInstalledApp(context, pkg),
-                onUninstall: (pkg) => softwareCtrl.uninstallPackageInteractive(context, pkg),
+                onUninstall: (pkg) =>
+                    softwareCtrl.uninstallPackageInteractive(context, pkg),
               );
             });
 

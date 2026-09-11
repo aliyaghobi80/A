@@ -27,54 +27,80 @@ class LicenseStatusPage extends StatelessWidget {
       final isWinActive = win.activated;
       final isOffActive = off.activated;
       final hasOffice = off.installed;
+      final showOriginalHome = info?.windows.isHomeEdition ?? false;
 
-      final isOemOriginal = win.channel.toUpperCase().contains('OEM') ||
+      final isOemOriginal =
+          win.channel.toUpperCase().contains('OEM') ||
           win.channel.toUpperCase().contains('RETAIL') ||
           win.statusText.contains('اورجینال') ||
           win.statusText.contains('دیجیتال') ||
-          (win.statusText.toUpperCase().contains('LICENSED') && !win.channel.toUpperCase().contains('VOLUME'));
+          (win.statusText.toUpperCase().contains('LICENSED') &&
+              !win.channel.toUpperCase().contains('VOLUME'));
 
-      final isAllReady = isWinActive && (!hasOffice || isOffActive);
+      final isAllReady =
+          (showOriginalHome || isWinActive) && (!hasOffice || isOffActive);
 
       return LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 750;
 
           return SingleChildScrollView(
-            padding: EdgeInsets.symmetric(horizontal: isNarrow ? 12 : 20, vertical: 16),
+            padding: EdgeInsets.symmetric(
+              horizontal: isNarrow ? 12 : 20,
+              vertical: 16,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Status Banner
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
-                    color: (isAllReady ? AppTheme.statusSuccess : AppTheme.statusWarning)
-                        .withValues(alpha: isDark ? 0.15 : 0.09),
+                    color:
+                        (isAllReady
+                                ? AppTheme.statusSuccess
+                                : AppTheme.statusWarning)
+                            .withValues(alpha: isDark ? 0.15 : 0.09),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: (isAllReady ? AppTheme.statusSuccess : AppTheme.statusWarning)
-                          .withValues(alpha: isDark ? 0.4 : 0.25),
+                      color:
+                          (isAllReady
+                                  ? AppTheme.statusSuccess
+                                  : AppTheme.statusWarning)
+                              .withValues(alpha: isDark ? 0.4 : 0.25),
                       width: 1.2,
                     ),
                   ),
                   child: Row(
                     children: [
                       Icon(
-                        isAllReady ? Icons.verified_user_rounded : Icons.gpp_maybe_rounded,
+                        isAllReady
+                            ? Icons.verified_user_rounded
+                            : Icons.gpp_maybe_rounded,
                         size: 26,
-                        color: isAllReady ? AppTheme.statusSuccess : AppTheme.statusWarning,
+                        color: isAllReady
+                            ? AppTheme.statusSuccess
+                            : AppTheme.statusWarning,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           isAllReady
-                              ? (l10n.isPersian ? 'لایسنس‌های سیستم تأیید شدند و آماده تحویل است.' : 'System licenses valid.')
-                              : (l10n.isPersian ? 'نیاز به اقدام: لایسنس ویندوز یا آفیس فعال نیست.' : 'Action required: Inactive license.'),
+                              ? (l10n.isPersian
+                                    ? 'لایسنس‌های سیستم تأیید شدند و آماده تحویل است.'
+                                    : 'System licenses valid.')
+                              : (l10n.isPersian
+                                    ? 'نیاز به اقدام: لایسنس ویندوز یا آفیس فعال نیست.'
+                                    : 'Action required: Inactive license.'),
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
-                            color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                            color: isDark
+                                ? AppTheme.darkTextPrimary
+                                : AppTheme.lightTextPrimary,
                           ),
                         ),
                       ),
@@ -90,7 +116,12 @@ class LicenseStatusPage extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+                    border: Border.all(
+                      color: isDark
+                          ? AppTheme.darkBorder
+                          : AppTheme.lightBorder,
+                      width: 1.2,
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -99,10 +130,16 @@ class LicenseStatusPage extends StatelessWidget {
                         width: isNarrow ? 56 : 72,
                         height: isNarrow ? 56 : 72,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.18 : 0.1),
+                          color: const Color(
+                            0xFF0284C7,
+                          ).withValues(alpha: isDark ? 0.18 : 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(Icons.window_rounded, color: const Color(0xFF0284C7), size: isNarrow ? 34 : 44),
+                        child: Icon(
+                          Icons.window_rounded,
+                          color: const Color(0xFF0284C7),
+                          size: isNarrow ? 34 : 44,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -117,48 +154,106 @@ class LicenseStatusPage extends StatelessWidget {
                                     style: TextStyle(
                                       fontSize: isNarrow ? 16 : 17.5,
                                       fontWeight: FontWeight.w800,
-                                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                      color: isDark
+                                          ? AppTheme.darkTextPrimary
+                                          : AppTheme.lightTextPrimary,
                                     ),
                                   ),
                                 ),
-                                if (win.isGenuineOriginal)
+                                if (showOriginalHome)
                                   GenuineOriginalBadge(
-                                    label: 'ویندوز اورجینال',
-                                    subLabel: win.genuineType.isNotEmpty ? win.genuineType : 'Digital License',
+                                    label: 'ویندوز اورجینال اصلی',
+                                    subLabel:
+                                        info?.windows.edition ?? 'Windows Home',
                                     compact: isNarrow,
                                   )
                                 else
                                   StatusBadge(
-                                    label: isWinActive ? 'فعال (Activated)' : 'غیرفعال',
-                                    status: isWinActive ? BadgeStatus.success : BadgeStatus.danger,
+                                    label: isWinActive
+                                        ? 'فعال (Activated)'
+                                        : 'غیرفعال',
+                                    status: isWinActive
+                                        ? BadgeStatus.success
+                                        : BadgeStatus.danger,
                                     fontSize: 12.5,
                                   ),
                               ],
                             ),
                             const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.desktop_windows_outlined,
+                                  size: 17,
+                                  color: Color(0xFF0284C7),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'ویندوز نصب‌شده: ${info?.windows.edition ?? win.edition}',
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: isDark
+                                          ? AppTheme.darkTextPrimary
+                                          : AppTheme.lightTextPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
                             Text(
-                              win.effectiveActivationSummaryFa,
+                              showOriginalHome
+                                  ? 'نسخهٔ Home ویندوز؛ ویندوز اورجینال اصلی'
+                                  : (isWinActive
+                                        ? 'لایسنس ویندوز فعال است.'
+                                        : 'لایسنس ویندوز غیرفعال است.'),
                               style: TextStyle(
                                 fontSize: 13.5,
-                                fontWeight: win.isGenuineOriginal ? FontWeight.w700 : FontWeight.w500,
-                                color: win.isGenuineOriginal
-                                    ? (isDark ? const Color(0xFF34D399) : const Color(0xFF059669))
-                                    : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
+                                fontWeight: showOriginalHome
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: showOriginalHome
+                                    ? (isDark
+                                          ? const Color(0xFF34D399)
+                                          : const Color(0xFF059669))
+                                    : (isDark
+                                          ? AppTheme.darkTextSecondary
+                                          : AppTheme.lightTextSecondary),
                               ),
                             ),
-                            if (win.channel.isNotEmpty && win.channel != 'Unknown') ...[
+                            if (win.channel.isNotEmpty &&
+                                win.channel != 'Unknown') ...[
                               const SizedBox(height: 8),
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 4,
                                 children: [
-                                  MetaTag(label: 'نوع کانال لایسنس', value: win.channel),
-                                  if (win.partialKey.isNotEmpty && win.partialKey != '-')
-                                    MetaTag(label: '۵ رقم آخر کلید', value: win.partialKey),
-                                  if (win.isGenuineOriginal)
-                                    const StatusBadge(label: 'لایسنس اصلی و دائمی مایکروسافت', status: BadgeStatus.success, showIcon: true, fontSize: 11)
+                                  MetaTag(
+                                    label: 'نوع کانال لایسنس',
+                                    value: win.channel,
+                                  ),
+                                  if (win.partialKey.isNotEmpty &&
+                                      win.partialKey != '-')
+                                    MetaTag(
+                                      label: '۵ رقم آخر کلید',
+                                      value: win.partialKey,
+                                    ),
+                                  if (showOriginalHome)
+                                    const StatusBadge(
+                                      label: 'لایسنس اصلی و دائمی مایکروسافت',
+                                      status: BadgeStatus.success,
+                                      showIcon: true,
+                                      fontSize: 11,
+                                    )
                                   else if (isOemOriginal)
-                                    const StatusBadge(label: 'لایسنس اصلی / دیجیتال OEM', status: BadgeStatus.info, showIcon: false, fontSize: 11),
+                                    const StatusBadge(
+                                      label: 'لایسنس اصلی / دیجیتال OEM',
+                                      status: BadgeStatus.info,
+                                      showIcon: false,
+                                      fontSize: 11,
+                                    ),
                                 ],
                               ),
                             ],
@@ -166,43 +261,93 @@ class LicenseStatusPage extends StatelessWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                if (!isWinActive)
+                                if (!showOriginalHome && !isWinActive)
                                   ElevatedButton.icon(
-                                    onPressed: isActivatingWin ? null : () => activationCtrl.activateWindows(context),
+                                    onPressed: isActivatingWin
+                                        ? null
+                                        : () => activationCtrl.activateWindows(
+                                            context,
+                                          ),
                                     icon: isActivatingWin
-                                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                        : const Icon(Icons.bolt_rounded, size: 16),
-                                    label: Text(isActivatingWin ? 'در حال فعال‌سازی...' : 'فعال‌سازی خودکار ویندوز'),
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.bolt_rounded,
+                                            size: 16,
+                                          ),
+                                    label: Text(
+                                      isActivatingWin
+                                          ? 'در حال فعال‌سازی...'
+                                          : 'فعال‌سازی خودکار ویندوز',
+                                    ),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF0284C7),
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 8,
+                                      ),
                                       minimumSize: const Size(0, 36),
                                     ),
                                   )
-                                else if (win.isGenuineOriginal)
+                                else if (showOriginalHome)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.2 : 0.1),
+                                      color: const Color(
+                                        0xFF10B981,
+                                      ).withValues(alpha: isDark ? 0.2 : 0.1),
                                       borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                                      border: Border.all(
+                                        color: const Color(
+                                          0xFF10B981,
+                                        ).withValues(alpha: 0.4),
+                                      ),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.verified_user_rounded, size: 16, color: Color(0xFF10B981)),
+                                        Icon(
+                                          Icons.verified_user_rounded,
+                                          size: 16,
+                                          color: Color(0xFF10B981),
+                                        ),
                                         SizedBox(width: 6),
-                                        Text('ویندوز اورجینال و تأیید شده', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF10B981))),
+                                        Text(
+                                          'ویندوز اورجینال و تأیید شده',
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF10B981),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   )
                                 else
                                   OutlinedButton.icon(
-                                    onPressed: () => systemCtrl.fetchSystemInfo(forceRefresh: true),
-                                    icon: const Icon(Icons.check_circle_outline_rounded, size: 16, color: AppTheme.statusSuccess),
+                                    onPressed: () => systemCtrl.fetchSystemInfo(
+                                      forceRefresh: true,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.check_circle_outline_rounded,
+                                      size: 16,
+                                      color: AppTheme.statusSuccess,
+                                    ),
                                     label: const Text('ویندوز فعال است'),
                                     style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
                                       minimumSize: const Size(0, 34),
                                     ),
                                   ),
@@ -223,7 +368,12 @@ class LicenseStatusPage extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+                    border: Border.all(
+                      color: isDark
+                          ? AppTheme.darkBorder
+                          : AppTheme.lightBorder,
+                      width: 1.2,
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -232,10 +382,16 @@ class LicenseStatusPage extends StatelessWidget {
                         width: isNarrow ? 56 : 72,
                         height: isNarrow ? 56 : 72,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFD97706).withValues(alpha: isDark ? 0.18 : 0.1),
+                          color: const Color(
+                            0xFFD97706,
+                          ).withValues(alpha: isDark ? 0.18 : 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(Icons.description_rounded, color: const Color(0xFFD97706), size: isNarrow ? 34 : 44),
+                        child: Icon(
+                          Icons.description_rounded,
+                          color: const Color(0xFFD97706),
+                          size: isNarrow ? 34 : 44,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -250,14 +406,18 @@ class LicenseStatusPage extends StatelessWidget {
                                     style: TextStyle(
                                       fontSize: isNarrow ? 16 : 17.5,
                                       fontWeight: FontWeight.w800,
-                                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                      color: isDark
+                                          ? AppTheme.darkTextPrimary
+                                          : AppTheme.lightTextPrimary,
                                     ),
                                   ),
                                 ),
                                 if (off.isGenuineOriginal)
                                   GenuineOriginalBadge(
                                     label: 'آفیس اورجینال',
-                                    subLabel: off.genuineType.isNotEmpty ? off.genuineType : 'Original',
+                                    subLabel: off.genuineType.isNotEmpty
+                                        ? off.genuineType
+                                        : 'Original',
                                     compact: isNarrow,
                                     isOffice: true,
                                   )
@@ -265,10 +425,14 @@ class LicenseStatusPage extends StatelessWidget {
                                   StatusBadge(
                                     label: !hasOffice
                                         ? 'نصب نشده'
-                                        : (isOffActive ? 'فعال (Activated)' : 'غیرفعال'),
+                                        : (isOffActive
+                                              ? 'فعال (Activated)'
+                                              : 'غیرفعال'),
                                     status: !hasOffice
                                         ? BadgeStatus.neutral
-                                        : (isOffActive ? BadgeStatus.success : BadgeStatus.danger),
+                                        : (isOffActive
+                                              ? BadgeStatus.success
+                                              : BadgeStatus.danger),
                                     fontSize: 12.5,
                                   ),
                               ],
@@ -278,10 +442,16 @@ class LicenseStatusPage extends StatelessWidget {
                               off.effectiveActivationSummaryFa,
                               style: TextStyle(
                                 fontSize: 13.5,
-                                fontWeight: off.isGenuineOriginal ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: off.isGenuineOriginal
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                                 color: off.isGenuineOriginal
-                                    ? (isDark ? const Color(0xFF34D399) : const Color(0xFF059669))
-                                    : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
+                                    ? (isDark
+                                          ? const Color(0xFF34D399)
+                                          : const Color(0xFF059669))
+                                    : (isDark
+                                          ? AppTheme.darkTextSecondary
+                                          : AppTheme.lightTextSecondary),
                               ),
                             ),
                             if (hasOffice && off.product.isNotEmpty) ...[
@@ -290,13 +460,29 @@ class LicenseStatusPage extends StatelessWidget {
                                 spacing: 8,
                                 runSpacing: 4,
                                 children: [
-                                  MetaTag(label: 'نسخه آفیس', value: off.product),
-                                  if (off.version.isNotEmpty && off.version != 'Not available')
-                                    MetaTag(label: 'شماره ساخت', value: off.version),
-                                  if (off.partialKey.isNotEmpty && off.partialKey != 'Not available')
-                                    MetaTag(label: '۵ رقم آخر کلید', value: off.partialKey),
+                                  MetaTag(
+                                    label: 'نسخه آفیس',
+                                    value: off.product,
+                                  ),
+                                  if (off.version.isNotEmpty &&
+                                      off.version != 'Not available')
+                                    MetaTag(
+                                      label: 'شماره ساخت',
+                                      value: off.version,
+                                    ),
+                                  if (off.partialKey.isNotEmpty &&
+                                      off.partialKey != 'Not available')
+                                    MetaTag(
+                                      label: '۵ رقم آخر کلید',
+                                      value: off.partialKey,
+                                    ),
                                   if (off.isGenuineOriginal)
-                                    const StatusBadge(label: 'لایسنس اصلی و رسمی مایکروسافت', status: BadgeStatus.success, showIcon: true, fontSize: 11),
+                                    const StatusBadge(
+                                      label: 'لایسنس اصلی و رسمی مایکروسافت',
+                                      status: BadgeStatus.success,
+                                      showIcon: true,
+                                      fontSize: 11,
+                                    ),
                                 ],
                               ),
                             ],
@@ -306,41 +492,91 @@ class LicenseStatusPage extends StatelessWidget {
                               children: [
                                 if (hasOffice && !isOffActive)
                                   ElevatedButton.icon(
-                                    onPressed: isActivatingOff ? null : () => activationCtrl.activateOffice(context),
+                                    onPressed: isActivatingOff
+                                        ? null
+                                        : () => activationCtrl.activateOffice(
+                                            context,
+                                          ),
                                     icon: isActivatingOff
-                                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                        : const Icon(Icons.bolt_rounded, size: 16),
-                                    label: Text(isActivatingOff ? 'در حال فعال‌سازی...' : 'فعال‌سازی خودکار آفیس'),
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.bolt_rounded,
+                                            size: 16,
+                                          ),
+                                    label: Text(
+                                      isActivatingOff
+                                          ? 'در حال فعال‌سازی...'
+                                          : 'فعال‌سازی خودکار آفیس',
+                                    ),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFFD97706),
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 8,
+                                      ),
                                       minimumSize: const Size(0, 36),
                                     ),
                                   )
                                 else if (hasOffice && off.isGenuineOriginal)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.2 : 0.1),
+                                      color: const Color(
+                                        0xFF10B981,
+                                      ).withValues(alpha: isDark ? 0.2 : 0.1),
                                       borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                                      border: Border.all(
+                                        color: const Color(
+                                          0xFF10B981,
+                                        ).withValues(alpha: 0.4),
+                                      ),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.verified_user_rounded, size: 16, color: Color(0xFF10B981)),
+                                        Icon(
+                                          Icons.verified_user_rounded,
+                                          size: 16,
+                                          color: Color(0xFF10B981),
+                                        ),
                                         SizedBox(width: 6),
-                                        Text('آفیس اورجینال و فعال', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF10B981))),
+                                        Text(
+                                          'آفیس اورجینال و فعال',
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF10B981),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   )
                                 else if (hasOffice && isOffActive)
                                   OutlinedButton.icon(
-                                    onPressed: () => systemCtrl.fetchSystemInfo(forceRefresh: true),
-                                    icon: const Icon(Icons.check_circle_outline_rounded, size: 16, color: AppTheme.statusSuccess),
+                                    onPressed: () => systemCtrl.fetchSystemInfo(
+                                      forceRefresh: true,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.check_circle_outline_rounded,
+                                      size: 16,
+                                      color: AppTheme.statusSuccess,
+                                    ),
                                     label: const Text('آفیس فعال است'),
                                     style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
                                       minimumSize: const Size(0, 34),
                                     ),
                                   ),

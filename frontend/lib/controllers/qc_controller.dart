@@ -64,7 +64,9 @@ class QcController extends GetxController {
       case 'qcStepSoftware':
         return l10n.isPersian ? 'بررسی نرم‌افزارها' : 'Required Software';
       case 'qcStepFiles':
-        return l10n.isPersian ? 'بررسی فایل‌ها و پوشه‌ها' : 'Required Files & Folders';
+        return l10n.isPersian
+            ? 'بررسی فایل‌ها و پوشه‌ها'
+            : 'Required Files & Folders';
       case 'qcStepWindowsActivation':
         return l10n.isPersian ? 'بررسی فعال‌سازی ویندوز' : 'Windows Activation';
       case 'qcStepOfficeInstallation':
@@ -112,7 +114,8 @@ class QcController extends GetxController {
       }
 
       // Close progress dialog if open
-      if (context.mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+      if (context.mounted &&
+          Navigator.of(context, rootNavigator: true).canPop()) {
         Navigator.of(context, rootNavigator: true).pop();
       }
 
@@ -121,7 +124,8 @@ class QcController extends GetxController {
         QcResultsDialog.show(context, report);
       }
     } catch (e) {
-      if (context.mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+      if (context.mounted &&
+          Navigator.of(context, rootNavigator: true).canPop()) {
         Navigator.of(context, rootNavigator: true).pop();
       }
       if (context.mounted) {
@@ -151,7 +155,9 @@ class QcController extends GetxController {
         canPop: false,
         child: Dialog(
           backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: Container(
             width: 440,
             padding: const EdgeInsets.all(24),
@@ -166,10 +172,16 @@ class QcController extends GetxController {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withValues(alpha: 0.15),
+                          color: const Color(
+                            0xFF2563EB,
+                          ).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.shield_outlined, color: Color(0xFF2563EB), size: 24),
+                        child: const Icon(
+                          Icons.shield_outlined,
+                          color: Color(0xFF2563EB),
+                          size: 24,
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -177,19 +189,27 @@ class QcController extends GetxController {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              l10n.isPersian ? 'بررسی کامل سیستم' : 'Full System Check',
+                              l10n.isPersian
+                                  ? 'بررسی کامل سیستم'
+                                  : 'Full System Check',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
-                                color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                                color: isDark
+                                    ? const Color(0xFFF8FAFC)
+                                    : const Color(0xFF0F172A),
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              l10n.isPersian ? 'پایش خودکار و ارزیابی بخش‌های سیستم...' : 'Automated inspection in progress...',
+                              l10n.isPersian
+                                  ? 'پایش خودکار و ارزیابی بخش‌های سیستم...'
+                                  : 'Automated inspection in progress...',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
                               ),
                             ),
                           ],
@@ -205,8 +225,12 @@ class QcController extends GetxController {
                     child: LinearProgressIndicator(
                       value: (activeIdx + 1) / steps.length,
                       minHeight: 6,
-                      backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                      backgroundColor: isDark
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFFE2E8F0),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Color(0xFF2563EB),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -221,25 +245,37 @@ class QcController extends GetxController {
                     Color titleColor;
 
                     if (idx < activeIdx) {
-                      statusIcon = const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18);
-                      titleColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155);
+                      statusIcon = const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF10B981),
+                        size: 18,
+                      );
+                      titleColor = isDark
+                          ? const Color(0xFFCBD5E1)
+                          : const Color(0xFF334155);
                     } else if (idx == activeIdx) {
                       statusIcon = const SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFF2563EB),
+                          ),
                         ),
                       );
                       titleColor = const Color(0xFF2563EB);
                     } else {
                       statusIcon = Icon(
                         Icons.radio_button_unchecked_rounded,
-                        color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                        color: isDark
+                            ? const Color(0xFF475569)
+                            : const Color(0xFFCBD5E1),
                         size: 18,
                       );
-                      titleColor = isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
+                      titleColor = isDark
+                          ? const Color(0xFF64748B)
+                          : const Color(0xFF94A3B8);
                     }
 
                     return Padding(
@@ -253,7 +289,9 @@ class QcController extends GetxController {
                               title,
                               style: TextStyle(
                                 fontSize: 13,
-                                fontWeight: idx == activeIdx ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: idx == activeIdx
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                                 color: titleColor,
                               ),
                             ),
@@ -280,7 +318,10 @@ class QcController extends GetxController {
       if (Get.isRegistered<SoftwareController>()) {
         final softCtrl = Get.find<SoftwareController>();
         final pkg = softCtrl.packages.firstWhereOrNull(
-          (p) => p.id == issue.actionTarget || p.filename == issue.packageFilename || p.name == issue.name,
+          (p) =>
+              p.id == issue.actionTarget ||
+              p.filename == issue.packageFilename ||
+              p.name == issue.name,
         );
         if (pkg != null) {
           await softCtrl.installPackageSilent(context, pkg);
@@ -291,7 +332,9 @@ class QcController extends GetxController {
           if (context.mounted) {
             scaffoldMessenger.showSnackBar(
               SnackBar(
-                content: Text('فایل نصبی برای ${issue.name} در پوشه Packages یافت نشد.'),
+                content: Text(
+                  'فایل نصبی برای ${issue.name} در پوشه Packages یافت نشد.',
+                ),
                 backgroundColor: const Color(0xFFEF4444),
               ),
             );
@@ -325,14 +368,18 @@ class QcController extends GetxController {
       }
     } else if (issue.actionType == 'open_folder') {
       final target = issue.actionTarget;
-      final folderPath = FileSystemEntity.isDirectorySync(target) ? target : File(target).parent.path;
+      final folderPath = FileSystemEntity.isDirectorySync(target)
+          ? target
+          : File(target).parent.path;
       if (Directory(folderPath).existsSync()) {
         Process.run('explorer.exe', [folderPath]);
       } else {
         if (context.mounted) {
           scaffoldMessenger.showSnackBar(
             SnackBar(
-              content: Text('${l10n.isPersian ? "مسیر پوشه وجود ندارد" : "Folder does not exist"}: $folderPath'),
+              content: Text(
+                '${l10n.isPersian ? "مسیر پوشه وجود ندارد" : "Folder does not exist"}: $folderPath',
+              ),
               backgroundColor: const Color(0xFFEF4444),
             ),
           );
@@ -342,7 +389,10 @@ class QcController extends GetxController {
   }
 
   /// Batch Prepare System Execution
-  Future<void> executeBatchPreparation(BuildContext context, List<QcIssue> selectedIssues) async {
+  Future<void> executeBatchPreparation(
+    BuildContext context,
+    List<QcIssue> selectedIssues,
+  ) async {
     if (isPreparing.value || selectedIssues.isEmpty) return;
 
     final l10n = AppLocalizations.of(context);
@@ -375,12 +425,15 @@ class QcController extends GetxController {
       }
 
       // Automatically re-evaluate full system QC
-      batchProgressText.value = l10n.isPersian ? 'در حال بررسی مجدد وضعیت سیستم...' : 'Re-checking system status...';
+      batchProgressText.value = l10n.isPersian
+          ? 'در حال بررسی مجدد وضعیت سیستم...'
+          : 'Re-checking system status...';
       final updatedReport = await _apiService.runQcCheck();
       qcReport.value = updatedReport;
 
       // Close batch dialog
-      if (context.mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+      if (context.mounted &&
+          Navigator.of(context, rootNavigator: true).canPop()) {
         Navigator.of(context, rootNavigator: true).pop();
       }
 
@@ -398,7 +451,8 @@ class QcController extends GetxController {
         );
       }
     } catch (e) {
-      if (context.mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+      if (context.mounted &&
+          Navigator.of(context, rootNavigator: true).canPop()) {
         Navigator.of(context, rootNavigator: true).pop();
       }
       if (context.mounted) {
@@ -427,7 +481,9 @@ class QcController extends GetxController {
         canPop: false,
         child: Dialog(
           backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: Container(
             width: 420,
             padding: const EdgeInsets.all(24),
@@ -442,15 +498,22 @@ class QcController extends GetxController {
                   const SizedBox(
                     width: 48,
                     height: 48,
-                    child: CircularProgressIndicator(strokeWidth: 3.5, color: Color(0xFF2563EB)),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3.5,
+                      color: Color(0xFF2563EB),
+                    ),
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    l10n.isPersian ? 'در حال آماده‌سازی سیستم' : 'Preparing System',
+                    l10n.isPersian
+                        ? 'در حال آماده‌سازی سیستم'
+                        : 'Preparing System',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                      color: isDark
+                          ? const Color(0xFFF8FAFC)
+                          : const Color(0xFF0F172A),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -469,7 +532,9 @@ class QcController extends GetxController {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
                     ),
                   ),
                 ],

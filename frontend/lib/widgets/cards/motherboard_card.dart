@@ -21,7 +21,8 @@ class MotherboardCard extends StatelessWidget {
     return CardWrapper(
       icon: motherboard.brandIcon,
       title: l10n.motherboard,
-      summarySubtitle: '${motherboard.fullDisplayName}${motherboard.effectiveChipset.isNotEmpty ? " (${motherboard.effectiveChipset})" : ""}',
+      summarySubtitle:
+          '${motherboard.fullDisplayName}${motherboard.effectiveChipset.isNotEmpty ? " (${motherboard.effectiveChipset})" : ""}',
       illustration: const MotherboardIllustration(),
       iconColor: brandColor,
       child: Column(
@@ -30,22 +31,36 @@ class MotherboardCard extends StatelessWidget {
           // Brand Badge & Chips
           Row(
             children: [
-              MotherboardBrandBadge(motherboard: motherboard, showChipset: true),
+              MotherboardBrandBadge(
+                motherboard: motherboard,
+                showChipset: true,
+              ),
               const Spacer(),
               if (motherboard.effectiveFormFactor.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                    color: isDark
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFCBD5E1),
+                    ),
                   ),
                   child: Text(
                     motherboard.effectiveFormFactor,
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
                     ),
                   ),
                 ),
@@ -74,7 +89,9 @@ class MotherboardCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14.5,
                         fontWeight: FontWeight.w800,
-                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        color: isDark
+                            ? const Color(0xFFF8FAFC)
+                            : const Color(0xFF0F172A),
                         letterSpacing: -0.2,
                       ),
                     ),
@@ -86,7 +103,8 @@ class MotherboardCard extends StatelessWidget {
           const SizedBox(height: 12),
           InfoRow(
             label: l10n.isPersian ? 'برند و سازنده' : 'Brand & Vendor',
-            value: '${motherboard.effectiveBrand}${motherboard.effectiveBrandFa.isNotEmpty ? " (${motherboard.effectiveBrandFa})" : ""}',
+            value:
+                '${motherboard.effectiveBrand}${motherboard.effectiveBrandFa.isNotEmpty ? " (${motherboard.effectiveBrandFa})" : ""}',
             icon: Icons.business_rounded,
           ),
           if (motherboard.effectiveChipset.isNotEmpty)

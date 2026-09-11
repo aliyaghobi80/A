@@ -21,18 +21,31 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
 
   static String normalizeCpuName(String raw) {
     final name = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
-    final intelModel = RegExp(r'(i[3579]-[\w\d]+|Core\s+Ultra\s+\d+\s+[\w\d]+|Xeon\s+[\w\d\-]+(?:\s+v\d+)?|Pentium\s+[\w\d]+|Celeron\s+[\w\d]+)', caseSensitive: false).firstMatch(name);
-    final amdModel = RegExp(r'(Ryzen\s+[3579]\s+[\w\d]+|Threadripper\s+[\w\d]+|Athlon\s+[\w\d]+|EPYC\s+[\w\d]+)', caseSensitive: false).firstMatch(name);
-    final genMatch = RegExp(r'(\d+)(?:th|rd|nd|st)\s+Gen', caseSensitive: false).firstMatch(name);
+    final intelModel = RegExp(
+      r'(i[3579]-[\w\d]+|Core\s+Ultra\s+\d+\s+[\w\d]+|Xeon\s+[\w\d\-]+(?:\s+v\d+)?|Pentium\s+[\w\d]+|Celeron\s+[\w\d]+)',
+      caseSensitive: false,
+    ).firstMatch(name);
+    final amdModel = RegExp(
+      r'(Ryzen\s+[3579]\s+[\w\d]+|Threadripper\s+[\w\d]+|Athlon\s+[\w\d]+|EPYC\s+[\w\d]+)',
+      caseSensitive: false,
+    ).firstMatch(name);
+    final genMatch = RegExp(
+      r'(\d+)(?:th|rd|nd|st)\s+Gen',
+      caseSensitive: false,
+    ).firstMatch(name);
     final genStr = genMatch != null ? '${genMatch.group(1)}th Gen' : '';
-    final vendor = name.toLowerCase().contains('intel') ? 'Intel(R)' : (name.toLowerCase().contains('amd') ? 'AMD(R)' : '');
+    final vendor = name.toLowerCase().contains('intel')
+        ? 'Intel(R)'
+        : (name.toLowerCase().contains('amd') ? 'AMD(R)' : '');
 
     String modelStr = '';
     String familyStr = '';
 
     if (intelModel != null) {
       modelStr = intelModel.group(1)!.trim();
-      familyStr = name.contains('Core') || modelStr.startsWith('i') ? 'Core(TM)' : '';
+      familyStr = name.contains('Core') || modelStr.startsWith('i')
+          ? 'Core(TM)'
+          : '';
     } else if (amdModel != null) {
       modelStr = amdModel.group(1)!.trim();
       familyStr = 'Ryzen(TM)';
@@ -41,7 +54,8 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
     if (modelStr.isNotEmpty) {
       final parts = <String>[];
       parts.add(modelStr);
-      if (familyStr.isNotEmpty && !modelStr.toLowerCase().contains(familyStr.toLowerCase())) {
+      if (familyStr.isNotEmpty &&
+          !modelStr.toLowerCase().contains(familyStr.toLowerCase())) {
         parts.add(familyStr);
       }
       if (genStr.isNotEmpty) {
@@ -57,11 +71,16 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
 
   static String formatGpuTitle(String name, String vramDisplay) {
     final raw = name.trim();
-    if (raw.toUpperCase().contains('12G') || raw.toUpperCase().contains('GB') || raw.toUpperCase().contains('VRAM')) {
+    if (raw.toUpperCase().contains('12G') ||
+        raw.toUpperCase().contains('GB') ||
+        raw.toUpperCase().contains('VRAM')) {
       return raw;
     }
     if (vramDisplay.isNotEmpty && vramDisplay != 'Shared') {
-      final vClean = vramDisplay.replaceAll(' ', '').toUpperCase().replaceAll('B', '');
+      final vClean = vramDisplay
+          .replaceAll(' ', '')
+          .toUpperCase()
+          .replaceAll('B', '');
       return '$raw $vClean';
     }
     return raw;
@@ -109,11 +128,29 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       flex: 5,
                       child: Column(
                         children: [
-                          _buildMotherboardCard(info.motherboard, info.bios, isDark, accent, systemCtrl, isCompact),
+                          _buildMotherboardCard(
+                            info.motherboard,
+                            info.bios,
+                            isDark,
+                            accent,
+                            systemCtrl,
+                            isCompact,
+                          ),
                           const SizedBox(height: 18),
-                          _buildCpuCard(info.cpu, isDark, accent, systemCtrl, isCompact),
+                          _buildCpuCard(
+                            info.cpu,
+                            isDark,
+                            accent,
+                            systemCtrl,
+                            isCompact,
+                          ),
                           const SizedBox(height: 18),
-                          _buildRamVisualRackCard(info.ram, isDark, accent, systemCtrl),
+                          _buildRamVisualRackCard(
+                            info.ram,
+                            isDark,
+                            accent,
+                            systemCtrl,
+                          ),
                         ],
                       ),
                     ),
@@ -123,11 +160,26 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       flex: 5,
                       child: Column(
                         children: [
-                          _buildGpuCard(info.gpu, isDark, accent, systemCtrl, isCompact),
+                          _buildGpuCard(
+                            info.gpu,
+                            isDark,
+                            accent,
+                            systemCtrl,
+                            isCompact,
+                          ),
                           const SizedBox(height: 18),
-                          _buildPowerOrBatteryCard(info.battery, isDark, accent),
+                          _buildPowerOrBatteryCard(
+                            info.battery,
+                            isDark,
+                            accent,
+                          ),
                           const SizedBox(height: 18),
-                          _buildStorageDevicesCard(info.storage, isDark, accent, systemCtrl),
+                          _buildStorageDevicesCard(
+                            info.storage,
+                            isDark,
+                            accent,
+                            systemCtrl,
+                          ),
                         ],
                       ),
                     ),
@@ -137,17 +189,46 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 // Tablet & Compact Single-Column Mode (Strict Priority Sequence)
                 Column(
                   children: [
-                    _buildMotherboardCard(info.motherboard, info.bios, isDark, accent, systemCtrl, isCompact),
+                    _buildMotherboardCard(
+                      info.motherboard,
+                      info.bios,
+                      isDark,
+                      accent,
+                      systemCtrl,
+                      isCompact,
+                    ),
                     const SizedBox(height: 16),
-                    _buildCpuCard(info.cpu, isDark, accent, systemCtrl, isCompact),
+                    _buildCpuCard(
+                      info.cpu,
+                      isDark,
+                      accent,
+                      systemCtrl,
+                      isCompact,
+                    ),
                     const SizedBox(height: 16),
-                    _buildRamVisualRackCard(info.ram, isDark, accent, systemCtrl),
+                    _buildRamVisualRackCard(
+                      info.ram,
+                      isDark,
+                      accent,
+                      systemCtrl,
+                    ),
                     const SizedBox(height: 16),
-                    _buildGpuCard(info.gpu, isDark, accent, systemCtrl, isCompact),
+                    _buildGpuCard(
+                      info.gpu,
+                      isDark,
+                      accent,
+                      systemCtrl,
+                      isCompact,
+                    ),
                     const SizedBox(height: 16),
                     _buildPowerOrBatteryCard(info.battery, isDark, accent),
                     const SizedBox(height: 16),
-                    _buildStorageDevicesCard(info.storage, isDark, accent, systemCtrl),
+                    _buildStorageDevicesCard(
+                      info.storage,
+                      isDark,
+                      accent,
+                      systemCtrl,
+                    ),
                   ],
                 ),
 
@@ -162,10 +243,17 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
   // -------------------------------------------------------------
   // 1. Layer 1: Hardware Summary Cards (Strict Order: 1.MB, 2.CPU, 3.RAM, 4.GPU, 5.Power)
   // -------------------------------------------------------------
-  Widget _buildHardwareSummaryRow(SystemInfo info, bool isDark, Color accent, AppLocalizations l10n) {
+  Widget _buildHardwareSummaryRow(
+    SystemInfo info,
+    bool isDark,
+    Color accent,
+    AppLocalizations l10n,
+  ) {
     // 1. Motherboard
     final mb = info.motherboard;
-    final mbName = mb.fullDisplayName.isNotEmpty ? mb.fullDisplayName : 'Motherboard';
+    final mbName = mb.fullDisplayName.isNotEmpty
+        ? mb.fullDisplayName
+        : 'Motherboard';
     final mbSubList = <String>[];
     if (mb.effectiveChipset.isNotEmpty) {
       mbSubList.add(mb.effectiveChipset);
@@ -176,22 +264,35 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
       mbSubList.add(mb.effectiveFormFactor);
     }
     final mbSub = mbSubList.isNotEmpty ? mbSubList.join(' • ') : 'استاندارد';
-    final mbCategory = mb.effectiveBrandFa.isNotEmpty ? 'مادربرد (${mb.effectiveBrandFa})' : 'مادربرد (Motherboard)';
+    final mbCategory = mb.effectiveBrandFa.isNotEmpty
+        ? 'مادربرد (${mb.effectiveBrandFa})'
+        : 'مادربرد (Motherboard)';
 
     // 2. CPU
-    final cpuName = normalizeCpuName(info.cpu.name.isNotEmpty ? info.cpu.name : info.cpu.manufacturer);
-    final cpuSub = '${info.cpu.cores} هسته فیزیکی / ${info.cpu.threads} رشته${info.cpu.maxClockDisplay.isNotEmpty && info.cpu.maxClockDisplay != "Not available" ? " • ${info.cpu.maxClockDisplay}" : ""}';
+    final cpuName = normalizeCpuName(
+      info.cpu.name.isNotEmpty ? info.cpu.name : info.cpu.manufacturer,
+    );
+    final cpuSub =
+        '${info.cpu.cores} هسته فیزیکی / ${info.cpu.threads} رشته${info.cpu.maxClockDisplay.isNotEmpty && info.cpu.maxClockDisplay != "Not available" ? " • ${info.cpu.maxClockDisplay}" : ""}';
 
     // 3. RAM
-    final totalRam = info.ram.totalDisplay.isNotEmpty ? info.ram.totalDisplay : '${info.ram.totalGb} GB';
-    final ramSpeed = info.ram.speedDisplay.isNotEmpty && info.ram.speedDisplay != 'Not available' ? info.ram.speedDisplay : '';
+    final totalRam = info.ram.totalDisplay.isNotEmpty
+        ? info.ram.totalDisplay
+        : '${info.ram.totalGb} GB';
+    final ramSpeed =
+        info.ram.speedDisplay.isNotEmpty &&
+            info.ram.speedDisplay != 'Not available'
+        ? info.ram.speedDisplay
+        : '';
     final ramSub = ramSpeed.isNotEmpty
         ? '$ramSpeed (${info.ram.modules.length} اسلات فعال)'
         : '${info.ram.modules.length} اسلات فعال';
 
     // 4. GPU
     final primaryGpu = info.gpu.isNotEmpty ? info.gpu.first : null;
-    final gpuName = primaryGpu != null ? formatGpuTitle(primaryGpu.name, primaryGpu.vramDisplay) : 'Display Adapter';
+    final gpuName = primaryGpu != null
+        ? formatGpuTitle(primaryGpu.name, primaryGpu.vramDisplay)
+        : 'Display Adapter';
     final gpuSub = primaryGpu != null && primaryGpu.vramDisplay.isNotEmpty
         ? 'حافظه اختصاصی ${primaryGpu.vramDisplay}'
         : 'گرافیک مجتمع';
@@ -212,8 +313,11 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
     } else {
       powerCategory = 'باتری دستگاه (Battery)';
       final hp = info.battery.healthPercent;
-      powerMain = hp != null ? 'سلامت باتری: ${hp.toStringAsFixed(0)}%' : 'باتری لپ‌تاپ';
-      powerSub = '${info.battery.powerSourceFa} • ${info.battery.fullChargeCapacityMwh} mWh';
+      powerMain = hp != null
+          ? 'سلامت باتری: ${hp.toStringAsFixed(0)}%'
+          : 'باتری لپ‌تاپ';
+      powerSub =
+          '${info.battery.powerSourceFa} • ${info.battery.fullChargeCapacityMwh} mWh';
       powerIcon = Icons.battery_charging_full_rounded;
       powerColor = const Color(0xFF10B981);
     }
@@ -227,15 +331,55 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
           final cardWidth = (availableWidth - 4 * 12) / 5.0;
           return Row(
             children: [
-              _buildSummaryCard(mbCategory, mbName, mbSub, mb.brandIcon, mb.brandColor, cardWidth, isDark),
+              _buildSummaryCard(
+                mbCategory,
+                mbName,
+                mbSub,
+                mb.brandIcon,
+                mb.brandColor,
+                cardWidth,
+                isDark,
+              ),
               const SizedBox(width: 12),
-              _buildSummaryCard('پردازنده (CPU)', cpuName, cpuSub, Icons.memory_rounded, const Color(0xFF2563EB), cardWidth, isDark),
+              _buildSummaryCard(
+                'پردازنده (CPU)',
+                cpuName,
+                cpuSub,
+                Icons.memory_rounded,
+                const Color(0xFF2563EB),
+                cardWidth,
+                isDark,
+              ),
               const SizedBox(width: 12),
-              _buildSummaryCard('حافظه رم (RAM)', totalRam, ramSub, Icons.dns_rounded, const Color(0xFFF59E0B), cardWidth, isDark),
+              _buildSummaryCard(
+                'حافظه رم (RAM)',
+                totalRam,
+                ramSub,
+                Icons.dns_rounded,
+                const Color(0xFFF59E0B),
+                cardWidth,
+                isDark,
+              ),
               const SizedBox(width: 12),
-              _buildSummaryCard('کارت گرافیک (GPU)', gpuName, gpuSub, Icons.videogame_asset_rounded, const Color(0xFF10B981), cardWidth, isDark),
+              _buildSummaryCard(
+                'کارت گرافیک (GPU)',
+                gpuName,
+                gpuSub,
+                Icons.videogame_asset_rounded,
+                const Color(0xFF10B981),
+                cardWidth,
+                isDark,
+              ),
               const SizedBox(width: 12),
-              _buildSummaryCard(powerCategory, powerMain, powerSub, powerIcon, powerColor, cardWidth, isDark),
+              _buildSummaryCard(
+                powerCategory,
+                powerMain,
+                powerSub,
+                powerIcon,
+                powerColor,
+                cardWidth,
+                isDark,
+              ),
             ],
           );
         } else if (availableWidth >= 650) {
@@ -245,36 +389,116 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
             children: [
               Row(
                 children: [
-                  _buildSummaryCard(mbCategory, mbName, mbSub, mb.brandIcon, mb.brandColor, cardWidth, isDark),
+                  _buildSummaryCard(
+                    mbCategory,
+                    mbName,
+                    mbSub,
+                    mb.brandIcon,
+                    mb.brandColor,
+                    cardWidth,
+                    isDark,
+                  ),
                   const SizedBox(width: 12),
-                  _buildSummaryCard('پردازنده (CPU)', cpuName, cpuSub, Icons.memory_rounded, const Color(0xFF2563EB), cardWidth, isDark),
+                  _buildSummaryCard(
+                    'پردازنده (CPU)',
+                    cpuName,
+                    cpuSub,
+                    Icons.memory_rounded,
+                    const Color(0xFF2563EB),
+                    cardWidth,
+                    isDark,
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  _buildSummaryCard('حافظه رم (RAM)', totalRam, ramSub, Icons.dns_rounded, const Color(0xFFF59E0B), cardWidth, isDark),
+                  _buildSummaryCard(
+                    'حافظه رم (RAM)',
+                    totalRam,
+                    ramSub,
+                    Icons.dns_rounded,
+                    const Color(0xFFF59E0B),
+                    cardWidth,
+                    isDark,
+                  ),
                   const SizedBox(width: 12),
-                  _buildSummaryCard('کارت گرافیک (GPU)', gpuName, gpuSub, Icons.videogame_asset_rounded, const Color(0xFF10B981), cardWidth, isDark),
+                  _buildSummaryCard(
+                    'کارت گرافیک (GPU)',
+                    gpuName,
+                    gpuSub,
+                    Icons.videogame_asset_rounded,
+                    const Color(0xFF10B981),
+                    cardWidth,
+                    isDark,
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
-              _buildSummaryCard(powerCategory, powerMain, powerSub, powerIcon, powerColor, availableWidth, isDark),
+              _buildSummaryCard(
+                powerCategory,
+                powerMain,
+                powerSub,
+                powerIcon,
+                powerColor,
+                availableWidth,
+                isDark,
+              ),
             ],
           );
         } else {
           // 1 column (Compact / Mobile) - 100% full width per card
           return Column(
             children: [
-              _buildSummaryCard(mbCategory, mbName, mbSub, mb.brandIcon, mb.brandColor, availableWidth, isDark),
+              _buildSummaryCard(
+                mbCategory,
+                mbName,
+                mbSub,
+                mb.brandIcon,
+                mb.brandColor,
+                availableWidth,
+                isDark,
+              ),
               const SizedBox(height: 10),
-              _buildSummaryCard('پردازنده (CPU)', cpuName, cpuSub, Icons.memory_rounded, const Color(0xFF2563EB), availableWidth, isDark),
+              _buildSummaryCard(
+                'پردازنده (CPU)',
+                cpuName,
+                cpuSub,
+                Icons.memory_rounded,
+                const Color(0xFF2563EB),
+                availableWidth,
+                isDark,
+              ),
               const SizedBox(height: 10),
-              _buildSummaryCard('حافظه رم (RAM)', totalRam, ramSub, Icons.dns_rounded, const Color(0xFFF59E0B), availableWidth, isDark),
+              _buildSummaryCard(
+                'حافظه رم (RAM)',
+                totalRam,
+                ramSub,
+                Icons.dns_rounded,
+                const Color(0xFFF59E0B),
+                availableWidth,
+                isDark,
+              ),
               const SizedBox(height: 10),
-              _buildSummaryCard('کارت گرافیک (GPU)', gpuName, gpuSub, Icons.videogame_asset_rounded, const Color(0xFF10B981), availableWidth, isDark),
+              _buildSummaryCard(
+                'کارت گرافیک (GPU)',
+                gpuName,
+                gpuSub,
+                Icons.videogame_asset_rounded,
+                const Color(0xFF10B981),
+                availableWidth,
+                isDark,
+              ),
               const SizedBox(height: 10),
-              _buildSummaryCard(powerCategory, powerMain, powerSub, powerIcon, powerColor, availableWidth, isDark),
+              _buildSummaryCard(
+                powerCategory,
+                powerMain,
+                powerSub,
+                powerIcon,
+                powerColor,
+                availableWidth,
+                isDark,
+              ),
             ],
           );
         }
@@ -325,7 +549,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    color: isDark
+                        ? AppTheme.darkTextMuted
+                        : AppTheme.lightTextMuted,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -336,7 +562,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                     style: TextStyle(
                       fontSize: 14.5,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      color: isDark
+                          ? AppTheme.darkTextPrimary
+                          : AppTheme.lightTextPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -347,7 +575,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                   subValue,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                    color: isDark
+                        ? AppTheme.darkTextSecondary
+                        : AppTheme.lightTextSecondary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -363,7 +593,14 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
   // -------------------------------------------------------------
   // 2. Motherboard Layout (Large Image 140px + Clean Details + Brand Badge)
   // -------------------------------------------------------------
-  Widget _buildMotherboardCard(MotherboardInfo mb, BiosInfo bios, bool isDark, Color accent, SystemInfoController systemCtrl, bool isCompact) {
+  Widget _buildMotherboardCard(
+    MotherboardInfo mb,
+    BiosInfo bios,
+    bool isDark,
+    Color accent,
+    SystemInfoController systemCtrl,
+    bool isCompact,
+  ) {
     final imgSize = isCompact ? 100.0 : 135.0;
     final brandColor = mb.brandColor;
 
@@ -372,7 +609,10 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,13 +624,19 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 style: TextStyle(
                   fontSize: isCompact ? 16 : 17.5,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  color: isDark
+                      ? AppTheme.darkTextPrimary
+                      : AppTheme.lightTextPrimary,
                 ),
               ),
               const Spacer(),
               MotherboardBrandBadge(motherboard: mb, compact: isCompact),
               const SizedBox(width: 8),
-              const StatusDot(label: 'سالم', status: BadgeStatus.success, fontSize: 13),
+              const StatusDot(
+                label: 'سالم',
+                status: BadgeStatus.success,
+                fontSize: 13,
+              ),
             ],
           ),
 
@@ -404,9 +650,13 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 height: imgSize,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                  color: isDark
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: brandColor.withValues(alpha: isDark ? 0.35 : 0.2)),
+                  border: Border.all(
+                    color: brandColor.withValues(alpha: isDark ? 0.35 : 0.2),
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: brandColor.withValues(alpha: isDark ? 0.08 : 0.04),
@@ -417,7 +667,8 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 child: Image.asset(
                   'assets/Parts/motherboard.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => Icon(mb.brandIcon, size: 64, color: brandColor),
+                  errorBuilder: (context, error, stackTrace) =>
+                      Icon(mb.brandIcon, size: 64, color: brandColor),
                 ),
               ),
               const SizedBox(width: 16),
@@ -432,14 +683,17 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                         style: TextStyle(
                           fontSize: isCompact ? 16.5 : 18.5,
                           fontWeight: FontWeight.w800,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
                           letterSpacing: -0.3,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (mb.effectiveChipset.isNotEmpty || mb.effectiveFormFactor.isNotEmpty) ...[
+                    if (mb.effectiveChipset.isNotEmpty ||
+                        mb.effectiveFormFactor.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -453,10 +707,16 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                               ),
                             ),
                           ],
-                          if (mb.effectiveChipset.isNotEmpty && mb.effectiveFormFactor.isNotEmpty)
+                          if (mb.effectiveChipset.isNotEmpty &&
+                              mb.effectiveFormFactor.isNotEmpty)
                             Text(
                               ' • ',
-                              style: TextStyle(fontSize: 12, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark
+                                    ? AppTheme.darkTextMuted
+                                    : AppTheme.lightTextMuted,
+                              ),
                             ),
                           if (mb.effectiveFormFactor.isNotEmpty) ...[
                             Text(
@@ -464,7 +724,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                                color: isDark
+                                    ? AppTheme.darkTextSecondary
+                                    : AppTheme.lightTextSecondary,
                               ),
                             ),
                           ],
@@ -477,41 +739,102 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       runSpacing: 6,
                       children: [
                         if (mb.effectiveChipset.isNotEmpty)
-                          MetaTag(label: 'چیپست اصلی', value: mb.effectiveChipset, isLtrValue: true, icon: Icons.developer_board_rounded),
+                          MetaTag(
+                            label: 'چیپست اصلی',
+                            value: mb.effectiveChipset,
+                            isLtrValue: true,
+                            icon: Icons.developer_board_rounded,
+                          ),
                         if (mb.effectiveFormFactor.isNotEmpty)
-                          MetaTag(label: 'سایز بورد', value: mb.effectiveFormFactor, isLtrValue: true, icon: Icons.aspect_ratio_rounded),
-                        if (bios.version.isNotEmpty && bios.version != 'Not available')
-                          MetaTag(label: 'نسخه بایوس', value: bios.version, isLtrValue: true, icon: Icons.security_rounded),
-                        if (bios.date.isNotEmpty && bios.date != 'Not available')
-                          MetaTag(label: 'تاریخ انتشار بایوس', value: bios.date, isLtrValue: true),
+                          MetaTag(
+                            label: 'سایز بورد',
+                            value: mb.effectiveFormFactor,
+                            isLtrValue: true,
+                            icon: Icons.aspect_ratio_rounded,
+                          ),
+                        if (bios.version.isNotEmpty &&
+                            bios.version != 'Not available')
+                          MetaTag(
+                            label: 'نسخه بایوس',
+                            value: bios.version,
+                            isLtrValue: true,
+                            icon: Icons.security_rounded,
+                          ),
+                        if (bios.date.isNotEmpty &&
+                            bios.date != 'Not available')
+                          MetaTag(
+                            label: 'تاریخ انتشار بایوس',
+                            value: bios.date,
+                            isLtrValue: true,
+                          ),
                         if (mb.version.isNotEmpty && mb.version != '-')
-                          MetaTag(label: 'Revision', value: mb.version, isLtrValue: true),
+                          MetaTag(
+                            label: 'Revision',
+                            value: mb.version,
+                            isLtrValue: true,
+                          ),
                       ],
                     ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        if (mb.serial.isNotEmpty && mb.serial != 'Not available' && mb.serial != 'Default string' && mb.serial != '-') ...[
+                        if (mb.serial.isNotEmpty &&
+                            mb.serial != 'Not available' &&
+                            mb.serial != 'Default string' &&
+                            mb.serial != '-') ...[
                           Tooltip(
                             message: 'کپی شماره سریال مادربرد',
                             child: InkWell(
                               borderRadius: BorderRadius.circular(6),
-                              onTap: () => systemCtrl.copyToClipboard(context, mb.serial, 'شماره سریال مادربرد کپی شد: ${mb.serial}'),
+                              onTap: () => systemCtrl.copyToClipboard(
+                                context,
+                                mb.serial,
+                                'شماره سریال مادربرد کپی شد: ${mb.serial}',
+                              ),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 5,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                                  color: isDark
+                                      ? const Color(0xFF1E293B)
+                                      : const Color(0xFFF1F5F9),
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? const Color(0xFF334155)
+                                        : const Color(0xFFCBD5E1),
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.qr_code_rounded, size: 14, color: brandColor),
+                                    Icon(
+                                      Icons.qr_code_rounded,
+                                      size: 14,
+                                      color: brandColor,
+                                    ),
                                     const SizedBox(width: 4),
-                                    Text('S/N: ${mb.serial}', style: TextStyle(fontSize: 11.5, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary)),
+                                    Text(
+                                      'S/N: ${mb.serial}',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontFamily: 'monospace',
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark
+                                            ? AppTheme.darkTextSecondary
+                                            : AppTheme.lightTextSecondary,
+                                      ),
+                                    ),
                                     const SizedBox(width: 4),
-                                    Icon(Icons.copy_rounded, size: 12, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                                    Icon(
+                                      Icons.copy_rounded,
+                                      size: 12,
+                                      color: isDark
+                                          ? AppTheme.darkTextMuted
+                                          : AppTheme.lightTextMuted,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -520,11 +843,23 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                         ],
                         const Spacer(),
                         OutlinedButton.icon(
-                          onPressed: () => _showMotherboardDetails(context, mb, bios, isDark, systemCtrl),
-                          icon: const Icon(Icons.info_outline_rounded, size: 15),
+                          onPressed: () => _showMotherboardDetails(
+                            context,
+                            mb,
+                            bios,
+                            isDark,
+                            systemCtrl,
+                          ),
+                          icon: const Icon(
+                            Icons.info_outline_rounded,
+                            size: 15,
+                          ),
                           label: const Text('جزئیات مادربرد و بایوس →'),
                           style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             minimumSize: const Size(0, 34),
                           ),
                         ),
@@ -540,37 +875,123 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
     );
   }
 
-  void _showMotherboardDetails(BuildContext context, MotherboardInfo mb, BiosInfo bios, bool isDark, SystemInfoController systemCtrl) {
+  void _showMotherboardDetails(
+    BuildContext context,
+    MotherboardInfo mb,
+    BiosInfo bios,
+    bool isDark,
+    SystemInfoController systemCtrl,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            const Text('مشخصات مادربرد و بایوس', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const Text(
+              'مشخصات مادربرد و بایوس',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
             const Spacer(),
-            MotherboardBrandBadge(motherboard: mb, compact: true, showChipset: true),
+            MotherboardBrandBadge(
+              motherboard: mb,
+              compact: true,
+              showChipset: true,
+            ),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDialogRow('مدل بورد:', mb.fullDisplayName, isDark, isLtrValue: true, onCopy: () => systemCtrl.copyToClipboard(context, mb.fullDisplayName, 'مدل مادربرد کپی شد: ${mb.fullDisplayName}')),
-            _buildDialogRow('سازنده برند:', '${mb.effectiveBrand} (${mb.effectiveBrandFa})', isDark, isLtrValue: false),
+            _buildDialogRow(
+              'مدل بورد:',
+              mb.fullDisplayName,
+              isDark,
+              isLtrValue: true,
+              onCopy: () => systemCtrl.copyToClipboard(
+                context,
+                mb.fullDisplayName,
+                'مدل مادربرد کپی شد: ${mb.fullDisplayName}',
+              ),
+            ),
+            _buildDialogRow(
+              'سازنده برند:',
+              '${mb.effectiveBrand} (${mb.effectiveBrandFa})',
+              isDark,
+              isLtrValue: false,
+            ),
             if (mb.effectiveChipset.isNotEmpty)
-              _buildDialogRow('چیپست مادربرد:', mb.effectiveChipset, isDark, isLtrValue: true),
+              _buildDialogRow(
+                'چیپست مادربرد:',
+                mb.effectiveChipset,
+                isDark,
+                isLtrValue: true,
+              ),
             if (mb.effectiveFormFactor.isNotEmpty)
-              _buildDialogRow('فرم فاکتور / ابعاد:', mb.effectiveFormFactor, isDark, isLtrValue: true),
-            _buildDialogRow('نام در بایوس / WMI:', mb.model, isDark, isLtrValue: true),
-            _buildDialogRow('شرکت ثبتی سازنده:', mb.manufacturer, isDark, isLtrValue: true),
-            _buildDialogRow('شماره سریال مادربرد:', mb.serial, isDark, isLtrValue: true, onCopy: () => systemCtrl.copyToClipboard(context, mb.serial, 'شماره سریال مادربرد کپی شد: ${mb.serial}')),
-            _buildDialogRow('شناسه سخت‌افزاری (UUID):', mb.uuid, isDark, isLtrValue: true, onCopy: () => systemCtrl.copyToClipboard(context, mb.uuid, 'شناسه یکتای UUID کپی شد: ${mb.uuid}')),
-            _buildDialogRow('نسخه بایوس:', bios.version, isDark, isLtrValue: true, onCopy: () => systemCtrl.copyToClipboard(context, bios.version, 'نسخه بایوس کپی شد: ${bios.version}')),
-            _buildDialogRow('تاریخ انتشار بایوس:', bios.date, isDark, isLtrValue: true),
+              _buildDialogRow(
+                'فرم فاکتور / ابعاد:',
+                mb.effectiveFormFactor,
+                isDark,
+                isLtrValue: true,
+              ),
+            _buildDialogRow(
+              'نام در بایوس / WMI:',
+              mb.model,
+              isDark,
+              isLtrValue: true,
+            ),
+            _buildDialogRow(
+              'شرکت ثبتی سازنده:',
+              mb.manufacturer,
+              isDark,
+              isLtrValue: true,
+            ),
+            _buildDialogRow(
+              'شماره سریال مادربرد:',
+              mb.serial,
+              isDark,
+              isLtrValue: true,
+              onCopy: () => systemCtrl.copyToClipboard(
+                context,
+                mb.serial,
+                'شماره سریال مادربرد کپی شد: ${mb.serial}',
+              ),
+            ),
+            _buildDialogRow(
+              'شناسه سخت‌افزاری (UUID):',
+              mb.uuid,
+              isDark,
+              isLtrValue: true,
+              onCopy: () => systemCtrl.copyToClipboard(
+                context,
+                mb.uuid,
+                'شناسه یکتای UUID کپی شد: ${mb.uuid}',
+              ),
+            ),
+            _buildDialogRow(
+              'نسخه بایوس:',
+              bios.version,
+              isDark,
+              isLtrValue: true,
+              onCopy: () => systemCtrl.copyToClipboard(
+                context,
+                bios.version,
+                'نسخه بایوس کپی شد: ${bios.version}',
+              ),
+            ),
+            _buildDialogRow(
+              'تاریخ انتشار بایوس:',
+              bios.date,
+              isDark,
+              isLtrValue: true,
+            ),
           ],
         ),
         actions: [
-          ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('بستن')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('بستن'),
+          ),
         ],
       ),
     );
@@ -579,7 +1000,13 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
   // -------------------------------------------------------------
   // 3. CPU Layout (Normalized Model + Clean Chips)
   // -------------------------------------------------------------
-  Widget _buildCpuCard(CpuInfo cpu, bool isDark, Color accent, SystemInfoController systemCtrl, bool isCompact) {
+  Widget _buildCpuCard(
+    CpuInfo cpu,
+    bool isDark,
+    Color accent,
+    SystemInfoController systemCtrl,
+    bool isCompact,
+  ) {
     final displayName = normalizeCpuName(cpu.name);
     final imgSize = isCompact ? 100.0 : 135.0;
 
@@ -588,7 +1015,10 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -600,11 +1030,17 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 style: TextStyle(
                   fontSize: isCompact ? 16 : 17.5,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  color: isDark
+                      ? AppTheme.darkTextPrimary
+                      : AppTheme.lightTextPrimary,
                 ),
               ),
               const Spacer(),
-              const StatusDot(label: 'عالی', status: BadgeStatus.success, fontSize: 13),
+              const StatusDot(
+                label: 'عالی',
+                status: BadgeStatus.success,
+                fontSize: 13,
+              ),
             ],
           ),
 
@@ -618,14 +1054,22 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 height: imgSize,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                  color: isDark
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                  border: Border.all(
+                    color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+                  ),
                 ),
                 child: Image.asset(
                   'assets/Parts/cpu.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.developer_board_rounded, size: 64, color: Color(0xFF2563EB)),
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.developer_board_rounded,
+                    size: 64,
+                    color: Color(0xFF2563EB),
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -640,7 +1084,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                         style: TextStyle(
                           fontSize: isCompact ? 16.5 : 18.5,
                           fontWeight: FontWeight.w800,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
                           letterSpacing: -0.3,
                         ),
                         maxLines: 2,
@@ -652,12 +1098,33 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       spacing: 8,
                       runSpacing: 6,
                       children: [
-                        MetaTag(label: 'تعداد هسته', value: '${cpu.cores} هسته فیزیکی', isLtrValue: false, icon: Icons.tune_rounded),
-                        MetaTag(label: 'تعداد رشته', value: '${cpu.threads} رشته منطقی', isLtrValue: false, icon: Icons.linear_scale_rounded),
-                        if (cpu.maxClockDisplay.isNotEmpty && cpu.maxClockDisplay != 'Not available')
-                          MetaTag(label: 'فرکانس بوست', value: cpu.maxClockDisplay, isLtrValue: true, icon: Icons.speed_rounded),
-                        if (cpu.manufacturer.isNotEmpty && cpu.manufacturer != 'Not available')
-                          MetaTag(label: 'سازنده', value: cpu.manufacturer, isLtrValue: true),
+                        MetaTag(
+                          label: 'تعداد هسته',
+                          value: '${cpu.cores} هسته فیزیکی',
+                          isLtrValue: false,
+                          icon: Icons.tune_rounded,
+                        ),
+                        MetaTag(
+                          label: 'تعداد رشته',
+                          value: '${cpu.threads} رشته منطقی',
+                          isLtrValue: false,
+                          icon: Icons.linear_scale_rounded,
+                        ),
+                        if (cpu.maxClockDisplay.isNotEmpty &&
+                            cpu.maxClockDisplay != 'Not available')
+                          MetaTag(
+                            label: 'فرکانس بوست',
+                            value: cpu.maxClockDisplay,
+                            isLtrValue: true,
+                            icon: Icons.speed_rounded,
+                          ),
+                        if (cpu.manufacturer.isNotEmpty &&
+                            cpu.manufacturer != 'Not available')
+                          MetaTag(
+                            label: 'سازنده',
+                            value: cpu.manufacturer,
+                            isLtrValue: true,
+                          ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -665,11 +1132,22 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         OutlinedButton.icon(
-                          onPressed: () => _showCpuDetails(context, cpu, displayName, isDark),
-                          icon: const Icon(Icons.info_outline_rounded, size: 15),
+                          onPressed: () => _showCpuDetails(
+                            context,
+                            cpu,
+                            displayName,
+                            isDark,
+                          ),
+                          icon: const Icon(
+                            Icons.info_outline_rounded,
+                            size: 15,
+                          ),
                           label: const Text('مشخصات کامل پردازنده →'),
                           style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             minimumSize: const Size(0, 34),
                           ),
                         ),
@@ -685,25 +1163,66 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
     );
   }
 
-  void _showCpuDetails(BuildContext context, CpuInfo cpu, String normalizedName, bool isDark) {
+  void _showCpuDetails(
+    BuildContext context,
+    CpuInfo cpu,
+    String normalizedName,
+    bool isDark,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('مشخصات فنی پردازنده (CPU)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        title: const Text(
+          'مشخصات فنی پردازنده (CPU)',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDialogRow('مدل نامگذاری استاندارد:', normalizedName, isDark, isLtrValue: true),
-            _buildDialogRow('تعداد هسته‌های فیزیکی:', '${cpu.cores} هسته فیزیکی (Physical Cores)', isDark, isLtrValue: false),
-            _buildDialogRow('تعداد رشته‌های منطقی:', '${cpu.threads} رشته پردازشی (Threads)', isDark, isLtrValue: false),
-            _buildDialogRow('فرکانس بیشینه کاری:', cpu.maxClockDisplay, isDark, isLtrValue: true),
-            _buildDialogRow('سازنده پردازنده:', cpu.manufacturer, isDark, isLtrValue: true),
-            _buildDialogRow('شماره سریال پردازنده:', cpu.serial, isDark, isLtrValue: true),
+            _buildDialogRow(
+              'مدل نامگذاری استاندارد:',
+              normalizedName,
+              isDark,
+              isLtrValue: true,
+            ),
+            _buildDialogRow(
+              'تعداد هسته‌های فیزیکی:',
+              '${cpu.cores} هسته فیزیکی (Physical Cores)',
+              isDark,
+              isLtrValue: false,
+            ),
+            _buildDialogRow(
+              'تعداد رشته‌های منطقی:',
+              '${cpu.threads} رشته پردازشی (Threads)',
+              isDark,
+              isLtrValue: false,
+            ),
+            _buildDialogRow(
+              'فرکانس بیشینه کاری:',
+              cpu.maxClockDisplay,
+              isDark,
+              isLtrValue: true,
+            ),
+            _buildDialogRow(
+              'سازنده پردازنده:',
+              cpu.manufacturer,
+              isDark,
+              isLtrValue: true,
+            ),
+            _buildDialogRow(
+              'شماره سریال پردازنده:',
+              cpu.serial,
+              isDark,
+              isLtrValue: true,
+            ),
           ],
         ),
         actions: [
-          ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('بستن')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('بستن'),
+          ),
         ],
       ),
     );
@@ -712,16 +1231,24 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
   // -------------------------------------------------------------
   // 4. RAM Layout — Real DIMM Visual Rack
   // -------------------------------------------------------------
-  Widget _buildRamVisualRackCard(RamInfo ram, bool isDark, Color accent, SystemInfoController systemCtrl) {
+  Widget _buildRamVisualRackCard(
+    RamInfo ram,
+    bool isDark,
+    Color accent,
+    SystemInfoController systemCtrl,
+  ) {
     final modules = ram.modules;
-    final totalSlots = modules.length >= 4 ? modules.length : 4;
+    final totalSlots = ram.totalSlots ?? modules.length;
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,7 +1260,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 style: TextStyle(
                   fontSize: 17.5,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  color: isDark
+                      ? AppTheme.darkTextPrimary
+                      : AppTheme.lightTextPrimary,
                 ),
               ),
               const SizedBox(width: 10),
@@ -750,8 +1279,12 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
               ),
               const Spacer(),
               StatusBadge(
-                label: '${modules.length} از $totalSlots اسلات فعال',
-                status: modules.isNotEmpty ? BadgeStatus.info : BadgeStatus.neutral,
+                label: totalSlots > modules.length
+                    ? '${modules.length} از $totalSlots اسلات دارای رم'
+                    : '${modules.length} ماژول رم شناسایی شد',
+                status: modules.isNotEmpty
+                    ? BadgeStatus.info
+                    : BadgeStatus.neutral,
                 showIcon: false,
                 fontSize: 12.5,
               ),
@@ -762,9 +1295,10 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
 
           Column(
             children: List.generate(totalSlots, (index) {
-              final slotLabel = index == 0 ? 'A1' : (index == 1 ? 'A2' : (index == 2 ? 'B1' : 'B2'));
               final isFilled = index < modules.length;
               final mod = isFilled ? modules[index] : null;
+              final slotLabel =
+                  mod?.slot ?? 'اسلات خالی ${index - modules.length + 1}';
               final isFocused = focusedRamIndex == index;
 
               return InkWell(
@@ -779,29 +1313,47 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: isFilled
                         ? (isFocused
-                            ? const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.22 : 0.12)
-                            : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC)))
-                        : (isDark ? Colors.transparent : const Color(0xFFF1F5F9)),
+                              ? const Color(
+                                  0xFFF59E0B,
+                                ).withValues(alpha: isDark ? 0.22 : 0.12)
+                              : (isDark
+                                    ? const Color(0xFF0F172A)
+                                    : const Color(0xFFF8FAFC)))
+                        : (isDark
+                              ? Colors.transparent
+                              : const Color(0xFFF1F5F9)),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: isFocused
                           ? const Color(0xFFF59E0B)
                           : (isFilled
-                              ? (isDark ? const Color(0xFF2A3A54) : const Color(0xFFCBD5E1))
-                              : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0))),
+                                ? (isDark
+                                      ? const Color(0xFF2A3A54)
+                                      : const Color(0xFFCBD5E1))
+                                : (isDark
+                                      ? const Color(0xFF1E293B)
+                                      : const Color(0xFFE2E8F0))),
                       width: isFocused ? 1.8 : 1.2,
                     ),
                   ),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
-                          color: isFilled ? const Color(0xFFF59E0B).withValues(alpha: 0.2) : Colors.transparent,
+                          color: isFilled
+                              ? const Color(0xFFF59E0B).withValues(alpha: 0.2)
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -809,7 +1361,11 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
-                            color: isFilled ? const Color(0xFFF59E0B) : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                            color: isFilled
+                                ? const Color(0xFFF59E0B)
+                                : (isDark
+                                      ? AppTheme.darkTextMuted
+                                      : AppTheme.lightTextMuted),
                           ),
                         ),
                       ),
@@ -835,14 +1391,22 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                                   style: TextStyle(
                                     fontSize: 14.5,
                                     fontWeight: FontWeight.w800,
-                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                    color: isDark
+                                        ? AppTheme.darkTextPrimary
+                                        : AppTheme.lightTextPrimary,
                                   ),
                                 ),
-                                if (mod.manufacturer.isNotEmpty && mod.manufacturer != 'Not available') ...[
+                                if (mod.manufacturer.isNotEmpty &&
+                                    mod.manufacturer != 'Not available') ...[
                                   const SizedBox(width: 10),
                                   Text(
                                     '(${mod.manufacturer})',
-                                    style: TextStyle(fontSize: 12, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDark
+                                          ? AppTheme.darkTextMuted
+                                          : AppTheme.lightTextMuted,
+                                    ),
                                   ),
                                 ],
                               ],
@@ -850,7 +1414,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                           ),
                         ),
                         Icon(
-                          isFocused ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                          isFocused
+                              ? Icons.expand_less_rounded
+                              : Icons.expand_more_rounded,
                           size: 18,
                           color: const Color(0xFFF59E0B),
                         ),
@@ -861,7 +1427,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                             style: TextStyle(
                               fontSize: 12.5,
                               fontStyle: FontStyle.italic,
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: isDark
+                                  ? AppTheme.darkTextMuted
+                                  : AppTheme.lightTextMuted,
                             ),
                           ),
                         ),
@@ -888,26 +1456,37 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
       decoration: BoxDecoration(
         color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.15 : 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.35)),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'مشخصات فنی ماژول رم در اسلات ${mod.slot}:',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFFF59E0B)),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFFF59E0B),
+            ),
           ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 12,
             runSpacing: 6,
             children: [
-              _buildSmallSpec('ظرفیت و نوع', '${mod.capacityDisplay} ${mod.type} @ ${mod.speedDisplay}', isDark),
+              _buildSmallSpec(
+                'ظرفیت و نوع',
+                '${mod.capacityDisplay} ${mod.type} @ ${mod.speedDisplay}',
+                isDark,
+              ),
               if (mod.partNumber.isNotEmpty && mod.partNumber != '-')
                 _buildSmallSpec('Part Number', mod.partNumber, isDark),
               if (mod.serial.isNotEmpty && mod.serial != '-')
                 _buildSmallSpec('Serial Number', mod.serial, isDark),
-              if (mod.manufacturer.isNotEmpty && mod.manufacturer != 'Not available')
+              if (mod.manufacturer.isNotEmpty &&
+                  mod.manufacturer != 'Not available')
                 _buildSmallSpec('سازنده ماژول', mod.manufacturer, isDark),
             ],
           ),
@@ -919,17 +1498,36 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
   // -------------------------------------------------------------
   // 5. GPU Layout
   // -------------------------------------------------------------
-  Widget _buildGpuCard(List<GpuInfo> gpus, bool isDark, Color accent, SystemInfoController systemCtrl, bool isCompact) {
-    final primary = gpus.isNotEmpty ? gpus.first : GpuInfo(name: 'Display Adapter', manufacturer: 'Standard', vramDisplay: 'Shared', driverVersion: 'Standard');
+  Widget _buildGpuCard(
+    List<GpuInfo> gpus,
+    bool isDark,
+    Color accent,
+    SystemInfoController systemCtrl,
+    bool isCompact,
+  ) {
+    final primary = gpus.isNotEmpty
+        ? gpus.first
+        : GpuInfo(
+            name: 'Display Adapter',
+            manufacturer: 'Standard',
+            vramDisplay: 'Shared',
+            driverVersion: 'Standard',
+          );
     final gpuTitle = formatGpuTitle(primary.name, primary.vramDisplay);
     final imgSize = isCompact ? 100.0 : 135.0;
+    final needsGraphicsDriver = gpus.any(
+      (gpu) => gpu.isMicrosoftBasicDisplayAdapter,
+    );
 
     return Container(
       padding: EdgeInsets.all(isCompact ? 14 : 18),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -941,15 +1539,60 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 style: TextStyle(
                   fontSize: isCompact ? 16 : 17.5,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  color: isDark
+                      ? AppTheme.darkTextPrimary
+                      : AppTheme.lightTextPrimary,
                 ),
               ),
               const Spacer(),
-              const StatusDot(label: 'عملکرد بهینه', status: BadgeStatus.success, fontSize: 13),
+              StatusDot(
+                label: needsGraphicsDriver
+                    ? 'درایور گرافیک نصب نیست'
+                    : 'عملکرد بهینه',
+                status: needsGraphicsDriver
+                    ? BadgeStatus.warning
+                    : BadgeStatus.success,
+                fontSize: 13,
+              ),
             ],
           ),
 
           const SizedBox(height: 14),
+
+          if (needsGraphicsDriver) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.statusWarning.withValues(
+                  alpha: isDark ? 0.16 : 0.10,
+                ),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: AppTheme.statusWarning.withValues(alpha: 0.42),
+                ),
+              ),
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: AppTheme.statusWarning,
+                  ),
+                  SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Microsoft Basic Display Adapter شناسایی شد؛ درایور اصلی کارت گرافیک را نصب کنید.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
 
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -959,14 +1602,22 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 height: imgSize,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                  color: isDark
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                  border: Border.all(
+                    color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+                  ),
                 ),
                 child: Image.asset(
                   'assets/Parts/graphic.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.videogame_asset_rounded, size: 64, color: Color(0xFF10B981)),
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.videogame_asset_rounded,
+                    size: 64,
+                    color: Color(0xFF10B981),
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -981,7 +1632,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                         style: TextStyle(
                           fontSize: isCompact ? 16.5 : 18.5,
                           fontWeight: FontWeight.w800,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
                           letterSpacing: -0.3,
                         ),
                         maxLines: 2,
@@ -993,11 +1646,29 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       spacing: 8,
                       runSpacing: 6,
                       children: [
-                        MetaTag(label: 'حافظه اختصاصی VRAM', value: primary.vramDisplay.isNotEmpty ? primary.vramDisplay : 'Shared', isLtrValue: true, icon: Icons.memory_rounded),
-                        if (primary.driverVersion.isNotEmpty && primary.driverVersion != 'Not available')
-                          MetaTag(label: 'ورژن درایور', value: primary.driverVersion, isLtrValue: true, icon: Icons.verified_rounded),
-                        if (primary.manufacturer.isNotEmpty && primary.manufacturer != 'Not available')
-                          MetaTag(label: 'سازنده چیپست', value: primary.manufacturer, isLtrValue: true),
+                        MetaTag(
+                          label: 'حافظه اختصاصی VRAM',
+                          value: primary.vramDisplay.isNotEmpty
+                              ? primary.vramDisplay
+                              : 'Shared',
+                          isLtrValue: true,
+                          icon: Icons.memory_rounded,
+                        ),
+                        if (primary.driverVersion.isNotEmpty &&
+                            primary.driverVersion != 'Not available')
+                          MetaTag(
+                            label: 'ورژن درایور',
+                            value: primary.driverVersion,
+                            isLtrValue: true,
+                            icon: Icons.verified_rounded,
+                          ),
+                        if (primary.manufacturer.isNotEmpty &&
+                            primary.manufacturer != 'Not available')
+                          MetaTag(
+                            label: 'سازنده چیپست',
+                            value: primary.manufacturer,
+                            isLtrValue: true,
+                          ),
                       ],
                     ),
                   ],
@@ -1013,14 +1684,21 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
   // -------------------------------------------------------------
   // 6. Power Source (Desktop) vs Battery Card (Laptop)
   // -------------------------------------------------------------
-  Widget _buildPowerOrBatteryCard(BatteryInfo battery, bool isDark, Color accent) {
+  Widget _buildPowerOrBatteryCard(
+    BatteryInfo battery,
+    bool isDark,
+    Color accent,
+  ) {
     if (!battery.hasBattery) {
       return Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+          border: Border.all(
+            color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+            width: 1.2,
+          ),
         ),
         child: Row(
           children: [
@@ -1028,10 +1706,16 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.18 : 0.1),
+                color: const Color(
+                  0xFF0284C7,
+                ).withValues(alpha: isDark ? 0.18 : 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.power_rounded, size: 28, color: Color(0xFF0284C7)),
+              child: const Icon(
+                Icons.power_rounded,
+                size: 28,
+                color: Color(0xFF0284C7),
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -1045,7 +1729,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
                         ),
                       ),
                       const Spacer(),
@@ -1061,7 +1747,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                     'سیستم رومیزی (Desktop) متصل به جریان مستقیم برق شهری • ${battery.psuDisplay}',
                     style: TextStyle(
                       fontSize: 13,
-                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                      color: isDark
+                          ? AppTheme.darkTextSecondary
+                          : AppTheme.lightTextSecondary,
                     ),
                   ),
                 ],
@@ -1080,7 +1768,10 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          width: 1.2,
+        ),
       ),
       child: Row(
         children: [
@@ -1088,11 +1779,14 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: (isGood ? AppTheme.statusSuccess : AppTheme.statusWarning).withValues(alpha: isDark ? 0.18 : 0.1),
+              color: (isGood ? AppTheme.statusSuccess : AppTheme.statusWarning)
+                  .withValues(alpha: isDark ? 0.18 : 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
-              battery.isCharging ? Icons.battery_charging_full_rounded : Icons.battery_full_rounded,
+              battery.isCharging
+                  ? Icons.battery_charging_full_rounded
+                  : Icons.battery_full_rounded,
               size: 28,
               color: isGood ? AppTheme.statusSuccess : AppTheme.statusWarning,
             ),
@@ -1109,13 +1803,17 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        color: isDark
+                            ? AppTheme.darkTextPrimary
+                            : AppTheme.lightTextPrimary,
                       ),
                     ),
                     const Spacer(),
                     StatusDot(
                       label: '${health.toStringAsFixed(0)}% سلامت',
-                      status: isGood ? BadgeStatus.success : BadgeStatus.warning,
+                      status: isGood
+                          ? BadgeStatus.success
+                          : BadgeStatus.warning,
                       fontSize: 13,
                     ),
                   ],
@@ -1125,7 +1823,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                   '${battery.powerSourceFa} • ظرفیت شارژ کامل: ${battery.fullChargeCapacityMwh} mWh (اسمی: ${battery.designCapacityMwh} mWh)',
                   style: TextStyle(
                     fontSize: 13,
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                    color: isDark
+                        ? AppTheme.darkTextSecondary
+                        : AppTheme.lightTextSecondary,
                   ),
                 ),
               ],
@@ -1139,7 +1839,12 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
   // -------------------------------------------------------------
   // 7. Storage Devices Layout (No Fake Health %, Clean Real Hardware Data)
   // -------------------------------------------------------------
-  Widget _buildStorageDevicesCard(List<StorageInfo> storage, bool isDark, Color accent, SystemInfoController systemCtrl) {
+  Widget _buildStorageDevicesCard(
+    List<StorageInfo> storage,
+    bool isDark,
+    Color accent,
+    SystemInfoController systemCtrl,
+  ) {
     final totalDrives = storage.length;
 
     return Container(
@@ -1147,7 +1852,10 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1159,7 +1867,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 style: TextStyle(
                   fontSize: 17.5,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  color: isDark
+                      ? AppTheme.darkTextPrimary
+                      : AppTheme.lightTextPrimary,
                 ),
               ),
               const Spacer(),
@@ -1177,7 +1887,12 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
           if (storage.isEmpty)
             Text(
               'هیچ درایو ذخیره‌سازی در سیستم شناسایی نشد.',
-              style: TextStyle(fontSize: 13, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark
+                    ? AppTheme.darkTextMuted
+                    : AppTheme.lightTextMuted,
+              ),
             )
           else
             ...storage.map((d) => _buildStorageDeviceRow(d, isDark, accent)),
@@ -1222,7 +1937,10 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          width: 1.2,
+        ),
       ),
       child: Column(
         children: [
@@ -1240,7 +1958,11 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 child: Image.asset(
                   assetPath,
                   fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.album_rounded, size: 40, color: Color(0xFF0284C7)),
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.album_rounded,
+                    size: 40,
+                    color: Color(0xFF0284C7),
+                  ),
                 ),
               ),
               const SizedBox(width: 14),
@@ -1258,7 +1980,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                               style: TextStyle(
                                 fontSize: 15.5,
                                 fontWeight: FontWeight.w800,
-                                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                color: isDark
+                                    ? AppTheme.darkTextPrimary
+                                    : AppTheme.lightTextPrimary,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1280,21 +2004,33 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                            color: const Color(
+                              0xFF0284C7,
+                            ).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             drive.typeDescription,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0284C7)),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0284C7),
+                            ),
                           ),
                         ),
-                        if (drive.smartStatus.isNotEmpty && drive.smartStatus != 'UNKNOWN') ...[
+                        if (drive.smartStatus.isNotEmpty &&
+                            drive.smartStatus != 'UNKNOWN') ...[
                           const SizedBox(width: 8),
                           StatusBadge(
                             label: 'SMART: ${drive.smartStatus}',
-                            status: drive.smartStatus == 'PASSED' ? BadgeStatus.success : BadgeStatus.danger,
+                            status: drive.smartStatus == 'PASSED'
+                                ? BadgeStatus.success
+                                : BadgeStatus.danger,
                             showIcon: false,
                             fontSize: 11,
                           ),
@@ -1303,11 +2039,21 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                           const SizedBox(width: 8),
                           Row(
                             children: [
-                              const Icon(Icons.thermostat_rounded, size: 14, color: Color(0xFFF59E0B)),
+                              const Icon(
+                                Icons.thermostat_rounded,
+                                size: 14,
+                                color: Color(0xFFF59E0B),
+                              ),
                               const SizedBox(width: 2),
                               Text(
                                 '${drive.temperatureC}°C',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark
+                                      ? AppTheme.darkTextPrimary
+                                      : AppTheme.lightTextPrimary,
+                                ),
                               ),
                             ],
                           ),
@@ -1328,9 +2074,15 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 icon: const Icon(Icons.analytics_outlined, size: 14),
                 label: const Text('گزارش کامل SMART و پارامترها →'),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   minimumSize: const Size(0, 30),
-                  textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                  textStyle: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -1340,38 +2092,103 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
     );
   }
 
-  void _showStorageDetails(BuildContext context, StorageInfo drive, bool isDark) {
+  void _showStorageDetails(
+    BuildContext context,
+    StorageInfo drive,
+    bool isDark,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('گزارش مشخصات فنی و SMART: ${drive.model}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+        title: Text(
+          'گزارش مشخصات فنی و SMART: ${drive.model}',
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDialogRow('مدل دیسک:', drive.model, isDark, isLtrValue: true),
-            _buildDialogRow('نوع درایو و رابط:', drive.typeDescription, isDark, isLtrValue: true),
-            _buildDialogRow('ظرفیت کل دیسک:', drive.capacityDisplay, isDark, isLtrValue: true),
-            _buildDialogRow('وضعیت کلی SMART:', drive.smartStatus, isDark, isLtrValue: true),
+            _buildDialogRow(
+              'نوع درایو و رابط:',
+              drive.typeDescription,
+              isDark,
+              isLtrValue: true,
+            ),
+            _buildDialogRow(
+              'ظرفیت کل دیسک:',
+              drive.capacityDisplay,
+              isDark,
+              isLtrValue: true,
+            ),
+            _buildDialogRow(
+              'وضعیت کلی SMART:',
+              drive.smartStatus,
+              isDark,
+              isLtrValue: true,
+            ),
             if (drive.temperatureC != null)
-              _buildDialogRow('دمای فعلی دیسک:', '${drive.temperatureC}°C', isDark, isLtrValue: true),
+              _buildDialogRow(
+                'دمای فعلی دیسک:',
+                '${drive.temperatureC}°C',
+                isDark,
+                isLtrValue: true,
+              ),
             if (drive.powerOnHours != null)
-              _buildDialogRow('کارکرد روشن بودن (Power-On Hours):', '${drive.powerOnHours} ساعت', isDark, isLtrValue: false),
+              _buildDialogRow(
+                'کارکرد روشن بودن (Power-On Hours):',
+                '${drive.powerOnHours} ساعت',
+                isDark,
+                isLtrValue: false,
+              ),
             if (drive.powerCycles != null)
-              _buildDialogRow('تعداد دفعات روشن/خاموش (Power Cycles):', '${drive.powerCycles} مرتبه', isDark, isLtrValue: false),
+              _buildDialogRow(
+                'تعداد دفعات روشن/خاموش (Power Cycles):',
+                '${drive.powerCycles} مرتبه',
+                isDark,
+                isLtrValue: false,
+              ),
             if (drive.reallocatedSectors != null)
-              _buildDialogRow('سکتورهای بازتخصیص‌یافته (Reallocated):', '${drive.reallocatedSectors}', isDark, isLtrValue: true),
+              _buildDialogRow(
+                'سکتورهای بازتخصیص‌یافته (Reallocated):',
+                '${drive.reallocatedSectors}',
+                isDark,
+                isLtrValue: true,
+              ),
             if (drive.pendingSectors != null)
-              _buildDialogRow('سکتورهای مشکوک (Pending):', '${drive.pendingSectors}', isDark, isLtrValue: true),
+              _buildDialogRow(
+                'سکتورهای مشکوک (Pending):',
+                '${drive.pendingSectors}',
+                isDark,
+                isLtrValue: true,
+              ),
             if (drive.uncorrectableSectors != null)
-              _buildDialogRow('سکتورهای تصحیح‌نشده (Uncorrectable):', '${drive.uncorrectableSectors}', isDark, isLtrValue: true),
+              _buildDialogRow(
+                'سکتورهای تصحیح‌نشده (Uncorrectable):',
+                '${drive.uncorrectableSectors}',
+                isDark,
+                isLtrValue: true,
+              ),
             if (drive.mediaErrors != null)
-              _buildDialogRow('خطاهای مدیا و دیتا (Media Errors):', '${drive.mediaErrors}', isDark, isLtrValue: true),
-            _buildDialogRow('شماره سریال دیسک:', drive.serial, isDark, isLtrValue: true),
+              _buildDialogRow(
+                'خطاهای مدیا و دیتا (Media Errors):',
+                '${drive.mediaErrors}',
+                isDark,
+                isLtrValue: true,
+              ),
+            _buildDialogRow(
+              'شماره سریال دیسک:',
+              drive.serial,
+              isDark,
+              isLtrValue: true,
+            ),
           ],
         ),
         actions: [
-          ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('بستن')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('بستن'),
+          ),
         ],
       ),
     );
@@ -1383,7 +2200,10 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
       children: [
         Text(
           '$label: ',
-          style: TextStyle(fontSize: 12, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+          ),
         ),
         Directionality(
           textDirection: TextDirection.ltr,
@@ -1392,7 +2212,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
             style: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
-              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+              color: isDark
+                  ? AppTheme.darkTextPrimary
+                  : AppTheme.lightTextPrimary,
             ),
           ),
         ),
@@ -1400,8 +2222,18 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
     );
   }
 
-  Widget _buildDialogRow(String label, String value, bool isDark, {bool isLtrValue = false, VoidCallback? onCopy}) {
-    final canCopy = onCopy != null && value.isNotEmpty && value != '-' && value != 'Not available';
+  Widget _buildDialogRow(
+    String label,
+    String value,
+    bool isDark, {
+    bool isLtrValue = false,
+    VoidCallback? onCopy,
+  }) {
+    final canCopy =
+        onCopy != null &&
+        value.isNotEmpty &&
+        value != '-' &&
+        value != 'Not available';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5.0),
@@ -1426,7 +2258,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        color: isDark
+                            ? AppTheme.darkTextPrimary
+                            : AppTheme.lightTextPrimary,
                       ),
                     ),
                   )
@@ -1436,7 +2270,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      color: isDark
+                          ? AppTheme.darkTextPrimary
+                          : AppTheme.lightTextPrimary,
                     ),
                   ),
           ),
@@ -1450,7 +2286,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 child: Icon(
                   Icons.copy_rounded,
                   size: 14,
-                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  color: isDark
+                      ? const Color(0xFF64748B)
+                      : const Color(0xFF94A3B8),
                 ),
               ),
             ),

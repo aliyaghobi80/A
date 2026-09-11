@@ -46,7 +46,10 @@ class AppSidebar extends StatelessWidget {
         children: [
           // 1. Sidebar Branding Header
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: isCompact ? 8 : 14, vertical: 16),
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompact ? 8 : 14,
+              vertical: 16,
+            ),
             child: Obx(() {
               final customPath = themeCtrl.customLogoPath.value;
               final accent = themeCtrl.currentAccentColor;
@@ -65,26 +68,25 @@ class AppSidebar extends StatelessWidget {
                   width: 32,
                   height: 32,
                   fit: BoxFit.contain,
-                  errorBuilder: (ctx, err, stack) => Icon(
-                    Icons.computer_rounded,
-                    size: 28,
-                    color: accent,
-                  ),
+                  errorBuilder: (ctx, err, stack) =>
+                      Icon(Icons.computer_rounded, size: 28, color: accent),
                 );
               }
 
               if (isCompact) {
                 return Tooltip(
-                  message: l10n.isPersian ? 'کامپیوتر مرکزی' : 'Central Computer',
+                  message: l10n.isPersian
+                      ? 'کامپیوتر مرکزی'
+                      : 'Markazi Computer',
                   child: Container(
                     width: 44,
                     height: 44,
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: accent.withValues(alpha: isDark ? 0.18 : 0.1),
-                      borderRadius: BorderRadius.circular(10),
+                      shape: BoxShape.circle,
                     ),
-                    child: Center(child: logoWidget),
+                    child: ClipOval(child: Center(child: logoWidget)),
                   ),
                 );
               }
@@ -97,9 +99,9 @@ class AppSidebar extends StatelessWidget {
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: accent.withValues(alpha: isDark ? 0.18 : 0.1),
-                      borderRadius: BorderRadius.circular(8),
+                      shape: BoxShape.circle,
                     ),
-                    child: Center(child: logoWidget),
+                    child: ClipOval(child: Center(child: logoWidget)),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -107,11 +109,15 @@ class AppSidebar extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          l10n.isPersian ? 'کامپیوتر مرکزی' : 'Central Computer',
+                          l10n.isPersian
+                              ? 'کامپیوتر مرکزی'
+                              : 'Markazi Computer',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
-                            color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                            color: isDark
+                                ? AppTheme.darkTextPrimary
+                                : AppTheme.lightTextPrimary,
                             letterSpacing: -0.3,
                           ),
                           maxLines: 1,
@@ -119,11 +125,15 @@ class AppSidebar extends StatelessWidget {
                         ),
                         const SizedBox(height: 1),
                         Text(
-                          l10n.isPersian ? 'سیستم چکر و استقرار' : 'System Checker',
+                          l10n.isPersian
+                              ? 'سیستم چکر و استقرار'
+                              : 'System Checker',
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w500,
-                            color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                            color: isDark
+                                ? AppTheme.darkTextMuted
+                                : AppTheme.lightTextMuted,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -146,11 +156,16 @@ class AppSidebar extends StatelessWidget {
           // 2. Navigation Items
           Expanded(
             child: Obx(() {
-              final uninstalledPackages = softwareCtrl.packages.where((p) => !p.isInstalled && p.isValid).length;
+              final uninstalledPackages = softwareCtrl.packages
+                  .where((p) => !p.isInstalled && p.isValid)
+                  .length;
               final scannedDrivers = driverCtrl.scannedFiles.length;
 
               return ListView(
-                padding: EdgeInsets.symmetric(horizontal: isCompact ? 6 : 8, vertical: 4),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isCompact ? 6 : 8,
+                  vertical: 4,
+                ),
                 children: [
                   _buildNavItem(
                     index: 0,
@@ -173,8 +188,12 @@ class AppSidebar extends StatelessWidget {
                   _buildNavItem(
                     index: 2,
                     icon: Icons.apps_rounded,
-                    title: l10n.isPersian ? 'نصب نرم‌افزارها' : 'Install Software',
-                    badgeCount: uninstalledPackages > 0 ? uninstalledPackages : null,
+                    title: l10n.isPersian
+                        ? 'نصب نرم‌افزارها'
+                        : 'Install Software',
+                    badgeCount: uninstalledPackages > 0
+                        ? uninstalledPackages
+                        : null,
                     badgeColor: const Color(0xFF0284C7),
                     isDark: isDark,
                     themeCtrl: themeCtrl,
@@ -191,13 +210,25 @@ class AppSidebar extends StatelessWidget {
                   _buildNavItem(
                     index: 4,
                     icon: Icons.folder_open_rounded,
-                    title: l10n.isPersian ? 'پوشه‌ها و ابزارها' : 'Tools & Folders',
+                    title: l10n.isPersian
+                        ? 'پوشه‌ها و ابزارها'
+                        : 'Tools & Folders',
                     isDark: isDark,
                     themeCtrl: themeCtrl,
                     isCompact: isCompact,
                   ),
                   _buildNavItem(
                     index: 5,
+                    icon: Icons.important_devices_rounded,
+                    title: l10n.isPersian
+                        ? 'تنظیمات مهم دستگاه'
+                        : 'Device Setup',
+                    isDark: isDark,
+                    themeCtrl: themeCtrl,
+                    isCompact: isCompact,
+                  ),
+                  _buildNavItem(
+                    index: 6,
                     icon: Icons.settings_rounded,
                     title: l10n.isPersian ? 'تنظیمات برنامه' : 'Settings',
                     isDark: isDark,
@@ -217,12 +248,19 @@ class AppSidebar extends StatelessWidget {
                 onTap: () => qcCtrl.runFullCheck(context),
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
-                    color: themeCtrl.currentAccentColor.withValues(alpha: isDark ? 0.15 : 0.08),
+                    color: themeCtrl.currentAccentColor.withValues(
+                      alpha: isDark ? 0.15 : 0.08,
+                    ),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: themeCtrl.currentAccentColor.withValues(alpha: isDark ? 0.4 : 0.25),
+                      color: themeCtrl.currentAccentColor.withValues(
+                        alpha: isDark ? 0.4 : 0.25,
+                      ),
                       width: 1.2,
                     ),
                   ),
@@ -239,11 +277,15 @@ class AppSidebar extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          l10n.isPersian ? 'بررسی آماده‌سازی QC' : 'QC Quality Check',
+                          l10n.isPersian
+                              ? 'بررسی آماده‌سازی QC'
+                              : 'QC Quality Check',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                            color: isDark
+                                ? AppTheme.darkTextPrimary
+                                : AppTheme.lightTextPrimary,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -306,11 +348,16 @@ class AppSidebar extends StatelessWidget {
               height: 48,
               decoration: BoxDecoration(
                 color: isSelected
-                    ? (isDark ? accent.withValues(alpha: 0.28) : accent.withValues(alpha: 0.14))
+                    ? (isDark
+                          ? accent.withValues(alpha: 0.28)
+                          : accent.withValues(alpha: 0.14))
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
                 border: isSelected
-                    ? Border.all(color: isDark ? accent : accent.withValues(alpha: 0.5), width: 1.5)
+                    ? Border.all(
+                        color: isDark ? accent : accent.withValues(alpha: 0.5),
+                        width: 1.5,
+                      )
                     : null,
                 boxShadow: isSelected
                     ? [
@@ -330,7 +377,9 @@ class AppSidebar extends StatelessWidget {
                     size: 24,
                     color: isSelected
                         ? (isDark ? Colors.white : accent)
-                        : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
+                        : (isDark
+                              ? AppTheme.darkTextSecondary
+                              : AppTheme.lightTextSecondary),
                   ),
                   if (badgeCount != null && badgeCount > 0)
                     Positioned(
@@ -362,7 +411,9 @@ class AppSidebar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isDark ? accent.withValues(alpha: 0.25) : accent.withValues(alpha: 0.12))
+                ? (isDark
+                      ? accent.withValues(alpha: 0.25)
+                      : accent.withValues(alpha: 0.12))
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
@@ -398,7 +449,9 @@ class AppSidebar extends StatelessWidget {
                 size: 20,
                 color: isSelected
                     ? (isDark ? Colors.white : accent)
-                    : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
+                    : (isDark
+                          ? AppTheme.darkTextSecondary
+                          : AppTheme.lightTextSecondary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -409,7 +462,9 @@ class AppSidebar extends StatelessWidget {
                     fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                     color: isSelected
                         ? (isDark ? Colors.white : accent)
-                        : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextPrimary),
+                        : (isDark
+                              ? AppTheme.darkTextSecondary
+                              : AppTheme.lightTextPrimary),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -417,7 +472,10 @@ class AppSidebar extends StatelessWidget {
               ),
               if (badgeCount != null && badgeCount > 0) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: badgeColor ?? AppTheme.statusWarning,
                     borderRadius: BorderRadius.circular(10),

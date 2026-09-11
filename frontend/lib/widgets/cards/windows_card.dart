@@ -24,6 +24,7 @@ class WindowsCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
     final act = activation ?? WindowsActivationInfo.empty();
+    final showOriginalHome = windows.isHomeEdition;
     final isActivated = act.activated;
     final statusColor = isActivated
         ? const Color(0xFF10B981)
@@ -33,13 +34,16 @@ class WindowsCard extends StatelessWidget {
     return CardWrapper(
       icon: Icons.window_rounded,
       title: l10n.windowsInformation,
-      summarySubtitle: act.isGenuineOriginal
-          ? '${windows.edition} (${windows.architecture}) • ویندوز اورجینال'
-          : '${windows.edition} (${windows.architecture}) • $statusLabel',
+      summarySubtitle: showOriginalHome
+          ? '${windows.edition} (${windows.architecture}) • ویندوز اورجینال اصلی'
+          : '${windows.edition} (${windows.architecture}) • لایسنس ویندوز $statusLabel است',
       illustration: const WindowsIllustration(),
       iconColor: const Color(0xFF0284C7),
-      trailing: act.isGenuineOriginal
-          ? const GenuineOriginalBadge(compact: true, label: 'ویندوز اورجینال')
+      trailing: showOriginalHome
+          ? const GenuineOriginalBadge(
+              compact: true,
+              label: 'ویندوز اورجینال اصلی',
+            )
           : Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
@@ -51,7 +55,9 @@ class WindowsCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    isActivated ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                    isActivated
+                        ? Icons.check_circle_rounded
+                        : Icons.cancel_rounded,
                     size: 13,
                     color: statusColor,
                   ),
@@ -70,7 +76,7 @@ class WindowsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (act.isGenuineOriginal)
+          if (showOriginalHome)
             Container(
               width: double.infinity,
               margin: const EdgeInsets.only(bottom: 12),
@@ -78,13 +84,19 @@ class WindowsCard extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF10B981).withValues(alpha: isDark ? 0.18 : 0.1),
-                    const Color(0xFF059669).withValues(alpha: isDark ? 0.08 : 0.04),
+                    const Color(
+                      0xFF10B981,
+                    ).withValues(alpha: isDark ? 0.18 : 0.1),
+                    const Color(
+                      0xFF059669,
+                    ).withValues(alpha: isDark ? 0.08 : 0.04),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.4 : 0.25),
+                  color: const Color(
+                    0xFF10B981,
+                  ).withValues(alpha: isDark ? 0.4 : 0.25),
                 ),
               ),
               child: Row(
@@ -97,11 +109,13 @@ class WindowsCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      act.effectiveActivationSummaryFa,
+                      'نسخهٔ Home ویندوز؛ ویندوز اورجینال اصلی',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF065F46),
+                        color: isDark
+                            ? const Color(0xFF6EE7B7)
+                            : const Color(0xFF065F46),
                       ),
                     ),
                   ),

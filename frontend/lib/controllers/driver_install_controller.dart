@@ -6,6 +6,17 @@ import '../services/api_service.dart';
 import '../services/folder_picker_service.dart';
 import 'system_info_controller.dart';
 
+Set<String> toggledSelectAll(Set<String> current, Set<String> selectable) {
+  if (selectable.isEmpty) return Set<String>.from(current);
+  final result = Set<String>.from(current);
+  if (result.containsAll(selectable)) {
+    result.removeAll(selectable);
+  } else {
+    result.addAll(selectable);
+  }
+  return result;
+}
+
 class DriverInstallController extends GetxController {
   final ApiService _apiService = ApiService();
 
@@ -16,10 +27,14 @@ class DriverInstallController extends GetxController {
   final Rx<DriverScanResult> scanResult = DriverScanResult.empty().obs;
   final RxSet<String> selectedPackageIds = <String>{}.obs;
   final RxBool isAdvancedMode = false.obs;
-  final RxList<RemovableDriverSource> removableSources = <RemovableDriverSource>[].obs;
-  final RxList<ScannedDriverFile> scannedFiles = <ScannedDriverFile>[].obs; // For backwards compatibility
+  final RxList<RemovableDriverSource> removableSources =
+      <RemovableDriverSource>[].obs;
+  final RxList<ScannedDriverFile> scannedFiles =
+      <ScannedDriverFile>[].obs; // For backwards compatibility
 
   Timer? _pollTimer;
+  bool _pollInFlight = false;
+  int _scanGeneration = 0;
 
   @override
   void onInit() {
@@ -30,6 +45,7 @@ class DriverInstallController extends GetxController {
 
   @override
   void onClose() {
+    _scanGeneration++;
     _pollTimer?.cancel();
     super.onClose();
   }
@@ -37,7 +53,10 @@ class DriverInstallController extends GetxController {
   Future<void> _loadInitialConfig() async {
     try {
       final cfg = await _apiService.getDriverDirectoryConfig();
-      final path = cfg['resolved_path'] as String? ?? cfg['configured_path'] as String? ?? 'Drivers';
+      final path =
+          cfg['resolved_path'] as String? ??
+          cfg['configured_path'] as String? ??
+          'Drivers';
       driverFolder.value = path;
 
       final rawRemovables = cfg['removable_sources'] as List<dynamic>? ?? [];
@@ -73,21 +92,24 @@ class DriverInstallController extends GetxController {
     }
   }
 
-  void selectAllPackages() {
-    final pkgs = scanResult.value.packages;
-    // Select all installable packages that are matching
-    final installable = pkgs.where((p) {
-      final m = p.match;
-      if (m == null) return false;
-      return m.isMatched && m.recommendation == 'recommended';
-    }).map((p) => p.packageId);
+  Set<String> get installablePackageIds => scanResult.value.packages
+      .where((package) {
+        final match = package.match;
+        return match != null &&
+            match.isMatched &&
+            match.recommendation == 'recommended';
+      })
+      .map((package) => package.packageId)
+      .toSet();
 
-    if (installable.isEmpty) {
-      // Fallback: select all packages if none marked recommended
-      selectedPackageIds.addAll(pkgs.map((p) => p.packageId));
-    } else {
-      selectedPackageIds.addAll(installable);
-    }
+  bool get areAllInstallableSelected {
+    final ids = installablePackageIds;
+    return ids.isNotEmpty && selectedPackageIds.containsAll(ids);
+  }
+
+  void toggleSelectAllPackages() {
+    final ids = installablePackageIds;
+    selectedPackageIds.assignAll(toggledSelectAll(selectedPackageIds, ids));
   }
 
   void clearSelection() {
@@ -108,7 +130,10 @@ class DriverInstallController extends GetxController {
     }
   }
 
-  Future<void> selectRemovableSource(BuildContext context, RemovableDriverSource source) async {
+  Future<void> selectRemovableSource(
+    BuildContext context,
+    RemovableDriverSource source,
+  ) async {
     driverFolder.value = source.driverPath;
     await _apiService.setDriverDirectoryConfig(source.driverPath);
     if (context.mounted) {
@@ -117,6 +142,8 @@ class DriverInstallController extends GetxController {
   }
 
   Future<void> scanDrivers(BuildContext context, {String? folderPath}) async {
+    if (isBatchInstalling.value || isClosed) return;
+    final generation = ++_scanGeneration;
     final targetPath = folderPath ?? driverFolder.value;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
@@ -124,7 +151,10 @@ class DriverInstallController extends GetxController {
     selectedPackageIds.clear();
 
     try {
-      final result = await _apiService.intelligentScanDrivers(folderPath: targetPath);
+      final result = await _apiService.intelligentScanDrivers(
+        folderPath: targetPath,
+      );
+      if (isClosed || generation != _scanGeneration) return;
       scanResult.value = result;
 
       // Update removable sources if discovered
@@ -133,20 +163,28 @@ class DriverInstallController extends GetxController {
       }
 
       // Populate scannedFiles for backwards compatibility
-      scannedFiles.value = result.packages.map((p) => ScannedDriverFile(
-        filename: p.installerFile.isNotEmpty ? p.installerFile : p.displayName,
-        relativePath: p.relativePath,
-        fullPath: p.sourcePath,
-        type: p.packageType,
-        fileSizeDisplay: p.fileSizeDisplay,
-        installerType: p.installMethod,
-        autoInstallSupported: true,
-        isValid: true,
-      )).toList();
+      scannedFiles.value = result.packages
+          .map(
+            (p) => ScannedDriverFile(
+              filename: p.installerFile.isNotEmpty
+                  ? p.installerFile
+                  : p.displayName,
+              relativePath: p.relativePath,
+              fullPath: p.sourcePath,
+              type: p.packageType,
+              fileSizeDisplay: p.fileSizeDisplay,
+              installerType: p.installMethod,
+              autoInstallSupported: true,
+              isValid: true,
+            ),
+          )
+          .toList();
 
       // Auto-select recommended packages
       for (final p in result.packages) {
-        if (p.match != null && p.match!.isMatched && p.match!.recommendation == 'recommended') {
+        if (p.match != null &&
+            p.match!.isMatched &&
+            p.match!.recommendation == 'recommended') {
           selectedPackageIds.add(p.packageId);
         }
       }
@@ -166,6 +204,7 @@ class DriverInstallController extends GetxController {
         );
       }
     } catch (e) {
+      if (isClosed || generation != _scanGeneration) return;
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('خطا در اسکن درایورها: $e'),
@@ -174,7 +213,7 @@ class DriverInstallController extends GetxController {
         ),
       );
     } finally {
-      isScanning.value = false;
+      if (!isClosed && generation == _scanGeneration) isScanning.value = false;
     }
   }
 
@@ -199,12 +238,16 @@ class DriverInstallController extends GetxController {
     final confirmed = await _showInstallConfirmationDialog(
       context,
       title: 'تأیید نصب درایورهای انتخاب‌شده',
-      message: 'تعداد $selectedCount بسته درایور در صف نصب خودکار قرار خواهند گرفت.',
+      message:
+          'تعداد $selectedCount بسته درایور در صف نصب خودکار قرار خواهند گرفت.',
       packageIds: selectedPackageIds.toList(),
     );
 
     if (confirmed == true && context.mounted) {
-      await _executeDriverQueue(context, packageIds: selectedPackageIds.toList());
+      await _executeDriverQueue(
+        context,
+        packageIds: selectedPackageIds.toList(),
+      );
     }
   }
 
@@ -231,7 +274,8 @@ class DriverInstallController extends GetxController {
     final confirmed = await _showInstallConfirmationDialog(
       context,
       title: 'تأیید نصب همه درایورها',
-      message: 'تمامی بسته‌های معتبر و سازگار (${targetList.length} بسته) به ترتیب در صف نصب قرار خواهند گرفت.',
+      message:
+          'تمامی بسته‌های معتبر و سازگار (${targetList.length} بسته) به ترتیب در صف نصب قرار خواهند گرفت.',
       packageIds: targetList.map((p) => p.packageId).toList(),
     );
 
@@ -250,7 +294,9 @@ class DriverInstallController extends GetxController {
     required List<String> packageIds,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pkgs = scanResult.value.packages.where((p) => packageIds.contains(p.packageId)).toList();
+    final pkgs = scanResult.value.packages
+        .where((p) => packageIds.contains(p.packageId))
+        .toList();
 
     return showDialog<bool>(
       context: context,
@@ -265,7 +311,11 @@ class DriverInstallController extends GetxController {
                 color: const Color(0xFF0D9488).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.extension_rounded, color: Color(0xFF0D9488), size: 24),
+              child: const Icon(
+                Icons.extension_rounded,
+                color: Color(0xFF0D9488),
+                size: 24,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -274,7 +324,9 @@ class DriverInstallController extends GetxController {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                  color: isDark
+                      ? const Color(0xFFF1F5F9)
+                      : const Color(0xFF0F172A),
                 ),
               ),
             ),
@@ -291,7 +343,9 @@ class DriverInstallController extends GetxController {
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+                  color: isDark
+                      ? const Color(0xFFE2E8F0)
+                      : const Color(0xFF1E293B),
                 ),
               ),
               const SizedBox(height: 12),
@@ -299,27 +353,43 @@ class DriverInstallController extends GetxController {
                 constraints: const BoxConstraints(maxHeight: 220),
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                  color: isDark
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFFE2E8F0),
+                  ),
                 ),
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: pkgs.length,
-                  separatorBuilder: (context, index) => const Divider(height: 8),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 8),
                   itemBuilder: (_, idx) {
                     final p = pkgs[idx];
                     return Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0D9488).withValues(alpha: 0.15),
+                            color: const Color(
+                              0xFF0D9488,
+                            ).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             p.categoryFa,
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0D9488),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -329,14 +399,21 @@ class DriverInstallController extends GetxController {
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                              color: isDark
+                                  ? const Color(0xFFCBD5E1)
+                                  : const Color(0xFF334155),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Text(
                           p.fileSizeDisplay,
-                          style: TextStyle(fontSize: 11, color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark
+                                ? const Color(0xFF64748B)
+                                : const Color(0xFF94A3B8),
+                          ),
                         ),
                       ],
                     );
@@ -352,12 +429,19 @@ class DriverInstallController extends GetxController {
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.shield_outlined, size: 18, color: Color(0xFF0D9488)),
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 18,
+                      color: Color(0xFF0D9488),
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'نصب با دسترسی Administrator و ترتیب اولویت استاندارد (چیپست، شبکه، صدا، گرافیک) انجام خواهد شد.',
-                        style: TextStyle(fontSize: 11.5, color: Color(0xFF0D9488)),
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: Color(0xFF0D9488),
+                        ),
                       ),
                     ),
                   ],
@@ -377,7 +461,9 @@ class DriverInstallController extends GetxController {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0D9488),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             label: Text('شروع صف نصب (${pkgs.length})'),
           ),
@@ -386,7 +472,10 @@ class DriverInstallController extends GetxController {
     );
   }
 
-  Future<void> _executeDriverQueue(BuildContext context, {List<String>? packageIds}) async {
+  Future<void> _executeDriverQueue(
+    BuildContext context, {
+    List<String>? packageIds,
+  }) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     isBatchInstalling.value = true;
 
@@ -399,7 +488,9 @@ class DriverInstallController extends GetxController {
       if (res['success'] == true) {
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(res['message'] as String? ?? 'صف نصب درایورها شروع شد...'),
+            content: Text(
+              res['message'] as String? ?? 'صف نصب درایورها شروع شد...',
+            ),
             backgroundColor: const Color(0xFF0D9488),
             duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
@@ -410,7 +501,9 @@ class DriverInstallController extends GetxController {
         isBatchInstalling.value = false;
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(res['message'] as String? ?? 'خطا در شروع صف نصب درایورها.'),
+            content: Text(
+              res['message'] as String? ?? 'خطا در شروع صف نصب درایورها.',
+            ),
             backgroundColor: const Color(0xFFEF4444),
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
@@ -431,9 +524,14 @@ class DriverInstallController extends GetxController {
 
   void _startDriverBatchPolling(ScaffoldMessengerState? scaffoldMessenger) {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
+      timer,
+    ) async {
+      if (_pollInFlight || isClosed) return;
+      _pollInFlight = true;
       try {
         final status = await _apiService.getDriverQueueStatus();
+        if (isClosed || timer != _pollTimer) return;
         batchStatus.value = status;
 
         if (!status.isRunning) {
@@ -444,17 +542,32 @@ class DriverInstallController extends GetxController {
           try {
             if (Get.isRegistered<SystemInfoController>()) {
               if (status.completed > 0) {
-                Get.find<SystemInfoController>().recordDriverInstall(status.completed);
+                Get.find<SystemInfoController>().recordDriverInstall(
+                  status.completed,
+                );
               }
-              Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
+              Get.find<SystemInfoController>().fetchSystemInfo(
+                forceRefresh: true,
+              );
             }
           } catch (_) {}
 
           // Rescan driver folder to update UI badges
           if (driverFolder.value.isNotEmpty) {
-            _apiService.intelligentScanDrivers(folderPath: driverFolder.value).then((res) {
-              scanResult.value = res;
-            });
+            final folder = driverFolder.value;
+            final generation = _scanGeneration;
+            _apiService
+                .intelligentScanDrivers(folderPath: folder)
+                .then((res) {
+                  if (!isClosed &&
+                      generation == _scanGeneration &&
+                      folder == driverFolder.value) {
+                    scanResult.value = res;
+                  }
+                })
+                .catchError((Object error) {
+                  debugPrint('[DriverInstallController] Rescan failed: $error');
+                });
           }
 
           if (scaffoldMessenger != null && status.summaryMessage.isNotEmpty) {
@@ -477,6 +590,8 @@ class DriverInstallController extends GetxController {
         }
       } catch (e) {
         debugPrint('[DriverInstallController] Queue poll error: $e');
+      } finally {
+        _pollInFlight = false;
       }
     });
   }
@@ -499,7 +614,11 @@ class DriverInstallController extends GetxController {
                 color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.restart_alt_rounded, color: Color(0xFFF59E0B), size: 24),
+              child: const Icon(
+                Icons.restart_alt_rounded,
+                color: Color(0xFFF59E0B),
+                size: 24,
+              ),
             ),
             const SizedBox(width: 12),
             Text(
@@ -507,13 +626,15 @@ class DriverInstallController extends GetxController {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                color: isDark
+                    ? const Color(0xFFF1F5F9)
+                    : const Color(0xFF0F172A),
               ),
             ),
           ],
         ),
         content: Text(
-          'برای اعمال کامل درایورهای نصب‌شده، سیستم‌عامل ویندوز نیازمند راه‌اندازی مجدد (Restart) است.\nآیا مایلید سیستم هم‌اکنون ری‌استارت شود؟',
+          'نصب‌ها تمام شد. برای اعمال کامل درایورها، بعداً سیستم را به‌صورت دستی ری‌استارت کنید.\n\nیادتان نرود پیش از تحویل دستگاه این کار را انجام دهید.',
           style: TextStyle(
             fontSize: 13.5,
             height: 1.6,
@@ -521,21 +642,9 @@ class DriverInstallController extends GetxController {
           ),
         ),
         actions: [
-          OutlinedButton(
+          FilledButton(
             onPressed: () => Navigator.of(dialogCtx).pop(),
-            child: const Text('بعداً ری‌استارت شود'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.of(dialogCtx).pop();
-              _apiService.restartSystem(delaySeconds: 5, reason: 'اعمال درایورهای نصب‌شده');
-            },
-            icon: const Icon(Icons.restart_alt_rounded, size: 16),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF59E0B),
-              foregroundColor: Colors.white,
-            ),
-            label: const Text('راه‌اندازی مجدد هم‌اکنون'),
+            child: const Text('متوجه شدم؛ بعداً ری‌استارت می‌کنم'),
           ),
         ],
       ),
@@ -565,7 +674,10 @@ class DriverInstallController extends GetxController {
     }
   }
 
-  Future<void> installSingleDriverAuto(BuildContext context, IntelligentDriverPackage pkg) async {
+  Future<void> installSingleDriverAuto(
+    BuildContext context,
+    IntelligentDriverPackage pkg,
+  ) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     isBatchInstalling.value = true;
     try {
@@ -607,16 +719,30 @@ class DriverInstallController extends GetxController {
     }
   }
 
-  Future<void> installSingleDriverInteractive(BuildContext context, IntelligentDriverPackage pkg) async {
+  Future<void> installSingleDriverInteractive(
+    BuildContext context,
+    IntelligentDriverPackage pkg,
+  ) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     try {
-      final res = await _apiService.installDriverInteractive(pkg.packageId, folderPath: driverFolder.value);
+      final res = await _apiService.installDriverInteractive(
+        pkg.packageId,
+        folderPath: driverFolder.value,
+      );
       final ok = res['success'] == true;
       final msg = res['message'] as String? ?? '';
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text(msg.isNotEmpty ? msg : (ok ? 'پنجره نصب با موفقیت باز شد.' : 'خطا در باز کردن نصاب.')),
-          backgroundColor: ok ? const Color(0xFF2563EB) : const Color(0xFFEF4444),
+          content: Text(
+            msg.isNotEmpty
+                ? msg
+                : (ok
+                      ? 'پنجره نصب با موفقیت باز شد.'
+                      : 'خطا در باز کردن نصاب.'),
+          ),
+          backgroundColor: ok
+              ? const Color(0xFF2563EB)
+              : const Color(0xFFEF4444),
           duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
         ),
@@ -636,10 +762,16 @@ class DriverInstallController extends GetxController {
     }
   }
 
-  Future<void> openPackageFolder(BuildContext context, IntelligentDriverPackage pkg) async {
+  Future<void> openPackageFolder(
+    BuildContext context,
+    IntelligentDriverPackage pkg,
+  ) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     try {
-      final res = await _apiService.openDriverFolder(pkg.packageId, folderPath: driverFolder.value);
+      final res = await _apiService.openDriverFolder(
+        pkg.packageId,
+        folderPath: driverFolder.value,
+      );
       if (res['success'] != true) {
         scaffoldMessenger.showSnackBar(
           SnackBar(
@@ -662,7 +794,9 @@ class DriverInstallController extends GetxController {
 
   Future<void> installSelectedDriversManual(BuildContext context) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final selected = scanResult.value.packages.where((p) => selectedPackageIds.contains(p.packageId)).toList();
+    final selected = scanResult.value.packages
+        .where((p) => selectedPackageIds.contains(p.packageId))
+        .toList();
     if (selected.isEmpty) {
       scaffoldMessenger.showSnackBar(
         const SnackBar(
@@ -679,7 +813,10 @@ class DriverInstallController extends GetxController {
     int launched = 0;
     for (final pkg in selected) {
       try {
-        final res = await _apiService.installDriverInteractive(pkg.packageId, folderPath: driverFolder.value);
+        final res = await _apiService.installDriverInteractive(
+          pkg.packageId,
+          folderPath: driverFolder.value,
+        );
         if (res['success'] == true) {
           launched++;
         }
@@ -699,4 +836,3 @@ class DriverInstallController extends GetxController {
     }
   }
 }
-

@@ -2,7 +2,9 @@ import 'dart:io';
 
 class FolderPickerService {
   /// Opens a native Windows FolderBrowserDialog to let user select any folder on any drive.
-  static Future<String?> pickFolder({String title = 'انتخاب پوشه مورد نظر'}) async {
+  static Future<String?> pickFolder({
+    String title = 'انتخاب پوشه مورد نظر',
+  }) async {
     try {
       final safeTitle = title.replaceAll("'", "''");
       final result = await Process.run('powershell.exe', [

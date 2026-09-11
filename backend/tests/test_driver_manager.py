@@ -179,11 +179,10 @@ RTL8168.DeviceDesc="Realtek PCIe GbE Family Controller"
             "hardware_ids": ["PCI\\VEN_10EC&DEV_8168&SUBSYS_5678"],
         }
         unique, dups = deduplicate_driver_packages([pkg1, pkg2])
-        self.assertEqual(len(unique), 1)
-        self.assertEqual(len(dups), 1)
-        # Higher version (v11) must be preserved as active
-        self.assertEqual(unique[0]["package_id"], "pkg_lan_v11")
-        self.assertEqual(dups[0]["package_id"], "pkg_lan_v10")
+        # Different subsystem IDs are not duplicate packages, even when the
+        # vendor/device prefix is equal. Both must remain available.
+        self.assertEqual(len(unique), 2)
+        self.assertEqual(len(dups), 0)
 
     # -------------------------------------------------------------------------
     # Test G: Already installed (Up to date skip)
@@ -350,4 +349,3 @@ RTL8168.DeviceDesc="Realtek PCIe GbE Family Controller"
 
 if __name__ == "__main__":
     unittest.main()
-

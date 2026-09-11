@@ -117,7 +117,6 @@ class AppHeader extends StatelessWidget {
                             : (isDark
                                   ? const Color(0xFFCBD5E1)
                                   : const Color(0xFF64748B)),
-
                       ),
                     ),
                   ],
@@ -154,7 +153,7 @@ class AppHeader extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
                     color: const Color(
@@ -165,8 +164,7 @@ class AppHeader extends StatelessWidget {
                   ),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+              child: ClipOval(
                 child: Image.asset(
                   'assets/logo/camputermarkazi.png',
                   fit: BoxFit.contain,
@@ -178,7 +176,7 @@ class AppHeader extends StatelessWidget {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(12),
+                      shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.computer_rounded,

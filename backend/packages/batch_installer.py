@@ -6,11 +6,12 @@ Each package is installed silently, verified via registry, and progress is track
 """
 
 import logging
+import copy
 import threading
 import time
 from typing import Dict, Any, List, Optional
 
-from packages.manager import scan_packages, silent_install_package
+from packages.manager import scan_packages, silent_install_package, _is_windows_update_blocker
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ _batch_state: Dict[str, Any] = {
     "completed": 0,
     "failed": 0,
     "skipped": 0,
+    "reboot_required": False,
     "current_item_name": None,
     "current_item_index": 0,
     "progress_percent": 0.0,
@@ -44,6 +46,7 @@ def _reset_state():
         "completed": 0,
         "failed": 0,
         "skipped": 0,
+        "reboot_required": False,
         "current_item_name": None,
         "current_item_index": 0,
         "progress_percent": 0.0,
@@ -103,6 +106,8 @@ def _run_batch_install(package_ids: List[str], custom_dir: Optional[str] = None)
             item["message"] = result.get("message", "")
             item["installed_version"] = result.get("installed_version", "")
             item["exit_code"] = result.get("exit_code", -1)
+            _batch_state["reboot_required"] = (
+                _batch_state["reboot_required"] or bool(result.get("reboot_required")))
 
             if result.get("skipped"):
                 item["status"] = "skipped"
@@ -116,6 +121,14 @@ def _run_batch_install(package_ids: List[str], custom_dir: Optional[str] = None)
 
             _batch_state["progress_percent"] = round(((idx + 1) / _batch_state["total"]) * 100, 1)
 
+        if result.get("exit_code") == -2:
+            with _batch_lock:
+                _batch_state["cancelled"] = True
+                for pending in _batch_state["items"][idx + 1:]:
+                    pending["status"] = "skipped"
+                    pending["message"] = "نصاب قبلی هنوز ممکن است فعال باشد؛ صف برای بررسی دستی متوقف شد."
+                    _batch_state["skipped"] += 1
+            break
         time.sleep(0.5)
 
     # Finalize
@@ -137,6 +150,8 @@ def _run_batch_install(package_ids: List[str], custom_dir: Optional[str] = None)
             _batch_state["summary_message"] = f"✓ تمام {completed} نرم‌افزار با موفقیت نصب شد! (در {elapsed} ثانیه)"
         else:
             _batch_state["summary_message"] = f"نصب خودکار تکمیل شد: {completed} موفق، {failed} ناموفق، {skipped} رد شده (در {elapsed} ثانیه)"
+        if completed > 0 or _batch_state["reboot_required"]:
+            _batch_state["summary_message"] += " — یادتان نرود پس از پایان همهٔ کارها، سیستم را دستی ری‌استارت کنید."
 
     logger.info(f"[BatchInstall] Batch complete: {_batch_state['summary_message']}")
 
@@ -168,17 +183,32 @@ def start_batch_install(package_ids: Optional[List[str]] = None, custom_dir: Opt
             pid_clean = pid.strip().replace("\\", "/").lower()
             for pkg in all_packages:
                 if pid_clean in [pkg["id"].lower(), pkg.get("relative_path", "").lower(), pkg.get("filename", "").lower()]:
-                    if pkg.get("is_valid") and (pkg.get("auto_install_supported") or pkg.get("installer_type") == "office_cmd"):
+                    if pkg.get("is_valid") and (
+                        pkg.get("auto_install_supported")
+                        or pkg.get("installer_type") == "office_cmd"
+                        or _is_windows_update_blocker(pkg)
+                    ):
                         target_packages.append(pkg)
                     break
     else:
         target_packages = [
             p for p in all_packages
-            if p.get("install_allowed")
-            and p.get("auto_install_supported")
+            if (p.get("install_allowed") or _is_windows_update_blocker(p))
+            and (p.get("auto_install_supported") or _is_windows_update_blocker(p))
             and p.get("is_valid")
-            and not p.get("is_installed")
+            and (not p.get("is_installed") or _is_windows_update_blocker(p))
         ]
+
+    # WUB is a deployment finishing action, not a conventional installer. If
+    # it exists in the source, include it exactly once at the end of every
+    # automatic deployment. The package manager enforces the Windows Home guard.
+    if target_packages and not any(_is_windows_update_blocker(p) for p in target_packages):
+        blocker = next(
+            (p for p in all_packages if p.get("is_valid") and _is_windows_update_blocker(p)),
+            None,
+        )
+        if blocker is not None:
+            target_packages.append(blocker)
 
     if not target_packages:
         return {
@@ -186,14 +216,24 @@ def start_batch_install(package_ids: Optional[List[str]] = None, custom_dir: Opt
             "message": "هیچ نصاب معتبرِ قابل نصب خودکاری یافت نشد؛ موارد ناشناخته را با نصب دستی بررسی کنید.",
         }
 
-    # Queue reordering: All regular applications install first; Microsoft Office installs at the VERY END!
-    normal_pkgs = [p for p in target_packages if p.get("installer_type") != "office_cmd" and "office" not in p.get("id", "").lower()]
+    # Queue reordering: regular applications, Office, then the WUB deployment action.
+    normal_pkgs = [p for p in target_packages if p.get("installer_type") != "office_cmd" and "office" not in p.get("id", "").lower() and not _is_windows_update_blocker(p)]
     office_pkgs = [p for p in target_packages if p.get("installer_type") == "office_cmd" or "office" in p.get("id", "").lower()]
-    target_packages = normal_pkgs + office_pkgs
-
-    _reset_state()
+    update_blockers = [p for p in target_packages if _is_windows_update_blocker(p)]
+    if update_blockers:
+        # The official archive contains x86 and x64 executables. Run exactly
+        # one, preferring x64 on the supported 64-bit Windows target.
+        update_blockers.sort(
+            key=lambda p: "x64" in str(p.get("filename", "")).lower(),
+            reverse=True,
+        )
+        update_blockers = update_blockers[:1]
+    target_packages = normal_pkgs + office_pkgs + update_blockers
 
     with _batch_lock:
+        if _batch_state["is_running"]:
+            return {"success": False, "message": "صف نصب نرم‌افزارها در حال اجراست."}
+        _reset_state()
         _batch_state["is_running"] = True
         _batch_state["cancelled"] = False
         _batch_state["total"] = len(target_packages)
@@ -232,7 +272,7 @@ def start_batch_install(package_ids: Optional[List[str]] = None, custom_dir: Opt
 def get_batch_status() -> Dict[str, Any]:
     """Returns current batch install progress and status."""
     with _batch_lock:
-        return dict(_batch_state)
+        return copy.deepcopy(_batch_state)
 
 
 def cancel_batch_install() -> Dict[str, Any]:

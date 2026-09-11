@@ -1,5 +1,6 @@
 ﻿import unittest
 import os
+from unittest.mock import patch
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import tempfile
@@ -10,6 +11,12 @@ from packages.batch_installer import start_batch_install, cancel_batch_install, 
 
 class TestOfficeAutomation(unittest.TestCase):
     def setUp(self):
+        thread_patch = patch("packages.batch_installer.threading.Thread")
+        thread_patch.start()
+        self.addCleanup(thread_patch.stop)
+        from packages.batch_installer import _reset_state
+        _reset_state()
+        self.addCleanup(_reset_state)
         self.temp_dir = tempfile.mkdtemp()
         self.office_dir = os.path.join(self.temp_dir, "Microsoft Office 2019-2024 Pro Plus 2509")
         os.makedirs(self.office_dir, exist_ok=True)

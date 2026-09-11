@@ -4,9 +4,11 @@
 
 #include "flutter_window.h"
 #include "utils.h"
+#include "startup_log.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  LogStartup("Starting Markazi System Checker");
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
@@ -28,6 +30,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 780);
   if (!window.Create(L"Markazi System Checker", origin, size)) {
+    LogStartup("Native window creation failed");
+    MessageBoxW(nullptr, L"Unable to initialize the application window.\n"
+        L"Check the graphics driver and the startup.log in\n"
+        L"%LOCALAPPDATA%\\MarkaziSystemChecker\\logs.",
+        L"Markazi System Checker", MB_OK | MB_ICONERROR);
+    ::CoUninitialize();
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
@@ -37,9 +45,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
   }
-
-  // Terminate backend processes on exit completely silently without console window
-  WinExec("taskkill.exe /F /IM backend_server.exe /T", SW_HIDE);
 
   ::CoUninitialize();
   return EXIT_SUCCESS;

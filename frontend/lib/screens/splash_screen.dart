@@ -1,330 +1,312 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../controllers/theme_language_controller.dart';
+import '../controllers/startup_controller.dart';
 import '../main.dart';
-import '../services/backend_process_manager.dart';
-import '../widgets/splash/splash_assembly.dart';
-import '../widgets/splash/splash_brand_text.dart';
-import '../widgets/splash/splash_logo.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
-
+  const SplashScreen({super.key, this.connect, this.onReady});
+  final Future<bool> Function()? connect;
+  final VoidCallback? onReady;
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _animController;
-  bool _backendReady = false;
-  bool _animationCompleted = false;
-  bool _hasNavigated = false;
+  late final AnimationController _animation;
+  late final StartupController _startup;
+  late final Worker _statusWorker;
+  Timer? _minimumTimer;
+  bool _minimumElapsed = false;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
-
-    // Core ~4.0 second animation sequence
-    _animController = AnimationController(
+    _startup = StartupController(connect: widget.connect);
+    _animation = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 4000),
-    );
-
-    _animController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _animationCompleted = true;
-        _checkAndNavigate();
-      }
+      duration: const Duration(seconds: 4),
+    )..forward();
+    _statusWorker = ever(_startup.status, (_) => _navigateIfReady());
+    _minimumTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() => _minimumElapsed = true);
+      _navigateIfReady();
     });
-
-    _animController.forward();
-
-    // Warm up and verify backend in parallel with the splash animation
-    _initBackend();
+    unawaited(_startup.connect());
   }
 
-  Future<void> _initBackend() async {
-    try {
-      final ready = await BackendProcessManager.ensureBackendRunning();
-      if (mounted) {
-        setState(() {
-          _backendReady = ready;
-        });
-        _checkAndNavigate();
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _backendReady = true; // Proceed anyway on error so user is never stuck
-        });
-        _checkAndNavigate();
-      }
+  void _navigateIfReady() {
+    if (_startup.status.value == StartupStatus.ready) _continue();
+  }
+
+  void _continue() {
+    if (!mounted || !_minimumElapsed || _navigated) return;
+    _navigated = true;
+    if (widget.onReady != null) {
+      widget.onReady!();
+      return;
     }
-  }
-
-  void _checkAndNavigate() {
-    if (_hasNavigated || !mounted) return;
-
-    // Transition when animation sequence has reached completion AND backend is ready
-    if (_animationCompleted && _backendReady) {
-      _navigateToDashboard();
-    }
-  }
-
-  void _navigateToDashboard() {
-    if (_hasNavigated || !mounted) return;
-    _hasNavigated = true;
-
     Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            const DashboardScreen(),
-        transitionDuration: const Duration(milliseconds: 550),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeInOutCubic,
-          );
-          return FadeTransition(
-            opacity: curved,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
-              child: child,
-            ),
-          );
-        },
-      ),
+      MaterialPageRoute<void>(builder: (_) => const DashboardScreen()),
     );
-  }
-
-  void _skipSplash() {
-    _navigateToDashboard();
   }
 
   @override
   void dispose() {
-    _animController.dispose();
+    _minimumTimer?.cancel();
+    _statusWorker.dispose();
+    _startup.onDelete();
+    _animation.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    Color accentColor = const Color(0xFF00E5FF);
-    bool isPersian = true;
-
-    try {
-      if (Get.isRegistered<ThemeLanguageController>()) {
-        final ctrl = Get.find<ThemeLanguageController>();
-        accentColor = ctrl.currentAccentColor;
-        isPersian = ctrl.currentLocale.value.languageCode == 'fa';
-      }
-    } catch (_) {}
-
+    final colors = Theme.of(context).colorScheme;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF070B14),
-      body: Stack(
-        children: [
-          // 1. Technical Circuit & Ambient Background Painter
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _TechnicalBackgroundPainter(accentColor: accentColor),
-            ),
-          ),
-
-          // 2. Main Centered Animated Visual Sequence
-          Center(
-            child: AnimatedBuilder(
-              animation: _animController,
-              builder: (context, _) {
-                final progress = _animController.value;
-
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Visual Assembly & Logo Stage
-                    SizedBox(
-                      width: 400,
-                      height: 320,
-                      child: Stack(
-                        alignment: Alignment.center,
+      backgroundColor: colors.surface,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedBuilder(
+                    animation: _animation,
+                    builder: (context, _) {
+                      final progress = reducedMotion ? 1.0 : _animation.value;
+                      final entrance = Curves.easeOutCubic.transform(
+                        (progress / 0.3).clamp(0.0, 1.0),
+                      );
+                      final pulse = reducedMotion
+                          ? 0.5
+                          : (math.sin(progress * math.pi * 5) + 1) / 2;
+                      return Column(
                         children: [
-                          // 0.0s to 2.1s: Hardware Components Assembly
-                          SplashAssemblyWidget(
-                            progress: progress,
-                            accentColor: accentColor,
+                          Opacity(
+                            opacity: entrance,
+                            child: SizedBox(
+                              width: 156,
+                              height: 156,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Container(
+                                    width: 148,
+                                    height: 148,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: colors.primary.withValues(
+                                            alpha: 0.10 + pulse * 0.08,
+                                          ),
+                                          blurRadius: 24 + pulse * 10,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Transform.rotate(
+                                    angle: reducedMotion
+                                        ? 0
+                                        : progress * math.pi * 1.2,
+                                    child: Container(
+                                      width: 142,
+                                      height: 142,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: colors.primary.withValues(
+                                            alpha: 0.22,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Align(
+                                        alignment: Alignment.topCenter,
+                                        child: Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            color: colors.primary,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Transform.scale(
+                                    scale: 0.88 + 0.12 * entrance,
+                                    child: Container(
+                                      width: 118,
+                                      height: 118,
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: colors.surface,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: colors.primary.withValues(
+                                            alpha: 0.16,
+                                          ),
+                                        ),
+                                      ),
+                                      child: ClipOval(
+                                        child: Image.asset(
+                                          'assets/logo/camputermarkazi.png',
+                                          semanticLabel: 'لوگوی مارکازی',
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Icon(
+                                            Icons.computer_rounded,
+                                            size: 82,
+                                            color: colors.primary,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-
-                          // 2.1s to 4.0s: Markazi Logo Reveal & Shimmer
-                          SplashLogoWidget(
-                            progress: progress,
-                            accentColor: accentColor,
+                          const SizedBox(height: 26),
+                          Semantics(
+                            label: 'مرکزی سیستم چکر',
+                            excludeSemantics: true,
+                            child: Directionality(
+                              textDirection: TextDirection.rtl,
+                              child: Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: 8,
+                                children: List.generate(3, (index) {
+                                  final phase = Curves.easeOutBack.transform(
+                                    ((progress - 0.18 - index * 0.13) / 0.28)
+                                        .clamp(0.0, 1.0),
+                                  );
+                                  return Opacity(
+                                    opacity: phase.clamp(0.0, 1.0),
+                                    child: Transform.translate(
+                                      offset: Offset(
+                                        (1 - phase) * (index - 1) * 28,
+                                        (1 - phase) * 14,
+                                      ),
+                                      child: Transform.scale(
+                                        scale: 0.92 + phase * 0.08,
+                                        child: Text(
+                                          ['مرکزی', 'سیستم', 'چکر'][index],
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .headlineSmall
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: -0.4,
+                                              ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Opacity(
+                            opacity: Curves.easeOut.transform(
+                              ((progress - 0.58) / 0.18).clamp(0.0, 1.0),
+                            ),
+                            child: Text(
+                              'Markazi System Checker',
+                              textDirection: TextDirection.ltr,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                    letterSpacing: 0.4,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Container(
+                            width: 176,
+                            height: 4,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: colors.primary.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            alignment: Alignment.centerLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: Curves.easeInOutCubic.transform(
+                                progress,
+                              ),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      colors.primary.withValues(alpha: 0.55),
+                                      colors.primary,
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                              ),
+                            ),
                           ),
                         ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // 3.0s to 4.0s: Typography Brand Reveal
-                    SizedBox(
-                      height: 80,
-                      child: SplashBrandTextWidget(
-                        progress: progress,
-                        accentColor: accentColor,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-
-          // 3. Subtle Status indicator (only if backend takes longer than 4.0s)
-          Positioned(
-            bottom: 24,
-            left: 0,
-            right: 0,
-            child: AnimatedBuilder(
-              animation: _animController,
-              builder: (context, _) {
-                if (_animationCompleted && !_backendReady) {
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.0,
-                          valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        isPersian
-                            ? 'در حال اتصال به سرویس هوشمند...'
-                            : 'Connecting to backend...',
-                        style: TextStyle(
-                          fontFamily: 'Vazirmatn',
-                          fontSize: 12,
-                          color: Colors.white.withValues(alpha: 0.65),
-                        ),
-                      ),
-                    ],
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-          ),
-
-          // 4. Subtle Accessible Skip Button (Top Corner)
-          Positioned(
-            top: 20,
-            left: isPersian ? null : 20,
-            right: isPersian ? 20 : null,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: _skipSplash,
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 7,
+                      );
+                    },
                   ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.12),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        isPersian ? 'رد کردن' : 'Skip',
-                        style: TextStyle(
-                          fontFamily: 'Vazirmatn',
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white.withValues(alpha: 0.75),
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Icon(
-                        isPersian
-                            ? Icons.chevron_left_rounded
-                            : Icons.chevron_right_rounded,
-                        size: 16,
-                        color: Colors.white.withValues(alpha: 0.75),
-                      ),
-                    ],
-                  ),
-                ),
+                  const SizedBox(height: 40),
+                  Obx(() {
+                    final status = _startup.status.value;
+                    if (status == StartupStatus.failed) {
+                      return Column(
+                        children: [
+                          const Icon(Icons.error_outline_rounded),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'سرویس برنامه آماده نشد. می‌توانید دوباره تلاش کنید یا برای بررسی خطا وارد برنامه شوید.',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: _startup.connect,
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('تلاش مجدد'),
+                              ),
+                              OutlinedButton(
+                                onPressed: _minimumElapsed ? _continue : null,
+                                child: const Text('ورود برای بررسی'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    }
+                    return Text(
+                      status == StartupStatus.ready
+                          ? 'آمادهٔ شروع'
+                          : 'در حال آماده‌سازی برنامه…',
+                      textAlign: TextAlign.center,
+                    );
+                  }),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
-  }
-}
-
-class _TechnicalBackgroundPainter extends CustomPainter {
-  final Color accentColor;
-
-  _TechnicalBackgroundPainter({required this.accentColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // 1. Deep radial gradient background
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final bgPaint = Paint()
-      ..shader = RadialGradient(
-        center: Alignment.center,
-        radius: 0.95,
-        colors: [
-          const Color(0xFF0E1726),
-          const Color(0xFF070B14),
-        ],
-      ).createShader(rect);
-
-    canvas.drawRect(rect, bgPaint);
-
-    // 2. Extremely subtle technical grid dots
-    final dotPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.035)
-      ..style = PaintingStyle.fill;
-
-    const double step = 44.0;
-    for (double x = step / 2; x < size.width; x += step) {
-      for (double y = step / 2; y < size.height; y += step) {
-        canvas.drawCircle(Offset(x, y), 0.9, dotPaint);
-      }
-    }
-
-    // 3. Subtle soft ambient center glow
-    final centerGlow = Paint()
-      ..shader = RadialGradient(
-        center: Alignment.center,
-        radius: 0.45,
-        colors: [
-          accentColor.withValues(alpha: 0.06),
-          Colors.transparent,
-        ],
-      ).createShader(rect);
-
-    canvas.drawRect(rect, centerGlow);
-  }
-
-  @override
-  bool shouldRepaint(covariant _TechnicalBackgroundPainter oldDelegate) {
-    return oldDelegate.accentColor != accentColor;
   }
 }

@@ -11,6 +11,7 @@ import ctypes
 from ctypes import wintypes
 import subprocess
 import logging
+import re
 from typing import Dict, Any, Optional, List
 import sys
 
@@ -44,14 +45,30 @@ CONFIG_FILE = os.path.join(REPO_ROOT, "config", "activation.json")
 DEFAULT_TOOLS_DIR = os.path.abspath(os.path.join(REPO_ROOT, "Tools"))
 
 def is_safe_tool_path(tool_path: str) -> bool:
-    """Validates that tool path exists and is a supported script/binary."""
-    if not tool_path:
+    """Allow executable tools only inside the bundled or user-selected KMS folder."""
+    if not tool_path or not tool_path.strip():
         return False
-    abs_p = os.path.abspath(tool_path)
+    abs_p = os.path.realpath(os.path.abspath(tool_path))
     if not os.path.isfile(abs_p):
         return False
     ext = os.path.splitext(abs_p)[1].lower()
-    return ext in [".cmd", ".bat", ".ps1", ".exe"]
+    if ext not in [".cmd", ".bat", ".ps1", ".exe"]:
+        return False
+
+    allowed_roots = [os.path.realpath(DEFAULT_TOOLS_DIR)]
+    custom_dir = get_activation_config().get("customToolsDir")
+    if custom_dir and os.path.isdir(custom_dir):
+        allowed_roots.append(os.path.realpath(os.path.abspath(custom_dir)))
+
+    candidate = os.path.normcase(abs_p)
+    for root in allowed_roots:
+        try:
+            if os.path.commonpath([candidate, os.path.normcase(root)]) == os.path.normcase(root):
+                return True
+        except ValueError:
+            # Different Windows drives cannot share a common path.
+            continue
+    return False
 
 
 # Win32 Constants for ShellExecuteExW
@@ -321,6 +338,16 @@ def execute_activation_tool(target: str, timeout_seconds: int = 180) -> Dict[str
         }
 
     abs_tool_path = status["absolute_path"]
+    if not is_safe_tool_path(abs_tool_path):
+        logger.error("Rejected activation tool outside the authorized tools directory: %s", abs_tool_path)
+        return {
+            "success": False,
+            "cancelled": False,
+            "exit_code": -1,
+            "output": "",
+            "error": "Activation tool path is outside the authorized tools directory.",
+            "message": "مسیر ابزار فعال‌سازی مجاز نیست.",
+        }
     work_dir = os.path.dirname(abs_tool_path)
     args_list = status.get("arguments", [])
     args_str = " ".join(f'"{a}"' if " " in str(a) else str(a) for a in args_list)
@@ -332,7 +359,11 @@ def execute_activation_tool(target: str, timeout_seconds: int = 180) -> Dict[str
     if ext in [".cmd", ".bat"]:
         executable = "cmd.exe"
         log_redirect = f' > "{log_file}" 2>&1'
-        parameters = f'/c ""{abs_tool_path}" {args_str}{log_redirect}"'
+        # Menu-driven activation scripts expect keyboard input, not argv.
+        # Feed the configured selection (normally 1), then close cmd when done.
+        safe_inputs = [str(value) for value in args_list if re.fullmatch(r"[A-Za-z0-9_.-]+", str(value))]
+        input_commands = " & ".join(f"echo {value}" for value in safe_inputs) or "echo 1"
+        parameters = f'/d /s /c "({input_commands}) | call "{abs_tool_path}"{log_redirect}"'
     elif ext == ".ps1":
         executable = "powershell.exe"
         log_redirect = f' *>&1 | Out-File -FilePath "{log_file}" -Encoding UTF8'
@@ -351,7 +382,15 @@ def execute_activation_tool(target: str, timeout_seconds: int = 180) -> Dict[str
     sei.lpDirectory = work_dir
     sei.nShow = SW_HIDE
 
-    success = ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(sei))
+    shell32 = ctypes.windll.shell32
+    kernel32 = ctypes.windll.kernel32
+    shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(SHELLEXECUTEINFOW)]
+    shell32.ShellExecuteExW.restype = wintypes.BOOL
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    success = shell32.ShellExecuteExW(ctypes.byref(sei))
 
     if not success:
         err = ctypes.GetLastError()
@@ -381,16 +420,16 @@ def execute_activation_tool(target: str, timeout_seconds: int = 180) -> Dict[str
     if h_process:
         try:
             timeout_ms = timeout_seconds * 1000
-            wait_res = ctypes.windll.kernel32.WaitForSingleObject(h_process, timeout_ms)
+            wait_res = kernel32.WaitForSingleObject(h_process, timeout_ms)
             if wait_res == 0:
                 exit_code_buf = wintypes.DWORD()
-                ctypes.windll.kernel32.GetExitCodeProcess(h_process, ctypes.byref(exit_code_buf))
+                kernel32.GetExitCodeProcess(h_process, ctypes.byref(exit_code_buf))
                 exit_code_val = exit_code_buf.value
             else:
                 logger.warning(f"Process timed out after {timeout_seconds} seconds")
                 exit_code_val = -2
         finally:
-            ctypes.windll.kernel32.CloseHandle(h_process)
+            kernel32.CloseHandle(h_process)
     else:
         exit_code_val = 0
 

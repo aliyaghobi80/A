@@ -38,7 +38,9 @@ enum QcState {
       case QcState.fail:
         return const Color(0xFFEF4444); // Rose Red
       case QcState.notPresent:
-        return isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8); // Slate
+        return isDark
+            ? const Color(0xFF64748B)
+            : const Color(0xFF94A3B8); // Slate
       case QcState.unknown:
         return isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
     }
@@ -90,16 +92,22 @@ class QcReport {
     final probsRaw = json['problems'] as List? ?? [];
 
     return QcReport(
-      timestamp: json['timestamp'] as String? ?? DateTime.now().toIso8601String(),
+      timestamp:
+          json['timestamp'] as String? ?? DateTime.now().toIso8601String(),
       overallStatus: json['overall_status'] as String? ?? 'NEEDS_ATTENTION',
       isReady: json['is_ready'] as bool? ?? false,
       hasProblems: json['has_problems'] as bool? ?? false,
       problemsCount: json['problems_count'] as int? ?? probsRaw.length,
       requiredProblemsCount: json['required_problems_count'] as int? ?? 0,
       passedCategoriesCount: json['passed_categories_count'] as int? ?? 0,
-      totalCategoriesCount: json['total_categories_count'] as int? ?? catsRaw.length,
-      categories: catsRaw.map((e) => QcCategory.fromJson(e as Map<String, dynamic>)).toList(),
-      problems: probsRaw.map((e) => QcIssue.fromJson(e as Map<String, dynamic>)).toList(),
+      totalCategoriesCount:
+          json['total_categories_count'] as int? ?? catsRaw.length,
+      categories: catsRaw
+          .map((e) => QcCategory.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      problems: probsRaw
+          .map((e) => QcIssue.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -143,11 +151,14 @@ class QcCategory {
     return QcCategory(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      displayName: json['displayName'] as String? ?? json['name'] as String? ?? '',
+      displayName:
+          json['displayName'] as String? ?? json['name'] as String? ?? '',
       state: QcState.fromString(json['state'] as String?),
       passedCount: json['passed_count'] as int? ?? 0,
       totalCount: json['total_count'] as int? ?? itemsRaw.length,
-      items: itemsRaw.map((e) => QcItem.fromJson(e as Map<String, dynamic>)).toList(),
+      items: itemsRaw
+          .map((e) => QcItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }
@@ -195,7 +206,8 @@ class QcIssue {
   final String solutionTitle;
   final String solutionSteps;
   final bool isRequired;
-  final String actionType; // 'install_software', 'activate_windows', 'activate_office', 'disable_proxy', 'install_drivers', 'open_folder', 'view_details', 'none'
+  final String
+  actionType; // 'install_software', 'activate_windows', 'activate_office', 'disable_proxy', 'install_drivers', 'open_folder', 'view_details', 'none'
   final String actionLabel;
   final String actionTarget;
   final String? packageFilename;

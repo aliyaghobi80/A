@@ -14,6 +14,7 @@ Compares candidate driver packages against actual hardware present in the curren
 """
 
 import logging
+import platform
 import re
 from typing import Dict, Any, List, Optional, Tuple
 from utils.powershell import run_powershell_json
@@ -127,6 +128,22 @@ def match_package_to_hardware(
     pkg_version = package_dict.get("driver_version", "")
     pkg_name = package_dict.get("display_name", "").lower()
     pkg_provider = package_dict.get("provider", "").lower()
+    supported_windows = package_dict.get("supported_windows") or []
+    current_windows = platform.release()
+    if supported_windows and current_windows not in supported_windows:
+        return {
+            "is_matched": False,
+            "confidence": "NOT_APPLICABLE",
+            "status": "not_applicable",
+            "status_fa": f"این بسته مخصوص ویندوز {'/'.join(supported_windows)} است؛ سیستم فعلی ویندوز {current_windows} است.",
+            "status_en": f"Package targets Windows {'/'.join(supported_windows)}; current Windows is {current_windows}.",
+            "matched_device_name": "",
+            "matched_device_id": "",
+            "installed_version": "",
+            "package_version": pkg_version,
+            "recommendation": "skip",
+            "reasons": ["نسخه ویندوز با بسته درایور سازگار نیست."],
+        }
 
     best_match_device = None
     best_match_score = 0  # 0: none, 1: category hint, 2: name/vendor hint, 3: compatible ID, 4: exact hardware ID
@@ -169,10 +186,14 @@ def match_package_to_hardware(
         if prefix_matched:
             break
 
-        # 2. Category & Class Matching
+        # 2. Category & Class Matching. If the package declares hardware IDs,
+        # require an ID match; a generic class must not recommend a driver for
+        # a different device in the same class.
         score = 0
         name_lower = dev_name.lower()
 
+        if pkg_hw_ids:
+            continue
         if pkg_category == "gpu" and dev_class == "display":
             if any(v in pkg_name for v in ("nvidia", "geforce")) and any(v in name_lower for v in ("nvidia", "geforce")):
                 score = 2
@@ -205,7 +226,7 @@ def match_package_to_hardware(
                 score = 2
 
         # Prioritize problem devices (Code 28 missing driver, Code 10, Code 43)
-        if dev_prob in (28, 10, 43):
+        if score > 0 and dev_prob in (28, 10, 43):
             score += 2
 
         if score > best_match_score:

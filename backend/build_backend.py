@@ -72,7 +72,7 @@ def build_backend(output_dir: str = None):
         "drivers.hardware_matcher",
         "drivers.deduplicator",
         "drivers.queue_manager",
-        "drivers.history_store",
+        "drivers.history",
     ]
 
     cmd = [
@@ -88,7 +88,6 @@ def build_backend(output_dir: str = None):
         f"--distpath={dist_path}",
         f"--workpath={work_path}",
         f"--specpath={output_dir}",
-        "--collect-all=backend",
     ]
 
     ico_path = os.path.join(root_dir, "installer", "app_icon.ico")

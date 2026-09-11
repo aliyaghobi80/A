@@ -76,34 +76,40 @@ def start_parent_watchdog(parent_pid: int = None):
     If the parent process exits or crashes, this backend terminates immediately."""
     import threading
     if parent_pid is None or parent_pid <= 0:
-        try:
-            parent_pid = os.getppid()
-        except Exception:
-            return
+        return
     if parent_pid <= 1:
         return
 
     def _watch():
         import ctypes
+        from ctypes import wintypes
         import time
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel.WaitForSingleObject.restype = wintypes.DWORD
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
         SYNCHRONIZE = 0x00100000
         INFINITE = 0xFFFFFFFF
         try:
-            handle = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, int(parent_pid))
+            handle = kernel.OpenProcess(SYNCHRONIZE, False, int(parent_pid))
             if handle:
-                ctypes.windll.kernel32.WaitForSingleObject(handle, INFINITE)
-                ctypes.windll.kernel32.CloseHandle(handle)
-                os._exit(0)
+                result = kernel.WaitForSingleObject(handle, INFINITE)
+                kernel.CloseHandle(handle)
+                if result == 0:
+                    os._exit(0)
         except Exception:
             pass
 
         while True:
             time.sleep(1.5)
             try:
-                h = ctypes.windll.kernel32.OpenProcess(0x0400, False, int(parent_pid))
+                h = kernel.OpenProcess(0x0400, False, int(parent_pid))
                 if not h:
                     os._exit(0)
-                ctypes.windll.kernel32.CloseHandle(h)
+                kernel.CloseHandle(h)
             except Exception:
                 os._exit(0)
 
@@ -112,7 +118,7 @@ def start_parent_watchdog(parent_pid: int = None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Central System Checker - Windows Hardware Detection Backend")
+    parser = argparse.ArgumentParser(description="Markazi System Checker - Windows Hardware Detection Backend")
     parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"Port to bind (default: {DEFAULT_PORT})")
     parser.add_argument("--parent-pid", type=int, default=None, help="Parent process PID to monitor for automatic termination")
@@ -146,7 +152,7 @@ def main():
     start_parent_watchdog(args.parent_pid)
 
     try:
-        logging.info(f"Central System Checker Local Backend Service starting at http://{args.host}:{args.port}/")
+        logging.info(f"Markazi System Checker Local Backend Service starting at http://{args.host}:{args.port}/")
     except Exception:
         pass
 

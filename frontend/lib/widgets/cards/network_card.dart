@@ -26,8 +26,12 @@ class NetworkCard extends StatelessWidget {
     final summarySub = activeAdapters.isNotEmpty
         ? '${activeAdapters.first.name} (${activeAdapters.first.ipv4Address})'
         : (network.isNotEmpty
-            ? (l10n.isPersian ? '${network.length} کارت شبکه (قطع)' : '${network.length} Adapters (Disconnected)')
-            : (l10n.isPersian ? 'شبکه‌ای متصل نیست' : 'No network connected'));
+              ? (l10n.isPersian
+                    ? '${network.length} کارت شبکه (قطع)'
+                    : '${network.length} Adapters (Disconnected)')
+              : (l10n.isPersian
+                    ? 'شبکه‌ای متصل نیست'
+                    : 'No network connected'));
 
     return CardWrapper(
       icon: Icons.lan_rounded,
@@ -37,10 +41,11 @@ class NetworkCard extends StatelessWidget {
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: (activeAdapters.isNotEmpty
-                  ? const Color(0xFF10B981)
-                  : const Color(0xFF64748B))
-              .withValues(alpha: 0.12),
+          color:
+              (activeAdapters.isNotEmpty
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFF64748B))
+                  .withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Row(
@@ -63,8 +68,12 @@ class NetworkCard extends StatelessWidget {
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: activeAdapters.isNotEmpty
-                    ? (isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857))
-                    : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    ? (isDark
+                          ? const Color(0xFF6EE7B7)
+                          : const Color(0xFF047857))
+                    : (isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B)),
               ),
             ),
           ],
@@ -78,7 +87,9 @@ class NetworkCard extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withValues(alpha: isDark ? 0.15 : 0.08),
+                color: const Color(
+                  0xFFEF4444,
+                ).withValues(alpha: isDark ? 0.15 : 0.08),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: const Color(0xFFEF4444).withValues(alpha: 0.4),
@@ -86,19 +97,33 @@ class NetworkCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.vpn_lock_rounded, color: Color(0xFFEF4444), size: 18),
+                  const Icon(
+                    Icons.vpn_lock_rounded,
+                    color: Color(0xFFEF4444),
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          l10n.isPersian ? 'پروکسی دستی فعال است' : 'Manual Proxy Enabled',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFEF4444)),
+                          l10n.isPersian
+                              ? 'پروکسی دستی فعال است'
+                              : 'Manual Proxy Enabled',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFEF4444),
+                          ),
                         ),
                         Text(
                           proxy!.server,
-                          style: const TextStyle(fontSize: 11, fontFamily: 'Consolas', fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontFamily: 'Consolas',
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -106,14 +131,25 @@ class NetworkCard extends StatelessWidget {
                   if (onDisableProxy != null)
                     ElevatedButton.icon(
                       onPressed: onDisableProxy,
-                      icon: const Icon(Icons.power_settings_new_rounded, size: 14),
+                      icon: const Icon(
+                        Icons.power_settings_new_rounded,
+                        size: 14,
+                      ),
                       label: Text(l10n.isPersian ? 'خاموش کردن' : 'Turn Off'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFEF4444),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
                       ),
                     ),
                 ],
@@ -130,7 +166,9 @@ class NetworkCard extends StatelessWidget {
               final isUp = adapter.isConnected;
               final statusColor = isUp
                   ? (isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
-                  : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8));
+                  : (isDark
+                        ? const Color(0xFF64748B)
+                        : const Color(0xFF94A3B8));
 
               final statusText = isUp ? l10n.connected : l10n.disconnected;
 
@@ -140,7 +178,9 @@ class NetworkCard extends StatelessWidget {
                   if (idx > 0) ...[
                     const SizedBox(height: 12),
                     Divider(
-                      color: isDark ? const Color(0xFF1E2C4A) : const Color(0xFFF1F5F9),
+                      color: isDark
+                          ? const Color(0xFF1E2C4A)
+                          : const Color(0xFFF1F5F9),
                     ),
                     const SizedBox(height: 8),
                   ],
@@ -164,13 +204,18 @@ class NetworkCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                              color: isDark
+                                  ? const Color(0xFFF1F5F9)
+                                  : const Color(0xFF0F172A),
                             ),
                           ),
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: statusColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(4),
@@ -197,7 +242,9 @@ class NetworkCard extends StatelessWidget {
                           adapter.description,
                           style: TextStyle(
                             fontSize: 11,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            color: isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B),
                           ),
                         ),
                       ),
@@ -219,7 +266,8 @@ class NetworkCard extends StatelessWidget {
                     isMonospace: true,
                     copyable: true,
                   ),
-                  if (adapter.linkSpeed != 'Not available' && adapter.linkSpeed != '0 bps')
+                  if (adapter.linkSpeed != 'Not available' &&
+                      adapter.linkSpeed != '0 bps')
                     InfoRow(
                       label: l10n.linkSpeed,
                       value: adapter.linkSpeed,

@@ -13,6 +13,7 @@ if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
 from activation.activation_tools import (
+    DEFAULT_TOOLS_DIR,
     is_safe_tool_path,
     get_activation_config,
     get_tool_status,
@@ -34,8 +35,8 @@ class TestActivationModule(unittest.TestCase):
         self.assertFalse(is_safe_tool_path("   "))
 
         # Allowed paths inside Tools
-        self.assertTrue(is_safe_tool_path("Tools/WindowsActivation/activate.cmd"))
-        self.assertTrue(is_safe_tool_path("Tools\\OfficeActivation\\activate.cmd"))
+        self.assertTrue(is_safe_tool_path(os.path.join(DEFAULT_TOOLS_DIR, "WindowsActivation", "activate.cmd")))
+        self.assertTrue(is_safe_tool_path(os.path.join(DEFAULT_TOOLS_DIR, "OfficeActivation", "activate.cmd")))
 
     def test_config_loading(self):
         cfg = get_activation_config()

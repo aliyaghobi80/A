@@ -13,7 +13,9 @@ if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
 from collector import collect_all_system_info
-from packages.manager import scan_packages, install_package, open_package, open_office_folder, get_package_icon_path, set_packages_directory, get_current_packages_directory
+from packages.manager import scan_packages, install_package, open_package, open_office_folder, get_package_icon_path, set_packages_directory, get_current_packages_directory, pin_package_to_taskbar, set_windows_update_state
+from windows.device_settings import get_device_settings_status, pin_windows_security, set_sleep_never
+from packages.office_shortcuts import ensure_office_desktop_shortcuts
 from packages.batch_installer import start_batch_install, get_batch_status, cancel_batch_install
 from drivers.driver_installer import (
     scan_driver_folder,
@@ -101,8 +103,8 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             resp = {
                 "status": "ok",
-                "service": "Central System Checker Backend",
-                "version": "4.1.0",
+                "service": "Markazi System Checker Backend",
+                "version": "1.1.11",
                 "phase": 4,
                 "api_contract_version": 2,
             }
@@ -165,6 +167,15 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps(packages_data, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/device-settings/status":
+            result = get_device_settings_status()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
             return
 
         elif path == "/api/packages/icon":
@@ -430,8 +441,81 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             logger.info(f"Opening installed package: {pkg_id}")
-            result = open_package(pkg_id)
+            result = open_package(
+                pkg_id,
+                confirm_home_update_block=bool(payload.get("confirm_home_update_block", False)),
+            )
+            self.send_response(200 if (result.get("success") or result.get("requires_confirmation")) else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/packages/pin-taskbar":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+            pkg_id = payload.get("package_id") or payload.get("relative_path") or payload.get("id") or ""
+            result = pin_package_to_taskbar(pkg_id) if pkg_id else {
+                "success": False,
+                "message": "شناسه برنامه ارسال نشده است.",
+            }
             self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/packages/windows-update":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+            pkg_id = payload.get("package_id") or payload.get("relative_path") or payload.get("id") or ""
+            enable = payload.get("enable")
+            if not pkg_id or not isinstance(enable, bool):
+                result = {"success": False, "message": "شناسه برنامه یا وضعیت موردنظر معتبر نیست."}
+            else:
+                result = set_windows_update_state(
+                    pkg_id,
+                    enable=enable,
+                    confirm_home_update_block=bool(payload.get("confirm_home_update_block", False)),
+                )
+            self.send_response(200 if (result.get("success") or result.get("requires_confirmation")) else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/device-settings/pin-windows-security":
+            result = pin_windows_security()
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/device-settings/sleep-never":
+            result = set_sleep_never()
+            self.send_response(200 if result.get("success") else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/packages/office-shortcuts":
+            result = ensure_office_desktop_shortcuts()
+            self.send_response(200 if result.get("created") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
             self.end_headers()
@@ -853,7 +937,7 @@ def run_server(host: str = "127.0.0.1", port: int = 18088):
         logger.critical(f"FATAL: Failed to bind to any candidate port in {ports_to_try}.")
         sys.exit(1)
 
-    logger.info(f"Central System Checker Backend API running at http://{host}:{bound_port}/")
+    logger.info(f"Markazi System Checker Backend API running at http://{host}:{bound_port}/")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

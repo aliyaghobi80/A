@@ -22,12 +22,13 @@ Executes packages sequentially:
 """
 
 import logging
+import copy
 import os
 import subprocess
 import tempfile
 import threading
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 from utils.powershell import run_powershell_json, get_hidden_subprocess_kwargs
 from packages.manager import _run_elevated_and_wait
@@ -103,7 +104,7 @@ def _query_problematic_devices() -> List[str]:
     ps = (
         "Get-CimInstance Win32_PnPEntity | "
         "Where-Object { $_.ConfigManagerErrorCode -ne 0 } | "
-        "Select-Object -ExpandProperty DeviceID"
+        "Select-Object -ExpandProperty DeviceID | ConvertTo-Json -Compress"
     )
     try:
         res = run_powershell_json(ps, timeout=8)
@@ -200,10 +201,23 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
 
     try:
         out = ""
-        if method == "pnputil":
-            exit_code, out = _install_inf_package(installer_path, timeout=timeout)
-            success = exit_code in (0, 259, 3010)
-            reboot = (exit_code == 3010)
+        if method in ("pnputil", "inf_pnputil"):
+            # A driver package can contain base, extension and component INFs.
+            # Process every INF, retaining failures instead of hiding them behind
+            # the first successful file. Never pass PnPUtil's /reboot switch.
+            inf_paths = list(dict.fromkeys(pkg.get("inf_files") or [installer_path]))
+            results = []
+            for inf_path in inf_paths:
+                try:
+                    code, output = _install_inf_package(inf_path, timeout=timeout)
+                except Exception as exc:
+                    code, output = -1, str(exc)
+                results.append((code, f"{os.path.basename(inf_path)}: {output}"))
+            failed_codes = [code for code, _ in results if code not in (0, 3010)]
+            success = not failed_codes
+            reboot = any(code == 3010 for code, _ in results)
+            exit_code = failed_codes[0] if failed_codes else (3010 if reboot else 0)
+            out = "\n".join(output for _, output in results)
             msg = "نصب INF با PnPUtil با موفقیت انجام شد." if success else _format_driver_failure_reason(exit_code, method, out, pkg.get("match", {}))
             if reboot:
                 msg += " (نیازمند راه‌اندازی مجدد)"
@@ -226,6 +240,19 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
 
         elif method == "script":
             work_dir = os.path.dirname(installer_path)
+            try:
+                with open(installer_path, "r", encoding="utf-8", errors="ignore") as script_file:
+                    script_text = script_file.read().lower()
+                reboot_commands = ("shutdown /r", "shutdown.exe /r", "restart-computer", "exitwindowsex")
+                if any(command in script_text for command in reboot_commands):
+                    return {
+                        "success": False,
+                        "exit_code": -4,
+                        "reboot_required": True,
+                        "message": "اسکریپت شامل فرمان ری‌استارت خودکار است و برای ایمنی اجرا نشد؛ نصب دستی را بررسی کنید.",
+                    }
+            except OSError as exc:
+                return {"success": False, "exit_code": -1, "reboot_required": False, "message": str(exc)}
             cmd = ["cmd.exe", "/c", installer_path]
             exit_code = _run_elevated_and_wait(cmd, work_dir, timeout)
             success = exit_code in (0, 3010)
@@ -311,6 +338,14 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
             _queue_state["reboot_required"] = any_reboot
             _queue_state["progress_percent"] = round(((idx + 1) / total) * 100.0, 1)
 
+        if res.get("exit_code") == -2:
+            with _queue_lock:
+                _queue_state["cancelled"] = True
+                for pending in _queue_state["items"][idx + 1:]:
+                    pending["status"] = "skipped"
+                    pending["message"] = "نصاب قبلی ممکن است فعال باشد؛ نیاز به بررسی دستی."
+                    _queue_state["skipped"] += 1
+            break
         time.sleep(1.0)
 
     # Re-evaluate problem devices after installation (Verification)
@@ -336,8 +371,8 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
         if resolved > 0:
             _queue_state["summary_message"] += f" ({resolved} خطای سخت‌افزاری برطرف گردید)"
 
-        if any_reboot:
-            _queue_state["summary_message"] += " — نیاز به راه‌اندازی مجدد سیستم دارد."
+        if c > 0 or any_reboot:
+            _queue_state["summary_message"] += " — یادتان نرود پس از پایان همهٔ کارها، سیستم را دستی ری‌استارت کنید."
 
     _log_driver_event(f"Queue finished: {_queue_state['summary_message']}")
 
@@ -356,6 +391,8 @@ def start_driver_queue(packages: List[Dict[str, Any]]) -> Dict[str, Any]:
     sorted_pkgs = sort_driver_queue(packages)
 
     with _queue_lock:
+        if _queue_state["is_running"]:
+            return {"success": False, "message": "صف نصب درایورها هم‌اکنون در حال اجراست."}
         _queue_state = {
             "is_running": True,
             "cancelled": False,
@@ -391,7 +428,13 @@ def start_driver_queue(packages: List[Dict[str, Any]]) -> Dict[str, Any]:
         daemon=True,
         name="IntelligentDriverQueueThread",
     )
-    _queue_thread.start()
+    try:
+        _queue_thread.start()
+    except Exception:
+        with _queue_lock:
+            _queue_state["is_running"] = False
+        logger.exception("Unable to start driver queue")
+        return {"success": False, "message": "شروع صف نصب ناموفق بود؛ دوباره تلاش کنید."}
 
     return {
         "success": True,
@@ -403,7 +446,7 @@ def start_driver_queue(packages: List[Dict[str, Any]]) -> Dict[str, Any]:
 def get_driver_queue_status() -> Dict[str, Any]:
     """Returns current state of the installation queue."""
     with _queue_lock:
-        return dict(_queue_state)
+        return copy.deepcopy(_queue_state)
 
 
 def cancel_driver_queue() -> Dict[str, Any]:

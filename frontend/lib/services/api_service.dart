@@ -39,10 +39,14 @@ class ApiService {
         final Map<String, dynamic> data = json.decode(rawBody);
         return SystemInfo.fromJson(data);
       } else {
-        throw Exception('Server returned status ${response.statusCode}: ${response.body}');
+        throw Exception(
+          'Server returned status ${response.statusCode}: ${response.body}',
+        );
       }
     } on TimeoutException {
-      throw Exception('System hardware scan timed out. Click Refresh to try again.');
+      throw Exception(
+        'System hardware scan timed out. Click Refresh to try again.',
+      );
     } catch (e) {
       debugPrint('[ApiService] fetchSystemInfo error: $e');
       rethrow;
@@ -57,10 +61,14 @@ class ApiService {
 
     try {
       final uri = customDir != null && customDir.isNotEmpty
-          ? Uri.parse('$baseUrl/api/packages?dir=${Uri.encodeComponent(customDir)}')
+          ? Uri.parse(
+              '$baseUrl/api/packages?dir=${Uri.encodeComponent(customDir)}',
+            )
           : Uri.parse('$baseUrl/api/packages');
 
-      final response = await _client.get(uri).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final rawBody = utf8.decode(response.bodyBytes);
@@ -83,7 +91,9 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/packages/scan');
-      final response = await _client.post(uri).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .post(uri)
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final rawBody = utf8.decode(response.bodyBytes);
@@ -101,10 +111,7 @@ class ApiService {
   Future<Map<String, dynamic>> installPackage(String packageId) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return {
-        'success': false,
-        'message': 'Backend service is not running.',
-      };
+      return {'success': false, 'message': 'Backend service is not running.'};
     }
 
     try {
@@ -117,7 +124,9 @@ class ApiService {
           )
           .timeout(const Duration(minutes: 5));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] installPackage error: $e');
@@ -128,13 +137,13 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> openPackage(String packageId) async {
+  Future<Map<String, dynamic>> openPackage(
+    String packageId, {
+    bool confirmHomeUpdateBlock = false,
+  }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return {
-        'success': false,
-        'message': 'Backend service is not running.',
-      };
+      return {'success': false, 'message': 'Backend service is not running.'};
     }
 
     try {
@@ -143,28 +152,90 @@ class ApiService {
           .post(
             uri,
             headers: {'Content-Type': 'application/json; charset=utf-8'},
-            body: json.encode({'package_id': packageId}),
+            body: json.encode({
+              'package_id': packageId,
+              'confirm_home_update_block': confirmHomeUpdateBlock,
+            }),
           )
           .timeout(const Duration(seconds: 15));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] openPackage error: $e');
-      return {
-        'success': false,
-        'message': 'Error opening application: $e',
-      };
+      return {'success': false, 'message': 'Error opening application: $e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> pinPackageToTaskbar(String packageId) async {
+    return _postJson('/api/packages/pin-taskbar', {'package_id': packageId});
+  }
+
+  Future<Map<String, dynamic>> setWindowsUpdateState(
+    String packageId, {
+    required bool enable,
+    bool confirmHomeUpdateBlock = false,
+  }) async {
+    return _postJson('/api/packages/windows-update', {
+      'package_id': packageId,
+      'enable': enable,
+      'confirm_home_update_block': confirmHomeUpdateBlock,
+    });
+  }
+
+  Future<Map<String, dynamic>> getDeviceSettingsStatus() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return {'success': false};
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/api/device-settings/status'))
+          .timeout(const Duration(seconds: 15));
+      return json.decode(utf8.decode(response.bodyBytes));
+    } catch (e) {
+      return {'success': false, 'message': '$e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> pinWindowsSecurity() async {
+    return _postJson('/api/device-settings/pin-windows-security', {});
+  }
+
+  Future<Map<String, dynamic>> setLaptopSleepNever() async {
+    return _postJson('/api/device-settings/sleep-never', {});
+  }
+
+  Future<Map<String, dynamic>> createOfficeDesktopShortcuts() async {
+    return _postJson('/api/packages/office-shortcuts', {});
+  }
+
+  Future<Map<String, dynamic>> _postJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      return {'success': false, 'message': 'Backend service is not running.'};
+    }
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl$path'),
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode(body),
+          )
+          .timeout(const Duration(seconds: 45));
+      return json.decode(utf8.decode(response.bodyBytes));
+    } catch (e) {
+      return {'success': false, 'message': '$e'};
     }
   }
 
   Future<Map<String, dynamic>> openOfficeFolder([String? customDir]) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return {
-        'success': false,
-        'message': 'Backend service is not running.',
-      };
+      return {'success': false, 'message': 'Backend service is not running.'};
     }
 
     try {
@@ -177,24 +248,20 @@ class ApiService {
           )
           .timeout(const Duration(seconds: 15));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] openOfficeFolder error: $e');
-      return {
-        'success': false,
-        'message': 'Error opening Office folder: $e',
-      };
+      return {'success': false, 'message': 'Error opening Office folder: $e'};
     }
   }
 
   Future<Map<String, dynamic>> uninstallPackage(String packageId) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return {
-        'success': false,
-        'message': 'Backend service is not running.',
-      };
+      return {'success': false, 'message': 'Backend service is not running.'};
     }
 
     try {
@@ -207,7 +274,9 @@ class ApiService {
           )
           .timeout(const Duration(minutes: 5));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] uninstallPackage error: $e');
@@ -221,36 +290,35 @@ class ApiService {
   Future<Map<String, dynamic>> disableProxy() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return {
-        'success': false,
-        'message': 'Backend service is not running.',
-      };
+      return {'success': false, 'message': 'Backend service is not running.'};
     }
 
     try {
       final uri = Uri.parse('$baseUrl/api/proxy/disable');
       final response = await http
-          .post(uri, headers: {'Content-Type': 'application/json; charset=utf-8'})
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+          )
           .timeout(const Duration(seconds: 10));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] disableProxy error: $e');
-      return {
-        'success': false,
-        'message': 'Error disabling proxy: $e',
-      };
+      return {'success': false, 'message': 'Error disabling proxy: $e'};
     }
   }
 
-  Future<Map<String, dynamic>> restartSystem({int delaySeconds = 3, String reason = ''}) async {
+  Future<Map<String, dynamic>> restartSystem({
+    int delaySeconds = 3,
+    String reason = '',
+  }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return {
-        'success': false,
-        'message': 'Backend service is not running.',
-      };
+      return {'success': false, 'message': 'Backend service is not running.'};
     }
 
     try {
@@ -259,44 +327,45 @@ class ApiService {
           .post(
             uri,
             headers: {'Content-Type': 'application/json; charset=utf-8'},
-            body: json.encode({'delay_seconds': delaySeconds, 'reason': reason}),
+            body: json.encode({
+              'delay_seconds': delaySeconds,
+              'reason': reason,
+            }),
           )
           .timeout(const Duration(seconds: 10));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] restartSystem error: $e');
-      return {
-        'success': false,
-        'message': 'Error restarting system: $e',
-      };
+      return {'success': false, 'message': 'Error restarting system: $e'};
     }
   }
 
   Future<Map<String, dynamic>> cancelRestart() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return {
-        'success': false,
-        'message': 'Backend service is not running.',
-      };
+      return {'success': false, 'message': 'Backend service is not running.'};
     }
 
     try {
       final uri = Uri.parse('$baseUrl/api/reboot/cancel');
       final response = await http
-          .post(uri, headers: {'Content-Type': 'application/json; charset=utf-8'})
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+          )
           .timeout(const Duration(seconds: 10));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] cancelRestart error: $e');
-      return {
-        'success': false,
-        'message': 'Error cancelling restart: $e',
-      };
+      return {'success': false, 'message': 'Error cancelling restart: $e'};
     }
   }
 
@@ -309,10 +378,15 @@ class ApiService {
     try {
       final uri = Uri.parse('$baseUrl/api/activation/windows');
       final response = await http
-          .post(uri, headers: {'Content-Type': 'application/json; charset=utf-8'})
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+          )
           .timeout(const Duration(minutes: 4));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return ActivationResult.fromJson(data);
     } catch (e) {
       debugPrint('[ApiService] activateWindows error: $e');
@@ -329,10 +403,15 @@ class ApiService {
     try {
       final uri = Uri.parse('$baseUrl/api/activation/office');
       final response = await http
-          .post(uri, headers: {'Content-Type': 'application/json; charset=utf-8'})
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+          )
           .timeout(const Duration(minutes: 4));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return ActivationResult.fromJson(data);
     } catch (e) {
       debugPrint('[ApiService] activateOffice error: $e');
@@ -351,7 +430,9 @@ class ApiService {
       final response = await _client.get(uri).timeout(timeoutDuration);
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
         return QcReport.fromJson(data);
       }
       return QcReport.empty();
@@ -372,7 +453,9 @@ class ApiService {
       final response = await _client.post(uri).timeout(timeoutDuration);
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
         return QcReport.fromJson(data);
       }
       return QcReport.empty();
@@ -388,14 +471,18 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/packages/directory');
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode({'directory': dir}),
-      ).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'directory': dir}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
         if (data.containsKey('packages_data')) {
           return PackagesResponse.fromJson(data['packages_data']);
         }
@@ -413,9 +500,13 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/tools/status');
-      final response = await _client.get(uri).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
         return ToolsDirectoryStatus.fromJson(data);
       }
       return ToolsDirectoryStatus.empty();
@@ -431,11 +522,13 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/tools/directory');
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode({'directory': dir}),
-      ).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'directory': dir}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       return response.statusCode == 200;
     } catch (e) {
@@ -450,11 +543,13 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/files/directory');
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode({'id': id, 'path': path}),
-      ).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'id': id, 'path': path}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       return response.statusCode == 200;
     } catch (e) {
@@ -469,10 +564,14 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/battery');
-      final response = await _client.get(uri).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
         if (data['battery'] is Map<String, dynamic>) {
           return BatteryInfo.fromJson(data['battery'] as Map<String, dynamic>);
         }
@@ -490,10 +589,14 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/battery/test');
-      final response = await _client.post(uri).timeout(const Duration(seconds: 20));
+      final response = await _client
+          .post(uri)
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
         if (data['battery'] is Map<String, dynamic>) {
           return BatteryInfo.fromJson(data['battery'] as Map<String, dynamic>);
         }
@@ -509,7 +612,10 @@ class ApiService {
   // Batch Software Installation APIs
   // -------------------------------------------------------------
 
-  Future<Map<String, dynamic>> startBatchInstall({List<String>? packageIds, String? customDir}) async {
+  Future<Map<String, dynamic>> startBatchInstall({
+    List<String>? packageIds,
+    String? customDir,
+  }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
       return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
@@ -525,13 +631,17 @@ class ApiService {
         body['custom_dir'] = customDir;
       }
 
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode(body),
-      ).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode(body),
+          )
+          .timeout(const Duration(seconds: 15));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] startBatchInstall error: $e');
@@ -545,10 +655,14 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/packages/batch-status');
-      final response = await _client.get(uri).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
         return BatchInstallStatus.fromJson(data);
       }
       return BatchInstallStatus.empty();
@@ -566,9 +680,13 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/packages/batch-cancel');
-      final response = await _client.post(uri).timeout(const Duration(seconds: 10));
+      final response = await _client
+          .post(uri)
+          .timeout(const Duration(seconds: 10));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] cancelBatchInstall error: $e');
@@ -583,26 +701,40 @@ class ApiService {
   Future<Map<String, dynamic>> scanDriverFolder(String folderPath) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.', 'files': []};
+      return {
+        'success': false,
+        'message': 'سرویس بک‌اند در حال اجرا نیست.',
+        'files': [],
+      };
     }
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/scan-folder');
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode({'folder_path': folderPath}),
-      ).timeout(const Duration(seconds: 30));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'folder_path': folderPath}),
+          )
+          .timeout(const Duration(seconds: 30));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] scanDriverFolder error: $e');
-      return {'success': false, 'message': 'خطا در اسکن پوشه درایورها: $e', 'files': []};
+      return {
+        'success': false,
+        'message': 'خطا در اسکن پوشه درایورها: $e',
+        'files': [],
+      };
     }
   }
 
-  Future<Map<String, dynamic>> startDriverBatchInstall(String folderPath) async {
+  Future<Map<String, dynamic>> startDriverBatchInstall(
+    String folderPath,
+  ) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
       return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
@@ -610,17 +742,24 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/batch-install');
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode({'folder_path': folderPath}),
-      ).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'folder_path': folderPath}),
+          )
+          .timeout(const Duration(seconds: 15));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] startDriverBatchInstall error: $e');
-      return {'success': false, 'message': 'خطا در شروع نصب خودکار درایورها: $e'};
+      return {
+        'success': false,
+        'message': 'خطا در شروع نصب خودکار درایورها: $e',
+      };
     }
   }
 
@@ -630,10 +769,14 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/batch-status');
-      final response = await _client.get(uri).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
         return DriverBatchStatus.fromJson(data);
       }
       return DriverBatchStatus.empty();
@@ -651,9 +794,13 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/batch-cancel');
-      final response = await _client.post(uri).timeout(const Duration(seconds: 10));
+      final response = await _client
+          .post(uri)
+          .timeout(const Duration(seconds: 10));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] cancelDriverBatchInstall error: $e');
@@ -667,32 +814,52 @@ class ApiService {
 
   Future<Map<String, dynamic>> getDriverDirectoryConfig() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
-    if (!isRunning) return {'exists': false, 'configured_path': 'Drivers', 'removable_sources': []};
+    if (!isRunning) {
+      return {
+        'exists': false,
+        'configured_path': 'Drivers',
+        'removable_sources': [],
+      };
+    }
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/config');
-      final response = await _client.get(uri).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
       }
-      return {'exists': false, 'configured_path': 'Drivers', 'removable_sources': []};
+      return {
+        'exists': false,
+        'configured_path': 'Drivers',
+        'removable_sources': [],
+      };
     } catch (e) {
       debugPrint('[ApiService] getDriverDirectoryConfig error: $e');
-      return {'exists': false, 'configured_path': 'Drivers', 'removable_sources': []};
+      return {
+        'exists': false,
+        'configured_path': 'Drivers',
+        'removable_sources': [],
+      };
     }
   }
 
   Future<Map<String, dynamic>> setDriverDirectoryConfig(String newPath) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
-    if (!isRunning) return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    if (!isRunning) {
+      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    }
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/config');
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode({'folder_path': newPath}),
-      ).timeout(const Duration(seconds: 10));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'folder_path': newPath}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       return json.decode(utf8.decode(response.bodyBytes));
     } catch (e) {
@@ -704,34 +871,52 @@ class ApiService {
   Future<DriverScanResult> intelligentScanDrivers({String? folderPath}) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return DriverScanResult(success: false, message: 'سرویس بک‌اند در حال اجرا نیست.', driverDirectory: folderPath ?? '');
+      return DriverScanResult(
+        success: false,
+        message: 'سرویس بک‌اند در حال اجرا نیست.',
+        driverDirectory: folderPath ?? '',
+      );
     }
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/scan');
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode({'folder_path': folderPath ?? ''}),
-      ).timeout(const Duration(seconds: 120));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'folder_path': folderPath ?? ''}),
+          )
+          .timeout(const Duration(seconds: 120));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return DriverScanResult.fromJson(data);
     } catch (e) {
       debugPrint('[ApiService] intelligentScanDrivers error: $e');
       final String msg;
       if (e is TimeoutException || e.toString().contains('TimeoutException')) {
-        msg = 'زمان پاسخگویی اسکن هوشمند درایورها به پایان رسید. لطفاً مجدداً تلاش کنید یا پوشه مشخص‌تری را انتخاب نمایید.';
+        msg =
+            'زمان پاسخگویی اسکن هوشمند درایورها به پایان رسید. لطفاً مجدداً تلاش کنید یا پوشه مشخص‌تری را انتخاب نمایید.';
       } else {
         msg = 'خطا در اسکن هوشمند درایورها: $e';
       }
-      return DriverScanResult(success: false, message: msg, driverDirectory: folderPath ?? '');
+      return DriverScanResult(
+        success: false,
+        message: msg,
+        driverDirectory: folderPath ?? '',
+      );
     }
   }
 
-  Future<Map<String, dynamic>> startDriverQueueInstall({List<String>? packageIds, String? folderPath}) async {
+  Future<Map<String, dynamic>> startDriverQueueInstall({
+    List<String>? packageIds,
+    String? folderPath,
+  }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
-    if (!isRunning) return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    if (!isRunning) {
+      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    }
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/queue/install');
@@ -739,11 +924,13 @@ class ApiService {
       if (packageIds != null) bodyMap['package_ids'] = packageIds;
       if (folderPath != null) bodyMap['folder_path'] = folderPath;
 
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode(bodyMap),
-      ).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode(bodyMap),
+          )
+          .timeout(const Duration(seconds: 15));
 
       return json.decode(utf8.decode(response.bodyBytes));
     } catch (e) {
@@ -766,7 +953,9 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/history');
-      final response = await _client.get(uri).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         return data.cast<Map<String, dynamic>>();
@@ -778,20 +967,27 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> installDriverInteractive(String packageId, {String? folderPath}) async {
+  Future<Map<String, dynamic>> installDriverInteractive(
+    String packageId, {
+    String? folderPath,
+  }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
-    if (!isRunning) return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    if (!isRunning) {
+      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    }
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/install-interactive');
       final Map<String, dynamic> bodyMap = {'package_id': packageId};
       if (folderPath != null) bodyMap['folder_path'] = folderPath;
 
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode(bodyMap),
-      ).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode(bodyMap),
+          )
+          .timeout(const Duration(seconds: 15));
 
       return json.decode(utf8.decode(response.bodyBytes));
     } catch (e) {
@@ -800,20 +996,27 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> openDriverFolder(String packageId, {String? folderPath}) async {
+  Future<Map<String, dynamic>> openDriverFolder(
+    String packageId, {
+    String? folderPath,
+  }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
-    if (!isRunning) return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    if (!isRunning) {
+      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    }
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/open-folder');
       final Map<String, dynamic> bodyMap = {'package_id': packageId};
       if (folderPath != null) bodyMap['folder_path'] = folderPath;
 
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode(bodyMap),
-      ).timeout(const Duration(seconds: 10));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode(bodyMap),
+          )
+          .timeout(const Duration(seconds: 10));
 
       return json.decode(utf8.decode(response.bodyBytes));
     } catch (e) {
@@ -832,11 +1035,17 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl/api/system/usb-drives');
-      final response = await _client.get(uri).timeout(const Duration(seconds: 6));
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 6));
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
         final List<dynamic> list = data['usb_drives'] ?? [];
-        return list.map((item) => UsbDriveInfo.fromJson(item as Map<String, dynamic>)).toList();
+        return list
+            .map((item) => UsbDriveInfo.fromJson(item as Map<String, dynamic>))
+            .toList();
       }
       return [];
     } catch (e) {
@@ -847,17 +1056,23 @@ class ApiService {
 
   Future<Map<String, dynamic>> safeEjectDrive(String driveLetter) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
-    if (!isRunning) return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    if (!isRunning) {
+      return {'success': false, 'message': 'سرویس بک‌اند در حال اجرا نیست.'};
+    }
 
     try {
       final uri = Uri.parse('$baseUrl/api/system/eject-drive');
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode({'drive_letter': driveLetter}),
-      ).timeout(const Duration(seconds: 15));
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'drive_letter': driveLetter}),
+          )
+          .timeout(const Duration(seconds: 15));
 
-      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      final Map<String, dynamic> data = json.decode(
+        utf8.decode(response.bodyBytes),
+      );
       return data;
     } catch (e) {
       debugPrint('[ApiService] safeEjectDrive error: $e');
@@ -865,5 +1080,3 @@ class ApiService {
     }
   }
 }
-
-

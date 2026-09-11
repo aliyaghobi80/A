@@ -80,7 +80,6 @@ class SystemInfoController extends GetxController {
     fetchSystemInfo();
   }
 
-
   Future<void> changeFileRequirementPath(
     BuildContext context,
     String reqId,
@@ -594,7 +593,9 @@ class SystemInfoController extends GetxController {
           children: [
             const Icon(Icons.eject_rounded, color: Color(0xFFEF4444)),
             const SizedBox(width: 8),
-            Text(l10n.isPersian ? 'خروج ایمن فلش مموری' : 'Safely Eject USB Drive'),
+            Text(
+              l10n.isPersian ? 'خروج ایمن فلش مموری' : 'Safely Eject USB Drive',
+            ),
           ],
         ),
         content: Text(
@@ -611,7 +612,9 @@ class SystemInfoController extends GetxController {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEF4444),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(l10n.isPersian ? 'خروج ایمن (Eject)' : 'Eject'),
@@ -634,10 +637,16 @@ class SystemInfoController extends GetxController {
             content: Text(
               res['message']?.toString() ??
                   (success
-                      ? (l10n.isPersian ? '✓ فلش مموری با موفقیت خارج شد.' : '✓ Drive safely ejected.')
-                      : (l10n.isPersian ? 'خطا در خروج درایو' : 'Failed to eject drive')),
+                      ? (l10n.isPersian
+                            ? '✓ فلش مموری با موفقیت خارج شد.'
+                            : '✓ Drive safely ejected.')
+                      : (l10n.isPersian
+                            ? 'خطا در خروج درایو'
+                            : 'Failed to eject drive')),
             ),
-            backgroundColor: success ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+            backgroundColor: success
+                ? const Color(0xFF10B981)
+                : const Color(0xFFEF4444),
             behavior: SnackBarBehavior.floating,
           ),
         );

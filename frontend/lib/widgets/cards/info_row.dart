@@ -30,7 +30,8 @@ class InfoRow extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context);
 
-    final isUnavailable = value.trim().toLowerCase() == 'not available' ||
+    final isUnavailable =
+        value.trim().toLowerCase() == 'not available' ||
         value.trim() == 'موجود نیست' ||
         value.trim().toLowerCase() == 'unknown' ||
         value.trim().toLowerCase() == 'n/a';
@@ -86,14 +87,14 @@ class InfoRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                color: isDark
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF64748B),
               ),
             ),
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: valueWidget,
-          ),
+          Expanded(child: valueWidget),
           ?trailingBadge,
           if (copyable && !isUnavailable) ...[
             const SizedBox(width: 6),
@@ -116,7 +117,9 @@ class InfoRow extends StatelessWidget {
                   child: Icon(
                     Icons.copy_rounded,
                     size: 13,
-                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    color: isDark
+                        ? const Color(0xFF64748B)
+                        : const Color(0xFF94A3B8),
                   ),
                 ),
               ),

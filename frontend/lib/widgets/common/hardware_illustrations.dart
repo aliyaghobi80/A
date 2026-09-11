@@ -103,7 +103,10 @@ class _CpuPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
-    final pcbRRect = RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.1, h * 0.1, w * 0.8, h * 0.8), const Radius.circular(6));
+    final pcbRRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.1, h * 0.1, w * 0.8, h * 0.8),
+      const Radius.circular(6),
+    );
     canvas.drawRRect(pcbRRect, pcbPaint);
     canvas.drawRRect(pcbRRect, pcbBorder);
 
@@ -114,11 +117,27 @@ class _CpuPainter extends CustomPainter {
     for (int i = 1; i <= 5; i++) {
       final frac = 0.1 + (i * 0.13);
       // Top & Bottom pins
-      canvas.drawLine(Offset(w * frac, 0), Offset(w * frac, h * 0.08), pinPaint);
-      canvas.drawLine(Offset(w * frac, h * 0.92), Offset(w * frac, h), pinPaint);
+      canvas.drawLine(
+        Offset(w * frac, 0),
+        Offset(w * frac, h * 0.08),
+        pinPaint,
+      );
+      canvas.drawLine(
+        Offset(w * frac, h * 0.92),
+        Offset(w * frac, h),
+        pinPaint,
+      );
       // Left & Right pins
-      canvas.drawLine(Offset(0, h * frac), Offset(w * 0.08, h * frac), pinPaint);
-      canvas.drawLine(Offset(w * 0.92, h * frac), Offset(w, h * frac), pinPaint);
+      canvas.drawLine(
+        Offset(0, h * frac),
+        Offset(w * 0.08, h * frac),
+        pinPaint,
+      );
+      canvas.drawLine(
+        Offset(w * 0.92, h * frac),
+        Offset(w, h * frac),
+        pinPaint,
+      );
     }
 
     // Heatspreader (IHS) Metallic Center
@@ -127,20 +146,33 @@ class _CpuPainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Colors.white.withValues(alpha: 0.4), color.withValues(alpha: 0.4), color.withValues(alpha: 0.7)],
+        colors: [
+          Colors.white.withValues(alpha: 0.4),
+          color.withValues(alpha: 0.4),
+          color.withValues(alpha: 0.7),
+        ],
       ).createShader(ihsRect);
-    canvas.drawRRect(RRect.fromRectAndRadius(ihsRect, const Radius.circular(4)), ihsPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(ihsRect, const Radius.circular(4)),
+      ihsPaint,
+    );
 
     final ihsBorder = Paint()
       ..color = Colors.white.withValues(alpha: 0.7)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
-    canvas.drawRRect(RRect.fromRectAndRadius(ihsRect, const Radius.circular(4)), ihsBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(ihsRect, const Radius.circular(4)),
+      ihsBorder,
+    );
 
     // Inner Silicon Die / Core with glowing grid
     final coreRect = Rect.fromLTWH(w * 0.35, h * 0.35, w * 0.3, h * 0.3);
     final corePaint = Paint()..color = color;
-    canvas.drawRRect(RRect.fromRectAndRadius(coreRect, const Radius.circular(2)), corePaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(coreRect, const Radius.circular(2)),
+      corePaint,
+    );
 
     // Golden Pin 1 triangle indicator on top-left corner
     final trianglePath = Path()
@@ -204,13 +236,19 @@ class _RamPainter extends CustomPainter {
         end: Alignment.bottomCenter,
         colors: [color.withValues(alpha: 0.35), color.withValues(alpha: 0.15)],
       ).createShader(pcbRect);
-    canvas.drawRRect(RRect.fromRectAndRadius(pcbRect, const Radius.circular(4)), pcbPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pcbRect, const Radius.circular(4)),
+      pcbPaint,
+    );
 
     final pcbBorder = Paint()
       ..color = color.withValues(alpha: 0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.3;
-    canvas.drawRRect(RRect.fromRectAndRadius(pcbRect, const Radius.circular(4)), pcbBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pcbRect, const Radius.circular(4)),
+      pcbBorder,
+    );
 
     // 4 Memory IC Chips
     final chipPaint = Paint()..color = const Color(0xFF1E293B);
@@ -225,8 +263,14 @@ class _RamPainter extends CustomPainter {
       final chipLeft = w * (0.1 + i * 0.2);
       final chipTop = h * 0.32;
       final cRect = Rect.fromLTWH(chipLeft, chipTop, chipWidth, chipHeight);
-      canvas.drawRRect(RRect.fromRectAndRadius(cRect, const Radius.circular(2)), chipPaint);
-      canvas.drawRRect(RRect.fromRectAndRadius(cRect, const Radius.circular(2)), chipBorder);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(cRect, const Radius.circular(2)),
+        chipPaint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(cRect, const Radius.circular(2)),
+        chipBorder,
+      );
     }
 
     // Gold Contact Edge Pins (Bottom with Center Key Notch)
@@ -243,7 +287,10 @@ class _RamPainter extends CustomPainter {
 
     // Notch cut
     final notchPaint = Paint()..color = Colors.black.withValues(alpha: 0.5);
-    canvas.drawRect(Rect.fromLTWH(w * 0.46, h * 0.78, w * 0.08, h * 0.1), notchPaint);
+    canvas.drawRect(
+      Rect.fromLTWH(w * 0.46, h * 0.78, w * 0.08, h * 0.1),
+      notchPaint,
+    );
   }
 
   @override
@@ -294,7 +341,10 @@ class _GpuPainter extends CustomPainter {
     // Metal IO Bracket on Left
     final bracketRect = Rect.fromLTWH(w * 0.04, h * 0.15, w * 0.08, h * 0.7);
     final bracketPaint = Paint()..color = const Color(0xFF94A3B8);
-    canvas.drawRRect(RRect.fromRectAndRadius(bracketRect, const Radius.circular(2)), bracketPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(bracketRect, const Radius.circular(2)),
+      bracketPaint,
+    );
 
     // GPU Main Shroud Body
     final shroudRect = Rect.fromLTWH(w * 0.14, h * 0.2, w * 0.82, h * 0.58);
@@ -304,20 +354,23 @@ class _GpuPainter extends CustomPainter {
         end: Alignment.bottomRight,
         colors: [color.withValues(alpha: 0.4), const Color(0xFF0F172A)],
       ).createShader(shroudRect);
-    canvas.drawRRect(RRect.fromRectAndRadius(shroudRect, const Radius.circular(5)), shroudPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(shroudRect, const Radius.circular(5)),
+      shroudPaint,
+    );
 
     final shroudBorder = Paint()
       ..color = color.withValues(alpha: 0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.3;
-    canvas.drawRRect(RRect.fromRectAndRadius(shroudRect, const Radius.circular(5)), shroudBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(shroudRect, const Radius.circular(5)),
+      shroudBorder,
+    );
 
     // Dual Axial Fans (Left Fan & Right Fan)
     final fanRadius = w * 0.16;
-    final fanCenters = [
-      Offset(w * 0.36, h * 0.49),
-      Offset(w * 0.74, h * 0.49),
-    ];
+    final fanCenters = [Offset(w * 0.36, h * 0.49), Offset(w * 0.74, h * 0.49)];
 
     for (final center in fanCenters) {
       // Fan circle ring
@@ -342,12 +395,27 @@ class _GpuPainter extends CustomPainter {
         final angle = (b * math.pi / 3);
         final dx = math.cos(angle) * (fanRadius * 0.75);
         final dy = math.sin(angle) * (fanRadius * 0.75);
-        canvas.drawLine(center, Offset(center.dx + dx, center.dy + dy), bladePaint);
+        canvas.drawLine(
+          center,
+          Offset(center.dx + dx, center.dy + dy),
+          bladePaint,
+        );
       }
 
       // Fan hub center
-      canvas.drawCircle(center, fanRadius * 0.28, Paint()..color = const Color(0xFF0F172A));
-      canvas.drawCircle(center, fanRadius * 0.28, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 1.0);
+      canvas.drawCircle(
+        center,
+        fanRadius * 0.28,
+        Paint()..color = const Color(0xFF0F172A),
+      );
+      canvas.drawCircle(
+        center,
+        fanRadius * 0.28,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0,
+      );
     }
 
     // Bottom PCIe Connector Finger
@@ -411,48 +479,116 @@ class _MotherboardPainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [color.withValues(alpha: 0.3), const Color(0xFF064E3B).withValues(alpha: 0.6)],
+        colors: [
+          color.withValues(alpha: 0.3),
+          const Color(0xFF064E3B).withValues(alpha: 0.6),
+        ],
       ).createShader(pcbRect);
-    canvas.drawRRect(RRect.fromRectAndRadius(pcbRect, const Radius.circular(6)), pcbPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pcbRect, const Radius.circular(6)),
+      pcbPaint,
+    );
 
     final pcbBorder = Paint()
       ..color = color.withValues(alpha: 0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
-    canvas.drawRRect(RRect.fromRectAndRadius(pcbRect, const Radius.circular(6)), pcbBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pcbRect, const Radius.circular(6)),
+      pcbBorder,
+    );
 
     // CPU Socket Area (Top Left quadrant)
     final socketRect = Rect.fromLTWH(w * 0.16, h * 0.16, w * 0.36, h * 0.36);
-    canvas.drawRRect(RRect.fromRectAndRadius(socketRect, const Radius.circular(3)), Paint()..color = const Color(0xFF1E293B));
-    canvas.drawRRect(RRect.fromRectAndRadius(socketRect, const Radius.circular(3)), Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 1.0);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(socketRect, const Radius.circular(3)),
+      Paint()..color = const Color(0xFF1E293B),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(socketRect, const Radius.circular(3)),
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
     // Socket Core Center
-    canvas.drawRect(Rect.fromLTWH(w * 0.24, h * 0.24, w * 0.2, h * 0.2), Paint()..color = color.withValues(alpha: 0.4));
+    canvas.drawRect(
+      Rect.fromLTWH(w * 0.24, h * 0.24, w * 0.2, h * 0.2),
+      Paint()..color = color.withValues(alpha: 0.4),
+    );
 
     // RAM Slots (Top Right quadrant: 2 Vertical Slots)
     final ramSlotPaint = Paint()..color = const Color(0xFF0F172A);
-    final ramSlotBorder = Paint()..color = const Color(0xFFF59E0B)..style = PaintingStyle.stroke..strokeWidth = 0.9;
+    final ramSlotBorder = Paint()
+      ..color = const Color(0xFFF59E0B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.9;
 
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.62, h * 0.14, w * 0.09, h * 0.42), const Radius.circular(1.5)), ramSlotPaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.62, h * 0.14, w * 0.09, h * 0.42), const Radius.circular(1.5)), ramSlotBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.62, h * 0.14, w * 0.09, h * 0.42),
+        const Radius.circular(1.5),
+      ),
+      ramSlotPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.62, h * 0.14, w * 0.09, h * 0.42),
+        const Radius.circular(1.5),
+      ),
+      ramSlotBorder,
+    );
 
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.77, h * 0.14, w * 0.09, h * 0.42), const Radius.circular(1.5)), ramSlotPaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.77, h * 0.14, w * 0.09, h * 0.42), const Radius.circular(1.5)), ramSlotBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.77, h * 0.14, w * 0.09, h * 0.42),
+        const Radius.circular(1.5),
+      ),
+      ramSlotPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.77, h * 0.14, w * 0.09, h * 0.42),
+        const Radius.circular(1.5),
+      ),
+      ramSlotBorder,
+    );
 
     // PCIe x16 Slot (Bottom Horizontal Slot)
     final pcieRect = Rect.fromLTWH(w * 0.16, h * 0.66, w * 0.68, h * 0.1);
-    canvas.drawRRect(RRect.fromRectAndRadius(pcieRect, const Radius.circular(2)), Paint()..color = const Color(0xFF1E293B));
-    canvas.drawRRect(RRect.fromRectAndRadius(pcieRect, const Radius.circular(2)), Paint()..color = const Color(0xFF8B5CF6)..style = PaintingStyle.stroke..strokeWidth = 1.0);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pcieRect, const Radius.circular(2)),
+      Paint()..color = const Color(0xFF1E293B),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pcieRect, const Radius.circular(2)),
+      Paint()
+        ..color = const Color(0xFF8B5CF6)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
 
     // Chipset Heatsink (Bottom Right)
     final chipHeatsink = Rect.fromLTWH(w * 0.62, h * 0.78, w * 0.22, h * 0.12);
-    canvas.drawRRect(RRect.fromRectAndRadius(chipHeatsink, const Radius.circular(2)), Paint()..color = color.withValues(alpha: 0.6));
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(chipHeatsink, const Radius.circular(2)),
+      Paint()..color = color.withValues(alpha: 0.6),
+    );
 
     // Circuit Traces Lines
     final tracePaint = Paint()
       ..color = color.withValues(alpha: 0.4)
       ..strokeWidth = 1.0;
-    canvas.drawLine(Offset(w * 0.34, h * 0.52), Offset(w * 0.34, h * 0.66), tracePaint);
-    canvas.drawLine(Offset(w * 0.52, h * 0.34), Offset(w * 0.62, h * 0.34), tracePaint);
+    canvas.drawLine(
+      Offset(w * 0.34, h * 0.52),
+      Offset(w * 0.34, h * 0.66),
+      tracePaint,
+    );
+    canvas.drawLine(
+      Offset(w * 0.52, h * 0.34),
+      Offset(w * 0.62, h * 0.34),
+      tracePaint,
+    );
   }
 
   @override
@@ -511,24 +647,39 @@ class StorageIllustration extends StatelessWidget {
     }
 
     // 1. Fallback: raw storageType / busType / model string checks
-    if (st.contains('usb') || bt.contains('usb') || md.contains('usb') ||
-        st.contains('removable') || md.contains('sandisk') ||
-        md.contains('cruzer') || md.contains('flash')) {
+    if (st.contains('usb') ||
+        bt.contains('usb') ||
+        md.contains('usb') ||
+        st.contains('removable') ||
+        md.contains('sandisk') ||
+        md.contains('cruzer') ||
+        md.contains('flash')) {
       return 'assets/Parts/usb_flash.png';
     }
-    if (st.contains('nvme') || bt.contains('nvme') || md.contains('nvme') ||
-        md.contains('m.2') || md.contains('m2') || md.contains('pcie')) {
+    if (st.contains('nvme') ||
+        bt.contains('nvme') ||
+        md.contains('nvme') ||
+        md.contains('m.2') ||
+        md.contains('m2') ||
+        md.contains('pcie')) {
       return 'assets/Parts/ssd_m2.png';
     }
-    if (st.contains('hdd') || st.contains('hard') || md.contains('wd') ||
-        md.contains('seagate') || md.contains('toshiba') ||
-        md.contains('barracuda') || md.contains('caviar')) {
+    if (st.contains('hdd') ||
+        st.contains('hard') ||
+        md.contains('wd') ||
+        md.contains('seagate') ||
+        md.contains('toshiba') ||
+        md.contains('barracuda') ||
+        md.contains('caviar')) {
       if (!md.contains('ssd') && !st.contains('ssd')) {
         return 'assets/Parts/hdd.png';
       }
     }
-    if (st.contains('ssd') || md.contains('ssd') || md.contains('sata') ||
-        md.contains('evo') || md.contains('crucial')) {
+    if (st.contains('ssd') ||
+        md.contains('ssd') ||
+        md.contains('sata') ||
+        md.contains('evo') ||
+        md.contains('crucial')) {
       return 'assets/Parts/ssd_sata.png';
     }
 
@@ -627,13 +778,19 @@ class _StoragePainter extends CustomPainter {
         end: Alignment.bottomRight,
         colors: [color.withValues(alpha: 0.35), const Color(0xFF0F172A)],
       ).createShader(pcbRect);
-    canvas.drawRRect(RRect.fromRectAndRadius(pcbRect, const Radius.circular(4)), pcbPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pcbRect, const Radius.circular(4)),
+      pcbPaint,
+    );
 
     final pcbBorder = Paint()
       ..color = color.withValues(alpha: 0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.3;
-    canvas.drawRRect(RRect.fromRectAndRadius(pcbRect, const Radius.circular(4)), pcbBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pcbRect, const Radius.circular(4)),
+      pcbBorder,
+    );
 
     // M.2 Screw Notch on Left Edge
     final notchPaint = Paint()..color = Colors.black.withValues(alpha: 0.7);
@@ -641,18 +798,43 @@ class _StoragePainter extends CustomPainter {
 
     // Controller Chip (Metallic Square)
     final ctrlRect = Rect.fromLTWH(w * 0.22, h * 0.35, w * 0.2, h * 0.3);
-    canvas.drawRRect(RRect.fromRectAndRadius(ctrlRect, const Radius.circular(2)), Paint()..color = const Color(0xFF334155));
-    canvas.drawRRect(RRect.fromRectAndRadius(ctrlRect, const Radius.circular(2)), Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 0.8);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(ctrlRect, const Radius.circular(2)),
+      Paint()..color = const Color(0xFF334155),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(ctrlRect, const Radius.circular(2)),
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8,
+    );
 
     // 2 NAND Flash Memory IC Blocks
     for (int i = 0; i < 2; i++) {
-      final nandRect = Rect.fromLTWH(w * (0.48 + i * 0.2), h * 0.33, w * 0.17, h * 0.34);
-      canvas.drawRRect(RRect.fromRectAndRadius(nandRect, const Radius.circular(2)), Paint()..color = const Color(0xFF1E293B));
-      canvas.drawRRect(RRect.fromRectAndRadius(nandRect, const Radius.circular(2)), Paint()..color = color.withValues(alpha: 0.6)..style = PaintingStyle.stroke..strokeWidth = 0.8);
+      final nandRect = Rect.fromLTWH(
+        w * (0.48 + i * 0.2),
+        h * 0.33,
+        w * 0.17,
+        h * 0.34,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(nandRect, const Radius.circular(2)),
+        Paint()..color = const Color(0xFF1E293B),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(nandRect, const Radius.circular(2)),
+        Paint()
+          ..color = color.withValues(alpha: 0.6)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.8,
+      );
     }
 
     // Gold M.2 Pins on Right Edge
-    final goldPinPaint = Paint()..color = const Color(0xFFF59E0B)..strokeWidth = 1.2;
+    final goldPinPaint = Paint()
+      ..color = const Color(0xFFF59E0B)
+      ..strokeWidth = 1.2;
     for (int i = 0; i < 7; i++) {
       final y = h * (0.32 + i * 0.056);
       canvas.drawLine(Offset(w * 0.88, y), Offset(w * 0.94, y), goldPinPaint);
@@ -695,8 +877,18 @@ class _WindowsPainter extends CustomPainter {
     final tiles = [
       Rect.fromLTWH(w * 0.1, h * 0.1, tileW, tileH), // Top-Left
       Rect.fromLTWH(w * 0.1 + tileW + gap, h * 0.1, tileW, tileH), // Top-Right
-      Rect.fromLTWH(w * 0.1, h * 0.1 + tileH + gap, tileW, tileH), // Bottom-Left
-      Rect.fromLTWH(w * 0.1 + tileW + gap, h * 0.1 + tileH + gap, tileW, tileH), // Bottom-Right
+      Rect.fromLTWH(
+        w * 0.1,
+        h * 0.1 + tileH + gap,
+        tileW,
+        tileH,
+      ), // Bottom-Left
+      Rect.fromLTWH(
+        w * 0.1 + tileW + gap,
+        h * 0.1 + tileH + gap,
+        tileW,
+        tileH,
+      ), // Bottom-Right
     ];
 
     for (final rect in tiles) {
@@ -704,19 +896,22 @@ class _WindowsPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF38BDF8),
-            color,
-          ],
+          colors: [const Color(0xFF38BDF8), color],
         ).createShader(rect);
 
-      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(3)), paint);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+        paint,
+      );
 
       final border = Paint()
         ..color = Colors.white.withValues(alpha: 0.6)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0;
-      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(3)), border);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+        border,
+      );
     }
   }
 
@@ -757,13 +952,19 @@ class _OfficePainter extends CustomPainter {
         end: Alignment.bottomRight,
         colors: [const Color(0xFFFB923C), color, const Color(0xFFEA580C)],
       ).createShader(backRect);
-    canvas.drawRRect(RRect.fromRectAndRadius(backRect, const Radius.circular(8)), backPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(backRect, const Radius.circular(8)),
+      backPaint,
+    );
 
     final backBorder = Paint()
       ..color = Colors.white.withValues(alpha: 0.5)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
-    canvas.drawRRect(RRect.fromRectAndRadius(backRect, const Radius.circular(8)), backBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(backRect, const Radius.circular(8)),
+      backBorder,
+    );
 
     // Front Overlapping Fold Badge
     final frontRect = Rect.fromLTWH(w * 0.28, h * 0.28, w * 0.44, h * 0.44);
@@ -773,7 +974,10 @@ class _OfficePainter extends CustomPainter {
         end: Alignment.bottomRight,
         colors: [Colors.white, Color(0xFFFED7AA)],
       ).createShader(frontRect);
-    canvas.drawRRect(RRect.fromRectAndRadius(frontRect, const Radius.circular(5)), frontPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(frontRect, const Radius.circular(5)),
+      frontPaint,
+    );
 
     // Office 'O' Emblem in Center
     final oPaint = Paint()
@@ -839,17 +1043,26 @@ class _BatteryPainter extends CustomPainter {
         end: Alignment.bottomCenter,
         colors: [color.withValues(alpha: 0.25), const Color(0xFF0F172A)],
       ).createShader(bodyRect);
-    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(6)), bodyPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(bodyRect, const Radius.circular(6)),
+      bodyPaint,
+    );
 
     final bodyBorder = Paint()
       ..color = color.withValues(alpha: 0.85)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
-    canvas.drawRRect(RRect.fromRectAndRadius(bodyRect, const Radius.circular(6)), bodyBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(bodyRect, const Radius.circular(6)),
+      bodyBorder,
+    );
 
     // Battery Positive Terminal Cap (Top)
     final capRect = Rect.fromLTWH(w * 0.38, h * 0.1, w * 0.24, h * 0.08);
-    canvas.drawRRect(RRect.fromRectAndRadius(capRect, const Radius.circular(2)), Paint()..color = color.withValues(alpha: 0.9));
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(capRect, const Radius.circular(2)),
+      Paint()..color = color.withValues(alpha: 0.9),
+    );
 
     // Health Level Bar Fill inside battery
     final fillFrac = (healthPercent.clamp(0.0, 100.0) / 100.0);
@@ -863,7 +1076,10 @@ class _BatteryPainter extends CustomPainter {
         end: Alignment.bottomCenter,
         colors: [color, color.withValues(alpha: 0.6)],
       ).createShader(fillRect);
-    canvas.drawRRect(RRect.fromRectAndRadius(fillRect, const Radius.circular(3)), fillPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(fillRect, const Radius.circular(3)),
+      fillPaint,
+    );
 
     // Lightning bolt in center if charging or healthy
     final boltPaint = Paint()..color = Colors.white;
@@ -904,12 +1120,8 @@ class UsbFlashIllustration extends StatelessWidget {
       width: width,
       height: height,
       fit: fit,
-      errorBuilder: (context, error, stackTrace) => const Icon(
-        Icons.usb_rounded,
-        size: 40,
-        color: Color(0xFFEF4444),
-      ),
+      errorBuilder: (context, error, stackTrace) =>
+          const Icon(Icons.usb_rounded, size: 40, color: Color(0xFFEF4444)),
     );
   }
 }
-

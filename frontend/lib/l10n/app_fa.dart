@@ -8,7 +8,8 @@ class AppLocalizationsFa implements AppLocalizations {
   String get appName => 'مرکزی سیستم چکر';
 
   @override
-  String get appSubtitle => 'شناسایی و بررسی خودکار مشخصات سخت‌افزار، ویندوز، نرم‌افزارها و درایورها';
+  String get appSubtitle =>
+      'شناسایی و بررسی خودکار مشخصات سخت‌افزار، ویندوز، نرم‌افزارها و درایورها';
 
   @override
   String get liveInspector => 'بررسی زنده';
@@ -20,10 +21,12 @@ class AppLocalizationsFa implements AppLocalizations {
   String get advancedMode => 'پیشرفته';
 
   @override
-  String get simpleModeTooltip => 'حالت ساده: مقایسه سریع با فاکتور خرید و چک‌لیست‌ها';
+  String get simpleModeTooltip =>
+      'حالت ساده: مقایسه سریع با فاکتور خرید و چک‌لیست‌ها';
 
   @override
-  String get advancedModeTooltip => 'حالت پیشرفته: مشخصات کامل فنی، جزئیات درایورها و نرم‌افزارها';
+  String get advancedModeTooltip =>
+      'حالت پیشرفته: مشخصات کامل فنی، جزئیات درایورها و نرم‌افزارها';
 
   @override
   String get languageEn => 'EN';
@@ -77,7 +80,8 @@ class AppLocalizationsFa implements AppLocalizations {
   String get simpleModeHeaderTitle => 'بررسی سریع سیستم و مقایسه با فاکتور';
 
   @override
-  String get simpleModeHeaderSubtitle => 'مشخصات سخت‌افزار، درایورها، نرم‌افزارها و فایل‌های موجود در سیستم را با فاکتور خرید مقایسه کنید.';
+  String get simpleModeHeaderSubtitle =>
+      'مشخصات سخت‌افزار، درایورها، نرم‌افزارها و فایل‌های موجود در سیستم را با فاکتور خرید مقایسه کنید.';
 
   @override
   String get invoiceCheckBadge => 'چک فاکتور';
@@ -140,7 +144,8 @@ class AppLocalizationsFa implements AppLocalizations {
   String get maxClockSpeed => 'حداکثر فرکانس';
 
   @override
-  String coresThreads(dynamic cores, dynamic threads) => '$cores هسته / $threads رشته';
+  String coresThreads(dynamic cores, dynamic threads) =>
+      '$cores هسته / $threads رشته';
 
   @override
   String get totalCapacity => 'ظرفیت کل';
@@ -251,7 +256,8 @@ class AppLocalizationsFa implements AppLocalizations {
   String get disconnected => 'قطع';
 
   @override
-  String activeAdaptersCount(int active, int total) => '$active متصل از مجموع $total';
+  String activeAdaptersCount(int active, int total) =>
+      '$active متصل از مجموع $total';
 
   @override
   String get noNetworkDetected => 'کارت شبکه‌ای یافت نشد';
@@ -279,7 +285,8 @@ class AppLocalizationsFa implements AppLocalizations {
   String get driverCategory => 'دسته‌بندی';
 
   @override
-  String driverSummaryCount(int healthy, int total) => '$healthy از $total درایور مهم سالم';
+  String driverSummaryCount(int healthy, int total) =>
+      '$healthy از $total درایور مهم سالم';
 
   // Software Requirements & Discovery
   @override
@@ -337,7 +344,8 @@ class AppLocalizationsFa implements AppLocalizations {
   String get softwareStatus => 'وضعیت نرم‌افزار';
 
   @override
-  String softwareSummaryCount(int installed, int total) => '$installed از $total نصب شده';
+  String softwareSummaryCount(int installed, int total) =>
+      '$installed از $total نصب شده';
 
   @override
   String get allSoftwareInstalled => 'تمام نرم‌افزارهای موردنیاز نصب شده‌اند';
@@ -346,7 +354,8 @@ class AppLocalizationsFa implements AppLocalizations {
   String get someSoftwareMissing => 'برخی نرم‌افزارها نصب نشده‌اند';
 
   @override
-  String get noSoftwareConfigured => 'نرم‌افزاری در لیست الزامات تعریف نشده است.';
+  String get noSoftwareConfigured =>
+      'نرم‌افزاری در لیست الزامات تعریف نشده است.';
 
   @override
   String get install => 'نصب';
@@ -364,7 +373,8 @@ class AppLocalizationsFa implements AppLocalizations {
   String get confirmInstallTitle => 'تأیید نصب نرم‌افزار';
 
   @override
-  String confirmInstallMessage(String name) => 'آیا از اجرای نصب $name اطمینان دارید؟';
+  String confirmInstallMessage(String name) =>
+      'آیا از اجرای نصب $name اطمینان دارید؟';
 
   @override
   String get availableToInstall => 'آماده نصب';
@@ -388,7 +398,8 @@ class AppLocalizationsFa implements AppLocalizations {
   String get confirmUninstallTitle => 'تأیید حذف نرم‌افزار';
 
   @override
-  String confirmUninstallMessage(String name) => 'آیا مطمئنید که می‌خواهید $name را به‌طور کامل از سیستم حذف کنید؟';
+  String confirmUninstallMessage(String name) =>
+      'آیا مطمئنید که می‌خواهید $name را به‌طور کامل از سیستم حذف کنید؟';
 
   @override
   String uninstallSuccess(String name) => '$name با موفقیت حذف شد';
@@ -422,7 +433,8 @@ class AppLocalizationsFa implements AppLocalizations {
   String get file => 'فایل';
 
   @override
-  String filesSummaryCount(int present, int total) => '$present از $total موجود است';
+  String filesSummaryCount(int present, int total) =>
+      '$present از $total موجود است';
 
   @override
   String get allFilesPresent => 'تمام فایل‌های موردنیاز موجود هستند';
@@ -435,7 +447,8 @@ class AppLocalizationsFa implements AppLocalizations {
 
   // Loading & Error Views
   @override
-  String get loadingMessage => 'در حال شناسایی مشخصات سخت‌افزار، ویندوز، نرم‌افزارها و درایورها...';
+  String get loadingMessage =>
+      'در حال شناسایی مشخصات سخت‌افزار، ویندوز، نرم‌افزارها و درایورها...';
 
   @override
   String get initializingMessage => 'در حال راه‌اندازی موتور شناسایی...';
@@ -478,10 +491,12 @@ class AppLocalizationsFa implements AppLocalizations {
   String get activationCompleted => 'فعالسازی انجام شد';
 
   @override
-  String get windowsActivationCompleted => 'فعالسازی ویندوز با موفقیت انجام شد.';
+  String get windowsActivationCompleted =>
+      'فعالسازی ویندوز با موفقیت انجام شد.';
 
   @override
-  String get officeActivationCompleted => 'فعالسازی مایکروسافت آفیس با موفقیت انجام شد.';
+  String get officeActivationCompleted =>
+      'فعالسازی مایکروسافت آفیس با موفقیت انجام شد.';
 
   @override
   String get activationFailed => 'فعالسازی انجام نشد';
@@ -597,13 +612,15 @@ class AppLocalizationsFa implements AppLocalizations {
   String get noProblemsFound => 'هیچ مشکلی یافت نشد؛ سیستم کاملاً آماده است.';
 
   @override
-  String get prepareSystemDescription => 'اقدامات اصلاحی موردنظر را جهت اجرای خودکار و ترتیبی انتخاب نمایید.';
+  String get prepareSystemDescription =>
+      'اقدامات اصلاحی موردنظر را جهت اجرای خودکار و ترتیبی انتخاب نمایید.';
 
   @override
   String get confirmPrepareSystemTitle => 'تأیید آماده‌سازی خودکار سیستم';
 
   @override
-  String get confirmPrepareSystemMessage => 'موارد انتخاب‌شده به ترتیب نصب و فعالسازی خواهند شد. آیا ادامه می‌دهید؟';
+  String get confirmPrepareSystemMessage =>
+      'موارد انتخاب‌شده به ترتیب نصب و فعالسازی خواهند شد. آیا ادامه می‌دهید؟';
 
   @override
   String get selectActionsToExecute => 'انتخاب اقدامات جهت اجرا';
@@ -615,7 +632,6 @@ class AppLocalizationsFa implements AppLocalizations {
   String qcProblemsFound(int count) => '$count مورد نیاز به بررسی دارد';
 
   @override
-  String qcPassedCategoriesCount(int passed, int total) => '$passed از $total بخش تأیید شد';
+  String qcPassedCategoriesCount(int passed, int total) =>
+      '$passed از $total بخش تأیید شد';
 }
-
-

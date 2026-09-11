@@ -19,12 +19,18 @@ class SoftwareController extends GetxController {
   void toggleHideDuplicates() => hideDuplicates.toggle();
   final RxString installingPackageId = ''.obs;
   final RxString uninstallingPackageId = ''.obs;
+  final RxString windowsUpdateActionPackageId = ''.obs;
+  final RxString officeShortcutPackageId = ''.obs;
 
   // Batch auto-install state
   final RxBool isBatchInstalling = false.obs;
   final Rx<BatchInstallStatus> batchStatus = BatchInstallStatus.empty().obs;
 
   Timer? _pollTimer;
+  Timer? _initialTimer;
+  bool _batchPollInFlight = false;
+  bool _syncInFlight = false;
+  int _scanGeneration = 0;
   Timer? _debounceTimer;
   Timer? _periodicSyncTimer;
   Timer? _batchPollTimer;
@@ -45,13 +51,15 @@ class SoftwareController extends GetxController {
   Future<void> _loadCacheAndFetch() async {
     try {
       final cached = await CacheService.loadCachedPackages();
-      if (cached != null) {
+      if (cached != null && !isClosed) {
         packagesResponse.value = cached;
       }
     } catch (_) {}
 
     // Defer initial scan slightly (500ms) so it does not contest initial frame render
-    Timer(const Duration(milliseconds: 500), () {
+    if (isClosed) return;
+    _initialTimer = Timer(const Duration(milliseconds: 500), () {
+      if (isClosed) return;
       fetchPackages();
       _startPeriodicSync();
       _checkInitialBatchStatus();
@@ -60,6 +68,8 @@ class SoftwareController extends GetxController {
 
   @override
   void onClose() {
+    _initialTimer?.cancel();
+    _scanGeneration++;
     _pollTimer?.cancel();
     _debounceTimer?.cancel();
     _periodicSyncTimer?.cancel();
@@ -79,9 +89,12 @@ class SoftwareController extends GetxController {
     );
 
     if (selectedPath != null && selectedPath.isNotEmpty) {
+      if (isClosed || isBatchInstalling.value) return;
+      final generation = ++_scanGeneration;
       isScanning.value = true;
       try {
         final res = await _apiService.setPackagesDirectory(selectedPath);
+        if (isClosed || generation != _scanGeneration) return;
         packagesResponse.value = res;
         _updateWatcher(res.packagesDirectory);
 
@@ -109,14 +122,19 @@ class SoftwareController extends GetxController {
           );
         }
       } finally {
-        isScanning.value = false;
+        if (!isClosed && generation == _scanGeneration) {
+          isScanning.value = false;
+        }
       }
     }
   }
 
   Future<void> fetchPackages({String? customDir}) async {
+    if (isClosed || isScanning.value) return;
+    final generation = ++_scanGeneration;
     try {
       final res = await _apiService.fetchPackages(customDir: customDir);
+      if (isClosed || generation != _scanGeneration) return;
       packagesResponse.value = res;
       _updateWatcher(res.packagesDirectory);
     } catch (e) {
@@ -125,17 +143,20 @@ class SoftwareController extends GetxController {
   }
 
   Future<void> scanPackages({bool silent = false}) async {
+    if (isClosed || isScanning.value) return;
+    final generation = ++_scanGeneration;
     if (!silent) {
       isScanning.value = true;
     }
     try {
       final res = await _apiService.scanPackages();
+      if (isClosed || generation != _scanGeneration) return;
       packagesResponse.value = res;
       _updateWatcher(res.packagesDirectory);
     } catch (e) {
       debugPrint('[SoftwareController] scanPackages error: $e');
     } finally {
-      if (!silent) {
+      if (!silent && !isClosed) {
         isScanning.value = false;
       }
     }
@@ -182,9 +203,13 @@ class SoftwareController extends GetxController {
     _periodicSyncTimer?.cancel();
     // Heartbeat every 4 seconds to catch any USB drive inserts or changes where watcher events might not fire
     _periodicSyncTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
+      if (_syncInFlight || isClosed || isBatchInstalling.value) return;
       if (!isScanning.value && installingPackageId.value.isEmpty) {
+        _syncInFlight = true;
+        final generation = _scanGeneration;
         try {
           final res = await _apiService.fetchPackages();
+          if (isClosed || generation != _scanGeneration) return;
           // Only update if count, items, or directory status actually changed
           if (res.packages.length != packagesResponse.value.packages.length ||
               res.directoryExists != packagesResponse.value.directoryExists ||
@@ -200,7 +225,11 @@ class SoftwareController extends GetxController {
             packagesResponse.value = res;
             _updateWatcher(res.packagesDirectory);
           }
-        } catch (_) {}
+        } catch (_) {
+          // Background sync is retried on the next tick.
+        } finally {
+          _syncInFlight = false;
+        }
       }
     });
   }
@@ -467,6 +496,11 @@ class SoftwareController extends GetxController {
 
       if (updated != null && updated.isInstalled) {
         timer.cancel();
+        final officeHint = '${pkg.id} ${pkg.name} ${pkg.filename}'
+            .toLowerCase();
+        if (officeHint.contains('office')) {
+          await _apiService.createOfficeDesktopShortcuts();
+        }
         if (Get.isRegistered<SystemInfoController>()) {
           Get.find<SystemInfoController>().recordSoftwareInstall();
         }
@@ -507,11 +541,13 @@ class SoftwareController extends GetxController {
 
     try {
       // 1. If installedExePath or fullPath for portable tools is known, open directly from Flutter desktop session
-      final directExe = (pkg.installedExePath != null && pkg.installedExePath!.isNotEmpty)
+      final directExe =
+          (pkg.installedExePath != null && pkg.installedExePath!.isNotEmpty)
           ? pkg.installedExePath!
           : (pkg.isPortable && pkg.fullPath.isNotEmpty ? pkg.fullPath : null);
 
-      if (directExe != null &&
+      if (!pkg.isWindowsUpdateBlocker &&
+          directExe != null &&
           directExe.isNotEmpty &&
           Platform.isWindows) {
         try {
@@ -534,7 +570,41 @@ class SoftwareController extends GetxController {
       }
 
       // 2. Open via backend open endpoint
-      final res = await _apiService.openPackage(targetId);
+      var res = await _apiService.openPackage(targetId);
+      if (res['requires_confirmation'] == true && context.mounted) {
+        final windows = res['windows'] as Map<String, dynamic>?;
+        final label = windows?['label'] as String? ?? 'Windows Home';
+        final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFF59E0B),
+              size: 38,
+            ),
+            title: Text('$label اورجینال است'),
+            content: const Text(
+              'بهتر است Windows Update در نسخهٔ Home روشن بماند تا به‌روزرسانی‌های امنیتی دریافت شوند. آیا با آگاهی از این موضوع می‌خواهید آن را غیرفعال کنید؟',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('انصراف'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('بله، غیرفعال کن'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true) return;
+        res = await _apiService.openPackage(
+          targetId,
+          confirmHomeUpdateBlock: true,
+        );
+      }
       final success = res['success'] == true;
       final msg =
           res['message'] as String? ??
@@ -558,6 +628,147 @@ class SoftwareController extends GetxController {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  Future<void> pinPackageToTaskbar(
+    BuildContext context,
+    SoftwarePackage pkg,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final targetId = pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id;
+    final res = await _apiService.pinPackageToTaskbar(targetId);
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(res['message'] as String? ?? 'عملیات Pin انجام نشد.'),
+        backgroundColor: res['success'] == true
+            ? const Color(0xFF0284C7)
+            : const Color(0xFFEF4444),
+        duration: const Duration(seconds: 6),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> createOfficeShortcuts(
+    BuildContext context,
+    SoftwarePackage pkg,
+  ) async {
+    if (officeShortcutPackageId.value.isNotEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    officeShortcutPackageId.value = pkg.id;
+    try {
+      final res = await _apiService.createOfficeDesktopShortcuts();
+      if (!context.mounted) return;
+      final success = res['success'] == true;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            res['message'] as String? ??
+                (success
+                    ? 'میانبرهای Word، Excel و PowerPoint ساخته شدند.'
+                    : 'ساخت میانبرهای Office انجام نشد.'),
+          ),
+          backgroundColor: success
+              ? const Color(0xFF10B981)
+              : const Color(0xFFEF4444),
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('خطا در ساخت میانبرهای Office: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      officeShortcutPackageId.value = '';
+    }
+  }
+
+  Future<void> setWindowsUpdateState(
+    BuildContext context,
+    SoftwarePackage pkg,
+  ) async {
+    if (windowsUpdateActionPackageId.value.isNotEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final targetId = pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id;
+    final enable = pkg.windowsUpdateBlocked;
+    windowsUpdateActionPackageId.value = pkg.id;
+    try {
+      var res = await _apiService.setWindowsUpdateState(
+        targetId,
+        enable: enable,
+      );
+      if (res['requires_confirmation'] == true && context.mounted) {
+        final windows = res['windows'] as Map<String, dynamic>?;
+        final label = windows?['label'] as String? ?? 'Windows Home';
+        final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFF59E0B),
+              size: 38,
+            ),
+            title: Text('$label اورجینال است'),
+            content: const Text(
+              'بهتر است Windows Update در نسخهٔ Home روشن بماند تا به‌روزرسانی‌های امنیتی دریافت شوند. آیا با آگاهی از این موضوع می‌خواهید آن را غیرفعال کنید؟',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('انصراف'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('بله، غیرفعال کن'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true) return;
+        res = await _apiService.setWindowsUpdateState(
+          targetId,
+          enable: false,
+          confirmHomeUpdateBlock: true,
+        );
+      }
+      if (!context.mounted) return;
+      final success = res['success'] == true;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            res['message'] as String? ??
+                (success
+                    ? 'وضعیت Windows Update تغییر کرد.'
+                    : 'تغییر وضعیت Windows Update ناموفق بود.'),
+          ),
+          backgroundColor: success
+              ? const Color(0xFF10B981)
+              : const Color(0xFFEF4444),
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      if (success) await scanPackages(silent: true);
+    } catch (e) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('خطا در تغییر وضعیت Windows Update: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      windowsUpdateActionPackageId.value = '';
     }
   }
 
@@ -1012,8 +1223,11 @@ class SoftwareController extends GetxController {
     _batchPollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
       timer,
     ) async {
+      if (_batchPollInFlight || isClosed) return;
+      _batchPollInFlight = true;
       try {
         final status = await _apiService.getBatchInstallStatus();
+        if (isClosed || timer != _batchPollTimer) return;
         batchStatus.value = status;
 
         if (!status.isRunning) {
@@ -1038,11 +1252,38 @@ class SoftwareController extends GetxController {
               ),
             );
           }
+          if (status.rebootRequired) {
+            _showManualRestartReminder();
+          }
         }
       } catch (e) {
         debugPrint('[SoftwareController] Batch poll error: $e');
+      } finally {
+        _batchPollInFlight = false;
       }
     });
+  }
+
+  void _showManualRestartReminder() {
+    final context = Get.context;
+    if (context == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.restart_alt_rounded, color: Color(0xFFF59E0B)),
+        title: const Text('یادآوری ری‌استارت'),
+        content: const Text(
+          'نصب نرم‌افزارها تمام شد. برای اعمال کامل تغییرات، بعداً سیستم را به‌صورت دستی ری‌استارت کنید. برنامه سیستم را خودکار ری‌استارت نمی‌کند.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('متوجه شدم؛ بعداً ری‌استارت می‌کنم'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> cancelBatchInstallInteractive(BuildContext context) async {

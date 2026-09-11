@@ -2,13 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/system_info.dart';
 import '../../theme/app_theme.dart';
 
-enum BadgeStatus {
-  success,
-  warning,
-  danger,
-  neutral,
-  info,
-}
+enum BadgeStatus { success, warning, danger, neutral, info }
 
 class StatusDot extends StatelessWidget {
   final String label;
@@ -51,10 +45,7 @@ class StatusDot extends StatelessWidget {
         Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
         Text(
@@ -191,7 +182,11 @@ class MetaTag extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 14, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+            Icon(
+              icon,
+              size: 14,
+              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+            ),
             const SizedBox(width: 5),
           ],
           Text(
@@ -209,7 +204,9 @@ class MetaTag extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                color: isDark
+                    ? AppTheme.darkTextPrimary
+                    : AppTheme.lightTextPrimary,
               ),
             ),
           ),
@@ -243,14 +240,20 @@ class EmptyStateWidget extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 56, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+            Icon(
+              icon,
+              size: 56,
+              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+            ),
             const SizedBox(height: 14),
             Text(
               title,
               style: TextStyle(
                 fontSize: 16.5,
                 fontWeight: FontWeight.w800,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                color: isDark
+                    ? AppTheme.darkTextPrimary
+                    : AppTheme.lightTextPrimary,
               ),
               textAlign: TextAlign.center,
             ),
@@ -259,14 +262,13 @@ class EmptyStateWidget extends StatelessWidget {
               subtitle,
               style: TextStyle(
                 fontSize: 13.5,
-                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                color: isDark
+                    ? AppTheme.darkTextMuted
+                    : AppTheme.lightTextMuted,
               ),
               textAlign: TextAlign.center,
             ),
-            if (action != null) ...[
-              const SizedBox(height: 18),
-              action!,
-            ],
+            if (action != null) ...[const SizedBox(height: 18), action!],
           ],
         ),
       ),
@@ -365,7 +367,9 @@ class MotherboardBrandBadge extends StatelessWidget {
               style: TextStyle(
                 fontSize: compact ? 11 : 12,
                 fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white.withValues(alpha: 0.95) : const Color(0xFF1E293B),
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.95)
+                    : const Color(0xFF1E293B),
               ),
             ),
           ],
@@ -383,7 +387,9 @@ class MotherboardBrandBadge extends StatelessWidget {
                 style: TextStyle(
                   fontSize: compact ? 10.5 : 11.5,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                  color: isDark
+                      ? const Color(0xFF94A3B8)
+                      : const Color(0xFF475569),
                 ),
               ),
             ),
@@ -415,7 +421,9 @@ class GenuineOriginalBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     const accentGold = Color(0xFF10B981);
-    final primaryColor = isOffice ? const Color(0xFF10B981) : const Color(0xFF059669);
+    final primaryColor = isOffice
+        ? const Color(0xFF10B981)
+        : const Color(0xFF059669);
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -484,7 +492,9 @@ class GenuineOriginalBadge extends StatelessWidget {
                 style: TextStyle(
                   fontSize: compact ? 10.5 : 11.5,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857),
+                  color: isDark
+                      ? const Color(0xFF6EE7B7)
+                      : const Color(0xFF047857),
                 ),
               ),
             ),

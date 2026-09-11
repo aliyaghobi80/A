@@ -388,6 +388,8 @@ class SoftwarePackage {
   final String folderName;
   final bool isPortableTool;
   final bool canOpenTool;
+  final bool windowsUpdateBlocked;
+  final bool windowsUpdateStateKnown;
 
   SoftwarePackage({
     required this.id,
@@ -424,9 +426,27 @@ class SoftwarePackage {
     this.folderName = '',
     this.isPortableTool = false,
     this.canOpenTool = false,
+    this.windowsUpdateBlocked = false,
+    this.windowsUpdateStateKnown = false,
   });
 
   bool get isPortable => isPortableTool || canOpenTool;
+
+  bool get isWindowsUpdateBlocker {
+    final value = '$name $filename $relativePath'.toLowerCase();
+    final compact = value.replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    return compact.contains('windowsupdateblocker') ||
+        RegExp(r'(^|[^a-z])wub(_x64)?\.exe').hasMatch(value);
+  }
+
+  bool get isMicrosoftOfficePackage {
+    final value = '$id $name $filename $relativePath $installerType'
+        .toLowerCase();
+    final compact = value.replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    return installerType == 'office_cmd' ||
+        id == 'office_2024_pro_plus' ||
+        compact.contains('microsoftoffice');
+  }
 
   String get installPathTooltip {
     if (isPortable) {
@@ -489,6 +509,9 @@ class SoftwarePackage {
       folderName: json['folder_name'] ?? '',
       isPortableTool: json['is_portable_tool'] as bool? ?? false,
       canOpenTool: json['can_open_tool'] as bool? ?? false,
+      windowsUpdateBlocked: json['windows_update_blocked'] as bool? ?? false,
+      windowsUpdateStateKnown:
+          json['windows_update_state_known'] as bool? ?? false,
     );
   }
 }
@@ -787,26 +810,59 @@ class MotherboardInfo {
   }
 
   String get effectiveBrand {
-    if (brand.isNotEmpty && brand != 'Unknown' && brand != 'Not available') return brand;
+    if (brand.isNotEmpty && brand != 'Unknown' && brand != 'Not available') {
+      return brand;
+    }
     final combined = '$manufacturer $model'.toLowerCase();
-    if (combined.contains('asustek') || combined.contains('asus') || combined.contains('rog') || combined.contains('tuf')) return 'ASUS';
-    if (combined.contains('gigabyte') || combined.contains('giga-byte') || combined.contains('aorus')) return 'GIGABYTE';
-    if (combined.contains('micro-star') || combined.contains('msi')) return 'MSI';
+    if (combined.contains('asustek') ||
+        combined.contains('asus') ||
+        combined.contains('rog') ||
+        combined.contains('tuf')) {
+      return 'ASUS';
+    }
+    if (combined.contains('gigabyte') ||
+        combined.contains('giga-byte') ||
+        combined.contains('aorus')) {
+      return 'GIGABYTE';
+    }
+    if (combined.contains('micro-star') || combined.contains('msi')) {
+      return 'MSI';
+    }
     if (combined.contains('asrock')) return 'ASRock';
     if (combined.contains('biostar')) return 'BIOSTAR';
     if (combined.contains('colorful')) return 'Colorful';
     if (combined.contains('maxsun')) return 'MAXSUN';
     if (combined.contains('nzxt')) return 'NZXT';
     if (combined.contains('evga')) return 'EVGA';
-    if (combined.contains('dell') || combined.contains('alienware')) return 'Dell';
-    if (combined.contains('lenovo') || combined.contains('thinkcentre') || combined.contains('legion')) return 'Lenovo';
-    if (combined.contains('hp') || combined.contains('hewlett-packard') || combined.contains('omen')) return 'HP';
-    if (combined.contains('acer') || combined.contains('predator')) return 'Acer';
+    if (combined.contains('dell') || combined.contains('alienware')) {
+      return 'Dell';
+    }
+    if (combined.contains('lenovo') ||
+        combined.contains('thinkcentre') ||
+        combined.contains('legion')) {
+      return 'Lenovo';
+    }
+    if (combined.contains('hp') ||
+        combined.contains('hewlett-packard') ||
+        combined.contains('omen')) {
+      return 'HP';
+    }
+    if (combined.contains('acer') || combined.contains('predator')) {
+      return 'Acer';
+    }
     if (combined.contains('machinist')) return 'Machinist';
     if (combined.contains('huananzhi')) return 'Huananzhi';
     if (combined.contains('jingsha')) return 'JingSha';
     if (manufacturer.isNotEmpty && manufacturer != 'Not available') {
-      return manufacturer.replaceAll(RegExp(r'(?:,\s*)?(?:Co\.|Ltd\.|Inc\.|Corp\.|Corporation)\b', caseSensitive: false), '').trim();
+      return manufacturer
+          .replaceAll(
+            RegExp(
+              r'(?:,\s*)?(?:Co\.|Ltd\.|Inc\.|Corp\.|Corporation)\b',
+              caseSensitive: false,
+            ),
+            '',
+          )
+          .trim();
     }
     return 'Standard';
   }
@@ -835,7 +891,9 @@ class MotherboardInfo {
   Color get brandColor {
     final b = effectiveBrand.toUpperCase();
     if (b.contains('ASUS')) return const Color(0xFF0072C6);
-    if (b.contains('GIGABYTE') || b.contains('AORUS')) return const Color(0xFFF97316);
+    if (b.contains('GIGABYTE') || b.contains('AORUS')) {
+      return const Color(0xFFF97316);
+    }
     if (b.contains('MSI')) return const Color(0xFFEF4444);
     if (b.contains('ASROCK')) return const Color(0xFF0EA5E9);
     if (b.contains('BIOSTAR')) return const Color(0xFFF5A623);
@@ -851,27 +909,51 @@ class MotherboardInfo {
   IconData get brandIcon {
     final b = effectiveBrand.toUpperCase();
     if (b.contains('ASUS')) return Icons.shield_rounded;
-    if (b.contains('GIGABYTE') || b.contains('AORUS')) return Icons.flash_on_rounded;
+    if (b.contains('GIGABYTE') || b.contains('AORUS')) {
+      return Icons.flash_on_rounded;
+    }
     if (b.contains('MSI')) return Icons.sports_esports_rounded;
     if (b.contains('ASROCK')) return Icons.auto_awesome_rounded;
     if (b.contains('BIOSTAR')) return Icons.star_rounded;
-    if (b.contains('DELL') || b.contains('HP') || b.contains('LENOVO')) return Icons.business_rounded;
+    if (b.contains('DELL') || b.contains('HP') || b.contains('LENOVO')) {
+      return Icons.business_rounded;
+    }
     return Icons.developer_board_rounded;
   }
 
   String get effectiveCleanModel {
-    var res = cleanModel.isNotEmpty && cleanModel != 'Not available' ? cleanModel : model;
+    var res = cleanModel.isNotEmpty && cleanModel != 'Not available'
+        ? cleanModel
+        : model;
     final b = effectiveBrand;
-    res = res.replaceAll(RegExp('^${RegExp.escape(b)}\\s+', caseSensitive: false), '');
-    res = res.replaceAll(RegExp('^${RegExp.escape(manufacturer)}\\s+', caseSensitive: false), '');
-    res = res.replaceAll(RegExp('\\s+${RegExp.escape(manufacturer)}\$', caseSensitive: false), '');
-    res = res.replaceAll(RegExp(r'\s+(?:Gigabyte|ASUS|ASUSTeK|MSI|Micro-Star|ASRock|Biostar|Colorful|Dell|HP|Lenovo)(?:\s+Technology|\s+Co\.|\s+Ltd\.|\s+INC\.)*$', caseSensitive: false), '');
+    res = res.replaceAll(
+      RegExp('^${RegExp.escape(b)}\\s+', caseSensitive: false),
+      '',
+    );
+    res = res.replaceAll(
+      RegExp('^${RegExp.escape(manufacturer)}\\s+', caseSensitive: false),
+      '',
+    );
+    res = res.replaceAll(
+      RegExp('\\s+${RegExp.escape(manufacturer)}\$', caseSensitive: false),
+      '',
+    );
+    res = res.replaceAll(
+      RegExp(
+        r'\s+(?:Gigabyte|ASUS|ASUSTeK|MSI|Micro-Star|ASRock|Biostar|Colorful|Dell|HP|Lenovo)(?:\s+Technology|\s+Co\.|\s+Ltd\.|\s+INC\.)*$',
+        caseSensitive: false,
+      ),
+      '',
+    );
     return res.trim().isNotEmpty ? res.trim() : model;
   }
 
   String get fullDisplayName {
     if (displayName.isNotEmpty && displayName != 'Not available') {
-      final hasSuffix = RegExp(r'\s+(?:Gigabyte|ASUS|ASUSTeK|MSI|Micro-Star|ASRock|Biostar|Colorful|Dell|HP|Lenovo)(?:\s+Technology|\s+Co\.|\s+Ltd\.|\s+INC\.)*$', caseSensitive: false).hasMatch(displayName);
+      final hasSuffix = RegExp(
+        r'\s+(?:Gigabyte|ASUS|ASUSTeK|MSI|Micro-Star|ASRock|Biostar|Colorful|Dell|HP|Lenovo)(?:\s+Technology|\s+Co\.|\s+Ltd\.|\s+INC\.)*$',
+        caseSensitive: false,
+      ).hasMatch(displayName);
       if (!hasSuffix) return displayName;
     }
     final b = effectiveBrand;
@@ -884,20 +966,37 @@ class MotherboardInfo {
   String get effectiveChipset {
     if (chipset.isNotEmpty && chipset != 'Not available') return chipset;
     final text = '$model $manufacturer'.toUpperCase();
-    final intelMatch = RegExp(r'\b(Z890|B860|H810|Z790|B760|H770|H710|Z690|B660|H670|H610|Z590|B560|H570|H510|Z490|B460|H470|H410|W480|Z390|Z370|B365|B360|H370|H310|Z270|B250|H270|Z170|B150|H170|H110|Z97|H97|Z87|H87|B85|H81|Z77|H77|B75|Z68|H67|H61|X79|X99|X299)(?=[MIA\s\-_]|$)', caseSensitive: false).firstMatch(text);
+    final intelMatch = RegExp(
+      r'\b(Z890|B860|H810|Z790|B760|H770|H710|Z690|B660|H670|H610|Z590|B560|H570|H510|Z490|B460|H470|H410|W480|Z390|Z370|B365|B360|H370|H310|Z270|B250|H270|Z170|B150|H170|H110|Z97|H97|Z87|H87|B85|H81|Z77|H77|B75|Z68|H67|H61|X79|X99|X299)(?=[MIA\s\-_]|$)',
+      caseSensitive: false,
+    ).firstMatch(text);
     if (intelMatch != null) return 'Intel ${intelMatch.group(1)}';
 
-    final amdMatch = RegExp(r'\b(X870E|X870|B850|B840|X670E|X670|B650E|B650|A620|X570S|X570|B550|A520|X470|B450|X370|B350|A320|WRX90|TRX50|WRX80|TRX40|X399)(?=[MIA\s\-_]|$)', caseSensitive: false).firstMatch(text);
+    final amdMatch = RegExp(
+      r'\b(X870E|X870|B850|B840|X670E|X670|B650E|B650|A620|X570S|X570|B550|A520|X470|B450|X370|B350|A320|WRX90|TRX50|WRX80|TRX40|X399)(?=[MIA\s\-_]|$)',
+      caseSensitive: false,
+    ).firstMatch(text);
     if (amdMatch != null) return 'AMD ${amdMatch.group(1)}';
 
     return '';
   }
 
   String get effectiveFormFactor {
-    if (formFactor.isNotEmpty && formFactor != 'Not available') return formFactor;
+    if (formFactor.isNotEmpty && formFactor != 'Not available') {
+      return formFactor;
+    }
     final text = model.toUpperCase();
-    if (text.contains('MINI-ITX') || RegExp(r'\b[A-Z0-9]+-ITX\b|\b[A-Z0-9]+-I\b|\b[A-Z0-9]{3,}I\b(?<!WIFI)').hasMatch(text)) return 'Mini-ITX';
-    if (text.contains('MICRO-ATX') || text.contains('MATX') || RegExp(r'\b[A-Z0-9]+M\b').hasMatch(text)) return 'Micro-ATX';
+    if (text.contains('MINI-ITX') ||
+        RegExp(
+          r'\b[A-Z0-9]+-ITX\b|\b[A-Z0-9]+-I\b|\b[A-Z0-9]{3,}I\b(?<!WIFI)',
+        ).hasMatch(text)) {
+      return 'Mini-ITX';
+    }
+    if (text.contains('MICRO-ATX') ||
+        text.contains('MATX') ||
+        RegExp(r'\b[A-Z0-9]+M\b').hasMatch(text)) {
+      return 'Micro-ATX';
+    }
     if (text.contains('E-ATX') || text.contains('EXTENDED-ATX')) return 'E-ATX';
     return 'ATX';
   }
@@ -910,6 +1009,7 @@ class RamInfo {
   final String moduleSummary;
   final dynamic speedMhz;
   final String speedDisplay;
+  final int? totalSlots;
   final List<RamModule> modules;
 
   RamInfo({
@@ -919,6 +1019,7 @@ class RamInfo {
     required this.moduleSummary,
     required this.speedMhz,
     required this.speedDisplay,
+    this.totalSlots,
     required this.modules,
   });
 
@@ -930,6 +1031,7 @@ class RamInfo {
       moduleSummary: json['module_summary'] ?? 'Not available',
       speedMhz: json['speed_mhz'] ?? 'Not available',
       speedDisplay: json['speed_display'] ?? 'Not available',
+      totalSlots: json['total_slots'] as int?,
       modules: (json['modules'] as List<dynamic>? ?? [])
           .map((e) => RamModule.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -939,6 +1041,10 @@ class RamInfo {
 
 class RamModule {
   final String slot;
+  final String deviceLocator;
+  final String bankLabel;
+  final String slotDetails;
+  final String slotConfidence;
   final double capacityGb;
   final String capacityDisplay;
   final int? speedMhz;
@@ -950,6 +1056,10 @@ class RamModule {
 
   RamModule({
     required this.slot,
+    this.deviceLocator = 'Not available',
+    this.bankLabel = 'Not available',
+    this.slotDetails = '',
+    this.slotConfidence = 'unknown',
     required this.capacityGb,
     required this.capacityDisplay,
     this.speedMhz,
@@ -963,6 +1073,10 @@ class RamModule {
   factory RamModule.fromJson(Map<String, dynamic> json) {
     return RamModule(
       slot: json['slot'] ?? 'Slot',
+      deviceLocator: json['device_locator'] ?? 'Not available',
+      bankLabel: json['bank_label'] ?? 'Not available',
+      slotDetails: json['slot_details'] ?? '',
+      slotConfidence: json['slot_confidence'] ?? 'unknown',
       capacityGb: (json['capacity_gb'] as num?)?.toDouble() ?? 0.0,
       capacityDisplay: json['capacity_display'] ?? 'Not available',
       speedMhz: json['speed_mhz'] as int?,
@@ -977,6 +1091,7 @@ class RamModule {
 
 class GpuInfo {
   final String name;
+  final String rawName;
   final String manufacturer;
   final int? vramBytes;
   final double? vramGb;
@@ -985,6 +1100,7 @@ class GpuInfo {
 
   GpuInfo({
     required this.name,
+    this.rawName = '',
     required this.manufacturer,
     this.vramBytes,
     this.vramGb,
@@ -995,12 +1111,19 @@ class GpuInfo {
   factory GpuInfo.fromJson(Map<String, dynamic> json) {
     return GpuInfo(
       name: json['name'] ?? 'Not available',
+      rawName: json['raw_name'] ?? json['name'] ?? '',
       manufacturer: json['manufacturer'] ?? 'Not available',
       vramBytes: json['vram_bytes'] as int?,
       vramGb: (json['vram_gb'] as num?)?.toDouble(),
       vramDisplay: json['vram_display'] ?? 'Not available',
       driverVersion: json['driver_version'] ?? 'Not available',
     );
+  }
+
+  bool get isMicrosoftBasicDisplayAdapter {
+    final value = '$name $rawName'.toLowerCase();
+    return value.contains('microsoft basic display adapter') ||
+        value.contains('کارت گرافیک پایه مایکروسافت');
   }
 }
 
@@ -1018,7 +1141,8 @@ class StorageInfo {
   final String healthStatus;
   final int? healthPercent;
   final String healthType; // 'REAL' | 'ESTIMATED' | 'UNKNOWN'
-  final String healthGrade; // 'EXCELLENT' | 'GOOD' | 'WARNING' | 'CRITICAL' | 'UNKNOWN'
+  final String
+  healthGrade; // 'EXCELLENT' | 'GOOD' | 'WARNING' | 'CRITICAL' | 'UNKNOWN'
   final String healthGradeFa;
   final String healthSource;
   final String source;
@@ -1122,6 +1246,15 @@ class WindowsInfo {
       build: json['build'] ?? 'Not available',
       architecture: json['architecture'] ?? 'Not available',
     );
+  }
+
+  bool get isHomeEdition {
+    final value = edition.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
+    return value.contains('windows 10 home') ||
+        value.contains('windows 11 home') ||
+        RegExp(
+          r'\b(core|core single language|home single language)\b',
+        ).hasMatch(value);
   }
 }
 
@@ -1284,19 +1417,21 @@ class WindowsActivationInfo {
     final ed = (json['edition'] as String? ?? 'Windows').toLowerCase();
     final ch = (json['channel'] as String? ?? '').toLowerCase();
     final desc = (json['description'] as String? ?? '').toLowerCase();
-    final isHome = ed.contains('home') || ed.contains('core') || ed.contains('singlelanguage');
+    final isHome =
+        ed.contains('home') ||
+        ed.contains('core') ||
+        ed.contains('singlelanguage');
     final isOem = ch.contains('oem') || desc.contains('oem');
     final isRetail = ch.contains('retail') || desc.contains('retail');
 
-    final computedGenuine = isGen || (act && perm && (isHome || isOem || isRetail));
+    final computedGenuine =
+        isGen || (act && perm && (isHome || isOem || isRetail));
 
     return WindowsActivationInfo(
       installed: json['installed'] as bool? ?? true,
       activated: act,
       statusCode: json['status_code'] as int? ?? (act ? 1 : 0),
-      statusText:
-          json['status_text'] ??
-          (act ? 'Licensed' : 'Not Activated'),
+      statusText: json['status_text'] ?? (act ? 'Licensed' : 'Not Activated'),
       channel: json['channel'] ?? 'Not available',
       partialKey: json['partial_key'] ?? 'Not available',
       edition: json['edition'] ?? 'Windows',
@@ -1306,7 +1441,9 @@ class WindowsActivationInfo {
       toolAvailable: json['tool_available'] as bool? ?? false,
       toolPath: json['tool_path'] as String?,
       isGenuine: computedGenuine,
-      genuineType: json['genuine_type'] as String? ?? (computedGenuine ? 'OEM / Digital License' : ''),
+      genuineType:
+          json['genuine_type'] as String? ??
+          (computedGenuine ? 'OEM / Digital License' : ''),
       oa3xKeyPresent: json['oa3x_key_present'] as bool? ?? false,
       needsActivation: json['needs_activation'] as bool? ?? (!act || !perm),
       activationSummaryFa: json['activation_summary_fa'] as String? ?? '',
@@ -1319,15 +1456,22 @@ class WindowsActivationInfo {
     final ed = edition.toLowerCase();
     final ch = channel.toLowerCase();
     final desc = description.toLowerCase();
-    final isHome = ed.contains('home') || ed.contains('core') || ed.contains('singlelanguage');
+    final isHome =
+        ed.contains('home') ||
+        ed.contains('core') ||
+        ed.contains('singlelanguage');
     final isOem = ch.contains('oem') || desc.contains('oem');
     final isRetail = ch.contains('retail') || desc.contains('retail');
-    return activated && isPermanent && (isHome || isOem || isRetail || oa3xKeyPresent);
+    return activated &&
+        isPermanent &&
+        (isHome || isOem || isRetail || oa3xKeyPresent);
   }
 
   String get effectiveActivationSummaryFa {
     if (activationSummaryFa.isNotEmpty) return activationSummaryFa;
-    if (isGenuineOriginal) return 'ویندوز اورجینال است و نیازی به فعال‌سازی ندارد.';
+    if (isGenuineOriginal) {
+      return 'ویندوز اورجینال است و نیازی به فعال‌سازی ندارد.';
+    }
     if (activated) return 'ویندوز با موفقیت فعال است.';
     return 'ویندوز فعال نیست و نیاز به فعال‌سازی دارد.';
   }
@@ -1408,8 +1552,13 @@ class OfficeActivationInfo {
     final isGen = json['is_genuine'] as bool? ?? false;
     final pr = (json['product'] as String? ?? '').toLowerCase();
     final ch = (json['channel'] as String? ?? '').toLowerCase();
-    final isSub = pr.contains('365') || ch.contains('365') || pr.contains('subscription');
-    final isRetail = ch.contains('retail') || pr.contains('retail') || pr.contains('home & student') || pr.contains('home & business');
+    final isSub =
+        pr.contains('365') || ch.contains('365') || pr.contains('subscription');
+    final isRetail =
+        ch.contains('retail') ||
+        pr.contains('retail') ||
+        pr.contains('home & student') ||
+        pr.contains('home & business');
     final computedGen = isGen || (isAct && (isSub || isRetail));
 
     return OfficeActivationInfo(
@@ -1430,7 +1579,9 @@ class OfficeActivationInfo {
       toolAvailable: json['tool_available'] as bool? ?? false,
       toolPath: json['tool_path'] as String?,
       isGenuine: computedGen,
-      genuineType: json['genuine_type'] as String? ?? (computedGen ? 'Retail / Subscription' : ''),
+      genuineType:
+          json['genuine_type'] as String? ??
+          (computedGen ? 'Retail / Subscription' : ''),
       needsActivation: json['needs_activation'] as bool? ?? (isInst && !isAct),
       activationSummaryFa: json['activation_summary_fa'] as String? ?? '',
       badgeLabel: json['badge_label'] as String? ?? '',
@@ -1441,15 +1592,22 @@ class OfficeActivationInfo {
     if (isGenuine) return true;
     final pr = product.toLowerCase();
     final ch = channel.toLowerCase();
-    final isSub = pr.contains('365') || ch.contains('365') || pr.contains('subscription');
-    final isRetail = ch.contains('retail') || pr.contains('retail') || pr.contains('home & student') || pr.contains('home & business');
+    final isSub =
+        pr.contains('365') || ch.contains('365') || pr.contains('subscription');
+    final isRetail =
+        ch.contains('retail') ||
+        pr.contains('retail') ||
+        pr.contains('home & student') ||
+        pr.contains('home & business');
     return activated && (isSub || isRetail);
   }
 
   String get effectiveActivationSummaryFa {
     if (activationSummaryFa.isNotEmpty) return activationSummaryFa;
     if (!installed) return 'مایکروسافت آفیس روی سیستم نصب نیست.';
-    if (isGenuineOriginal) return 'لایسنس آفیس اورجینال است و نیازی به فعال‌سازی ندارد.';
+    if (isGenuineOriginal) {
+      return 'لایسنس آفیس اورجینال است و نیازی به فعال‌سازی ندارد.';
+    }
     if (activated) return 'مایکروسافت آفیس با موفقیت فعال است.';
     return 'آفیس فعال نیست و نیاز به فعال‌سازی دارد.';
   }
@@ -1703,6 +1861,7 @@ class BatchInstallStatus {
   final int completed;
   final int failed;
   final int skipped;
+  final bool rebootRequired;
   final String? currentItemName;
   final int currentItemIndex;
   final double progressPercent;
@@ -1716,6 +1875,7 @@ class BatchInstallStatus {
     this.completed = 0,
     this.failed = 0,
     this.skipped = 0,
+    this.rebootRequired = false,
     this.currentItemName,
     this.currentItemIndex = 0,
     this.progressPercent = 0.0,
@@ -1733,6 +1893,7 @@ class BatchInstallStatus {
       completed: json['completed'] as int? ?? 0,
       failed: json['failed'] as int? ?? 0,
       skipped: json['skipped'] as int? ?? 0,
+      rebootRequired: json['reboot_required'] as bool? ?? false,
       currentItemName: json['current_item_name'] as String?,
       currentItemIndex: json['current_item_index'] as int? ?? 0,
       progressPercent: (json['progress_percent'] as num?)?.toDouble() ?? 0.0,
@@ -1816,7 +1977,11 @@ class DriverInstallItem {
 
   factory DriverInstallItem.fromJson(Map<String, dynamic> json) {
     return DriverInstallItem(
-      filename: json['filename'] ?? json['display_name'] ?? json['installer_file'] ?? '',
+      filename:
+          json['filename'] ??
+          json['display_name'] ??
+          json['installer_file'] ??
+          '',
       relativePath: json['relative_path'] ?? '',
       type: json['type'] ?? 'exe',
       fileSizeDisplay: json['file_size_display'] ?? '',
@@ -1883,7 +2048,6 @@ class DriverBatchStatus {
     );
   }
 }
-
 
 class ActivationToolItem {
   final String name;
@@ -1960,7 +2124,8 @@ class ToolsDirectoryStatus {
 class DriverHardwareMatch {
   final bool isMatched;
   final String confidence; // HIGH, MEDIUM, LOW, NOT_APPLICABLE
-  final String status; // needs_install, update_available, up_to_date, not_applicable
+  final String
+  status; // needs_install, update_available, up_to_date, not_applicable
   final String statusFa;
   final String statusEn;
   final String matchedDeviceName;
@@ -1996,7 +2161,9 @@ class DriverHardwareMatch {
       installedVersion: json['installed_version'] ?? '',
       packageVersion: json['package_version'] ?? '',
       recommendation: json['recommendation'] ?? 'skip',
-      reasons: (json['reasons'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      reasons: (json['reasons'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList(),
     );
   }
 }
@@ -2061,12 +2228,19 @@ class IntelligentDriverPackage {
       fileSizeDisplay: json['file_size_display'] ?? '',
       sizeBytes: json['size_bytes'] as int? ?? 0,
       fingerprint: json['fingerprint'] ?? '',
-      hardwareIds: (json['hardware_ids'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      hardwareIds: (json['hardware_ids'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList(),
       driverVersion: json['driver_version'] ?? '',
       driverDate: json['driver_date'] ?? '',
       provider: json['provider'] ?? '',
-      alternativeInstallers: (json['alternative_installers'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
-      match: json['match'] != null ? DriverHardwareMatch.fromJson(json['match'] as Map<String, dynamic>) : null,
+      alternativeInstallers:
+          (json['alternative_installers'] as List<dynamic>? ?? [])
+              .map((e) => e.toString())
+              .toList(),
+      match: json['match'] != null
+          ? DriverHardwareMatch.fromJson(json['match'] as Map<String, dynamic>)
+          : null,
       isDuplicate: json['is_duplicate'] as bool? ?? false,
     );
   }
@@ -2124,11 +2298,8 @@ class DriverScanResult {
     this.duplicateCount = 0,
   });
 
-  factory DriverScanResult.empty() => DriverScanResult(
-    success: false,
-    message: '',
-    driverDirectory: '',
-  );
+  factory DriverScanResult.empty() =>
+      DriverScanResult(success: false, message: '', driverDirectory: '');
 
   factory DriverScanResult.fromJson(Map<String, dynamic> json) {
     final summary = json['summary'] as Map<String, dynamic>? ?? {};
@@ -2140,8 +2311,14 @@ class DriverScanResult {
       message: json['message'] ?? '',
       driverDirectory: json['driver_directory'] ?? '',
       totalPackages: json['total_packages'] as int? ?? rawPkgs.length,
-      packages: rawPkgs.map((e) => IntelligentDriverPackage.fromJson(e as Map<String, dynamic>)).toList(),
-      removableSources: rawRemovables.map((e) => RemovableDriverSource.fromJson(e as Map<String, dynamic>)).toList(),
+      packages: rawPkgs
+          .map(
+            (e) => IntelligentDriverPackage.fromJson(e as Map<String, dynamic>),
+          )
+          .toList(),
+      removableSources: rawRemovables
+          .map((e) => RemovableDriverSource.fromJson(e as Map<String, dynamic>))
+          .toList(),
       matchingCount: summary['matching'] as int? ?? 0,
       needsInstallCount: summary['needs_install'] as int? ?? 0,
       updateAvailableCount: summary['update_available'] as int? ?? 0,
@@ -2188,8 +2365,12 @@ class UsbDriveInfo {
   factory UsbDriveInfo.fromJson(Map<String, dynamic> json) {
     final total = (json['total_gb'] as num?)?.toDouble() ?? 0.0;
     final free = (json['free_gb'] as num?)?.toDouble() ?? 0.0;
-    final used = (json['used_gb'] as num?)?.toDouble() ?? (total > free ? (total - free) : 0.0);
-    final pct = (json['percent_used'] as num?)?.toDouble() ?? (total > 0 ? ((used / total) * 100.0) : 0.0);
+    final used =
+        (json['used_gb'] as num?)?.toDouble() ??
+        (total > free ? (total - free) : 0.0);
+    final pct =
+        (json['percent_used'] as num?)?.toDouble() ??
+        (total > 0 ? ((used / total) * 100.0) : 0.0);
 
     return UsbDriveInfo(
       driveLetter: (json['drive_letter'] ?? '').toString(),
@@ -2214,7 +2395,9 @@ class UsbDriveInfo {
     if (vendor.isNotEmpty) parts.add(vendor);
     if (product.isNotEmpty) parts.add(product);
     if (parts.isNotEmpty) {
-      if (volumeName.isNotEmpty && volumeName != 'فلش مموری' && volumeName != 'USB Drive') {
+      if (volumeName.isNotEmpty &&
+          volumeName != 'فلش مموری' &&
+          volumeName != 'USB Drive') {
         return '${parts.join(' ')} ($volumeName)';
       }
       return parts.join(' ');
@@ -2223,4 +2406,3 @@ class UsbDriveInfo {
     return 'فلش مموری $driveLetter';
   }
 }
-

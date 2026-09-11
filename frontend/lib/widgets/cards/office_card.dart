@@ -30,8 +30,8 @@ class OfficeCard extends StatelessWidget {
 
     final summarySub = isInstalled
         ? (isGenuine
-            ? '${office.product} • ${office.effectiveBadgeLabel}'
-            : '${office.product} • $statusLabel')
+              ? '${office.product} • ${office.effectiveBadgeLabel}'
+              : '${office.product} • $statusLabel')
         : l10n.notInstalled;
 
     return CardWrapper(
@@ -45,7 +45,9 @@ class OfficeCard extends StatelessWidget {
               compact: true,
               isOffice: true,
               label: office.effectiveBadgeLabel,
-              subLabel: office.genuineType.isNotEmpty ? office.genuineType : null,
+              subLabel: office.genuineType.isNotEmpty
+                  ? office.genuineType
+                  : null,
             )
           : Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -89,13 +91,19 @@ class OfficeCard extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF10B981).withValues(alpha: isDark ? 0.18 : 0.1),
-                    const Color(0xFF059669).withValues(alpha: isDark ? 0.08 : 0.04),
+                    const Color(
+                      0xFF10B981,
+                    ).withValues(alpha: isDark ? 0.18 : 0.1),
+                    const Color(
+                      0xFF059669,
+                    ).withValues(alpha: isDark ? 0.08 : 0.04),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.4 : 0.25),
+                  color: const Color(
+                    0xFF10B981,
+                  ).withValues(alpha: isDark ? 0.4 : 0.25),
                 ),
               ),
               child: Row(
@@ -112,7 +120,9 @@ class OfficeCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF065F46),
+                        color: isDark
+                            ? const Color(0xFF6EE7B7)
+                            : const Color(0xFF065F46),
                       ),
                     ),
                   ),

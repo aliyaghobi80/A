@@ -45,7 +45,10 @@ class QcResultsDialog extends StatelessWidget {
             // 2. Scrollable Body
             Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -60,7 +63,9 @@ class QcResultsDialog extends StatelessWidget {
                           Icon(
                             Icons.build_circle_outlined,
                             size: 18,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                            color: isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF475569),
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -70,13 +75,23 @@ class QcResultsDialog extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155),
+                              color: isDark
+                                  ? const Color(0xFFE2E8F0)
+                                  : const Color(0xFF334155),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      ...problems.map((prob) => _buildProblemSolutionCard(context, prob, isDark, l10n, qcCtrl)),
+                      ...problems.map(
+                        (prob) => _buildProblemSolutionCard(
+                          context,
+                          prob,
+                          isDark,
+                          l10n,
+                          qcCtrl,
+                        ),
+                      ),
                     ] else ...[
                       _buildAllClearCard(context, isDark, l10n),
                     ],
@@ -93,7 +108,12 @@ class QcResultsDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, bool isDark, AppLocalizations l10n, bool isReady) {
+  Widget _buildHeader(
+    BuildContext context,
+    bool isDark,
+    AppLocalizations l10n,
+    bool isReady,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
       decoration: BoxDecoration(
@@ -116,8 +136,12 @@ class QcResultsDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              isReady ? Icons.verified_user_rounded : Icons.health_and_safety_rounded,
-              color: isReady ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+              isReady
+                  ? Icons.verified_user_rounded
+                  : Icons.health_and_safety_rounded,
+              color: isReady
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFFF59E0B),
               size: 24,
             ),
           ),
@@ -127,11 +151,15 @@ class QcResultsDialog extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l10n.isPersian ? 'گزارش ارزیابی و بررسی کامل سیستم (QC)' : 'System QC Evaluation Report',
+                  l10n.isPersian
+                      ? 'گزارش ارزیابی و بررسی کامل سیستم (QC)'
+                      : 'System QC Evaluation Report',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                    color: isDark
+                        ? const Color(0xFFF8FAFC)
+                        : const Color(0xFF0F172A),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -141,7 +169,9 @@ class QcResultsDialog extends StatelessWidget {
                       : 'Hardware, OS, Drivers, Licenses & Apps audit',
                   style: TextStyle(
                     fontSize: 11,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
                   ),
                 ),
               ],
@@ -157,7 +187,12 @@ class QcResultsDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryCard(BuildContext context, bool isDark, AppLocalizations l10n, bool isReady) {
+  Widget _buildSummaryCard(
+    BuildContext context,
+    bool isDark,
+    AppLocalizations l10n,
+    bool isReady,
+  ) {
     final passedCats = report.passedCategoriesCount;
     final totalCats = report.totalCategoriesCount;
     final problemsCount = report.problemsCount;
@@ -180,7 +215,9 @@ class QcResultsDialog extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: isReady ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+              color: isReady
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFFF59E0B),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
@@ -202,15 +239,17 @@ class QcResultsDialog extends StatelessWidget {
                 Text(
                   isReady
                       ? (l10n.isPersian
-                          ? 'تمامی $totalCats بخش سیستم تایید شدند و سیستم آماده تحویل به مشتری است.'
-                          : 'All $totalCats check categories passed. System is fully verified.')
+                            ? 'تمامی $totalCats بخش سیستم تایید شدند و سیستم آماده تحویل به مشتری است.'
+                            : 'All $totalCats check categories passed. System is fully verified.')
                       : (l10n.isPersian
-                          ? 'تعداد $problemsCount مورد برای تکمیل آماده‌سازی سیستم یافت شد.'
-                          : '$problemsCount item(s) need resolution before handoff.'),
+                            ? 'تعداد $problemsCount مورد برای تکمیل آماده‌سازی سیستم یافت شد.'
+                            : '$problemsCount item(s) need resolution before handoff.'),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF1E293B),
+                    color: isDark
+                        ? const Color(0xFFF8FAFC)
+                        : const Color(0xFF1E293B),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -220,7 +259,9 @@ class QcResultsDialog extends StatelessWidget {
                       : '$passedCats of $totalCats domains passed successfully.',
                   style: TextStyle(
                     fontSize: 11,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
                   ),
                 ),
               ],
@@ -240,9 +281,12 @@ class QcResultsDialog extends StatelessWidget {
   ) {
     final isFail = prob.severity == QcState.fail;
     final sevColor = isFail ? const Color(0xFFEF4444) : const Color(0xFFF59E0B);
-    final sevText = isFail ? (l10n.isPersian ? 'بحرانی' : 'FAIL') : (l10n.isPersian ? 'هشدار' : 'WARNING');
+    final sevText = isFail
+        ? (l10n.isPersian ? 'بحرانی' : 'FAIL')
+        : (l10n.isPersian ? 'هشدار' : 'WARNING');
 
-    final hasSolution = prob.solutionTitle.isNotEmpty || prob.solutionSteps.isNotEmpty;
+    final hasSolution =
+        prob.solutionTitle.isNotEmpty || prob.solutionSteps.isNotEmpty;
     final hasAction = prob.actionType.isNotEmpty && prob.actionType != 'none';
 
     return Container(
@@ -280,13 +324,19 @@ class QcResultsDialog extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFE2E8F0),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  prob.categoryName.isNotEmpty ? prob.categoryName : prob.category,
+                  prob.categoryName.isNotEmpty
+                      ? prob.categoryName
+                      : prob.category,
                   style: TextStyle(
-                    color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                    color: isDark
+                        ? const Color(0xFFCBD5E1)
+                        : const Color(0xFF475569),
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -299,7 +349,9 @@ class QcResultsDialog extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                    color: isDark
+                        ? const Color(0xFFF8FAFC)
+                        : const Color(0xFF0F172A),
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -324,10 +376,14 @@ class QcResultsDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF2563EB).withValues(alpha: isDark ? 0.15 : 0.06),
+                color: const Color(
+                  0xFF2563EB,
+                ).withValues(alpha: isDark ? 0.15 : 0.06),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: const Color(0xFF2563EB).withValues(alpha: isDark ? 0.4 : 0.2),
+                  color: const Color(
+                    0xFF2563EB,
+                  ).withValues(alpha: isDark ? 0.4 : 0.2),
                 ),
               ),
               child: Row(
@@ -358,7 +414,9 @@ class QcResultsDialog extends StatelessWidget {
                             prob.solutionSteps,
                             style: TextStyle(
                               fontSize: 11,
-                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                              color: isDark
+                                  ? const Color(0xFFCBD5E1)
+                                  : const Color(0xFF334155),
                               height: 1.35,
                             ),
                           ),
@@ -422,7 +480,10 @@ class QcResultsDialog extends StatelessWidget {
         await qcCtrl.executeSingleAction(context, prob);
       },
       icon: Icon(btnIcon, size: 16),
-      label: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      ),
       style: ElevatedButton.styleFrom(
         backgroundColor: btnColor,
         foregroundColor: Colors.white,
@@ -433,7 +494,11 @@ class QcResultsDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildAllClearCard(BuildContext context, bool isDark, AppLocalizations l10n) {
+  Widget _buildAllClearCard(
+    BuildContext context,
+    bool isDark,
+    AppLocalizations l10n,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(28),
@@ -460,7 +525,9 @@ class QcResultsDialog extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            l10n.isPersian ? 'سیستم ۱۰۰٪ بدون نقص و آماده است!' : 'System is 100% Ready & Verified!',
+            l10n.isPersian
+                ? 'سیستم ۱۰۰٪ بدون نقص و آماده است!'
+                : 'System is 100% Ready & Verified!',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,
@@ -518,13 +585,21 @@ class QcResultsDialog extends StatelessWidget {
                 l10n.isPersian
                     ? 'اصلاح خودکار تمام موارد قابل حل (${autoFixable.length})'
                     : 'Auto-Fix All Resolvable (${autoFixable.length})',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             )
           else
@@ -533,7 +608,9 @@ class QcResultsDialog extends StatelessWidget {
             onPressed: () => Navigator.of(context).pop(),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: Text(l10n.isPersian ? 'بستن' : 'Close'),
           ),

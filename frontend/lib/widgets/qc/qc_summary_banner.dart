@@ -23,7 +23,9 @@ class QcSummaryBanner extends StatelessWidget {
       }
 
       final isReady = report.isReady;
-      final accentColor = isReady ? const Color(0xFF10B981) : const Color(0xFFD97706);
+      final accentColor = isReady
+          ? const Color(0xFF10B981)
+          : const Color(0xFFD97706);
       final hasProblems = report.hasProblems;
       final problems = report.problems;
       final preparableIssues = problems.where((p) => p.canAutoPrepare).toList();
@@ -35,13 +37,19 @@ class QcSummaryBanner extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isReady
-                ? const Color(0xFF10B981).withValues(alpha: isDark ? 0.35 : 0.25)
-                : const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.45 : 0.35),
+                ? const Color(
+                    0xFF10B981,
+                  ).withValues(alpha: isDark ? 0.35 : 0.25)
+                : const Color(
+                    0xFFF59E0B,
+                  ).withValues(alpha: isDark ? 0.45 : 0.35),
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: (isReady ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: isDark ? 0.12 : 0.08),
+              color:
+                  (isReady ? const Color(0xFF10B981) : const Color(0xFFF59E0B))
+                      .withValues(alpha: isDark ? 0.12 : 0.08),
               blurRadius: 18,
               offset: const Offset(0, 4),
             ),
@@ -61,10 +69,15 @@ class QcSummaryBanner extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: accentColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: accentColor.withValues(alpha: 0.3), width: 1.2),
+                    border: Border.all(
+                      color: accentColor.withValues(alpha: 0.3),
+                      width: 1.2,
+                    ),
                   ),
                   child: Icon(
-                    isReady ? Icons.verified_rounded : Icons.warning_amber_rounded,
+                    isReady
+                        ? Icons.verified_rounded
+                        : Icons.warning_amber_rounded,
                     color: accentColor,
                     size: 28,
                   ),
@@ -83,18 +96,26 @@ class QcSummaryBanner extends StatelessWidget {
                               fontWeight: FontWeight.w900,
                               color: isReady
                                   ? const Color(0xFF10B981)
-                                  : (isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706)),
+                                  : (isDark
+                                        ? const Color(0xFFFBBF24)
+                                        : const Color(0xFFD97706)),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: accentColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              l10n.qcPassedCategoriesCount(report.passedCategoriesCount, report.totalCategoriesCount),
+                              l10n.qcPassedCategoriesCount(
+                                report.passedCategoriesCount,
+                                report.totalCategoriesCount,
+                              ),
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
@@ -108,12 +129,14 @@ class QcSummaryBanner extends StatelessWidget {
                       Text(
                         isReady
                             ? (l10n.isPersian
-                                ? 'تمامی بخش‌های سخت‌افزار، سیستم‌عامل، درایورها و لایسنس‌ها با موفقیت تأیید شدند.'
-                                : 'All hardware, OS, drivers, and required licenses are verified and ready.')
+                                  ? 'تمامی بخش‌های سخت‌افزار، سیستم‌عامل، درایورها و لایسنس‌ها با موفقیت تأیید شدند.'
+                                  : 'All hardware, OS, drivers, and required licenses are verified and ready.')
                             : l10n.qcProblemsFound(report.problemsCount),
                         style: TextStyle(
                           fontSize: 13,
-                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                          color: isDark
+                              ? const Color(0xFFCBD5E1)
+                              : const Color(0xFF475569),
                         ),
                       ),
                     ],
@@ -126,33 +149,54 @@ class QcSummaryBanner extends StatelessWidget {
                   children: [
                     if (!isReady && preparableIssues.isNotEmpty)
                       ElevatedButton.icon(
-                        onPressed: () => PrepareSystemDialog.show(context, problems),
+                        onPressed: () =>
+                            PrepareSystemDialog.show(context, problems),
                         icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2563EB),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                         label: Text(
                           l10n.prepareSystem,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     OutlinedButton.icon(
                       onPressed: () => qcCtrl.runFullCheck(context),
                       icon: const Icon(Icons.refresh_rounded, size: 16),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                        foregroundColor: isDark
+                            ? const Color(0xFFF1F5F9)
+                            : const Color(0xFF0F172A),
                         side: BorderSide(
-                          color: isDark ? const Color(0xFF2E3D60) : const Color(0xFFCBD5E1),
+                          color: isDark
+                              ? const Color(0xFF2E3D60)
+                              : const Color(0xFFCBD5E1),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       label: Text(
                         l10n.runCheckAgain,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],
@@ -164,7 +208,9 @@ class QcSummaryBanner extends StatelessWidget {
             if (hasProblems) ...[
               const SizedBox(height: 18),
               Divider(
-                color: isDark ? const Color(0xFF1E2C4A) : const Color(0xFFE2E8F0),
+                color: isDark
+                    ? const Color(0xFF1E2C4A)
+                    : const Color(0xFFE2E8F0),
                 height: 1,
               ),
               const SizedBox(height: 14),
@@ -173,7 +219,9 @@ class QcSummaryBanner extends StatelessWidget {
                   Icon(
                     Icons.assignment_late_outlined,
                     size: 16,
-                    color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+                    color: isDark
+                        ? const Color(0xFFFBBF24)
+                        : const Color(0xFFD97706),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -181,7 +229,9 @@ class QcSummaryBanner extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                      color: isDark
+                          ? const Color(0xFFF8FAFC)
+                          : const Color(0xFF0F172A),
                     ),
                   ),
                 ],
@@ -190,17 +240,41 @@ class QcSummaryBanner extends StatelessWidget {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final isMultiCol = constraints.maxWidth > 700;
-                  final problemCards = problems.map((prob) => _buildProblemCard(context, prob, isDark, l10n, qcCtrl)).toList();
+                  final problemCards = problems
+                      .map(
+                        (prob) => _buildProblemCard(
+                          context,
+                          prob,
+                          isDark,
+                          l10n,
+                          qcCtrl,
+                        ),
+                      )
+                      .toList();
 
                   if (isMultiCol) {
                     return Wrap(
                       spacing: 12,
                       runSpacing: 10,
-                      children: problemCards.map((w) => SizedBox(width: (constraints.maxWidth - 12) / 2, child: w)).toList(),
+                      children: problemCards
+                          .map(
+                            (w) => SizedBox(
+                              width: (constraints.maxWidth - 12) / 2,
+                              child: w,
+                            ),
+                          )
+                          .toList(),
                     );
                   } else {
                     return Column(
-                      children: problemCards.map((w) => Padding(padding: const EdgeInsets.only(bottom: 8), child: w)).toList(),
+                      children: problemCards
+                          .map(
+                            (w) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: w,
+                            ),
+                          )
+                          .toList(),
                     );
                   }
                 },
@@ -276,18 +350,25 @@ class QcSummaryBanner extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                          color: isDark
+                              ? const Color(0xFFF8FAFC)
+                              : const Color(0xFF0F172A),
                         ),
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: sevColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        prob.isRequired ? (l10n.isPersian ? 'ضروری' : 'Required') : (l10n.isPersian ? 'اختیاری' : 'Optional'),
+                        prob.isRequired
+                            ? (l10n.isPersian ? 'ضروری' : 'Required')
+                            : (l10n.isPersian ? 'اختیاری' : 'Optional'),
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -302,7 +383,9 @@ class QcSummaryBanner extends StatelessWidget {
                   prob.description,
                   style: TextStyle(
                     fontSize: 11,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
                   ),
                 ),
               ],
@@ -316,12 +399,20 @@ class QcSummaryBanner extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: actionBtnColor,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               label: Text(
                 prob.actionLabel,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
         ],

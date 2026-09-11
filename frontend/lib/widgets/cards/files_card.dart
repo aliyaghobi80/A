@@ -23,12 +23,17 @@ class FilesCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     final allGood = summary.allPresent;
-    final badgeColor = allGood ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+    final badgeColor = allGood
+        ? const Color(0xFF10B981)
+        : const Color(0xFFF59E0B);
 
     return CardWrapper(
       icon: Icons.folder_special_rounded,
       title: l10n.requiredFiles,
-      summarySubtitle: l10n.filesSummaryCount(summary.presentCount, summary.totalCount),
+      summarySubtitle: l10n.filesSummaryCount(
+        summary.presentCount,
+        summary.totalCount,
+      ),
       iconColor: const Color(0xFF0EA5E9),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -56,7 +61,9 @@ class FilesCard extends StatelessWidget {
                 l10n.noFilesConfigured,
                 style: TextStyle(
                   fontSize: 13,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: isDark
+                      ? const Color(0xFF94A3B8)
+                      : const Color(0xFF64748B),
                 ),
               ),
             )
@@ -64,7 +71,13 @@ class FilesCard extends StatelessWidget {
             ...files.asMap().entries.map((entry) {
               final index = entry.key;
               final item = entry.value;
-              return _buildFileItem(context, item, isDark, l10n, isLast: index == files.length - 1);
+              return _buildFileItem(
+                context,
+                item,
+                isDark,
+                l10n,
+                isLast: index == files.length - 1,
+              );
             }),
         ],
       ),
@@ -79,7 +92,9 @@ class FilesCard extends StatelessWidget {
     required bool isLast,
   }) {
     final exists = item.exists;
-    final statusColor = exists ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final statusColor = exists
+        ? const Color(0xFF10B981)
+        : const Color(0xFFEF4444);
     final isFolder = item.type.toLowerCase() == 'folder';
 
     return Container(
@@ -107,7 +122,13 @@ class FilesCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Icon(
-                  isFolder ? (exists ? Icons.folder_rounded : Icons.folder_off_rounded) : (exists ? Icons.insert_drive_file_rounded : Icons.file_present_rounded),
+                  isFolder
+                      ? (exists
+                            ? Icons.folder_rounded
+                            : Icons.folder_off_rounded)
+                      : (exists
+                            ? Icons.insert_drive_file_rounded
+                            : Icons.file_present_rounded),
                   size: 16,
                   color: statusColor,
                 ),
@@ -121,7 +142,9 @@ class FilesCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                      color: isDark
+                          ? const Color(0xFFF8FAFC)
+                          : const Color(0xFF0F172A),
                     ),
                   ),
                 ),
@@ -155,7 +178,9 @@ class FilesCard extends StatelessWidget {
           InfoRow(
             label: l10n.fileType,
             value: isFolder ? l10n.folder : l10n.file,
-            icon: isFolder ? Icons.folder_open_rounded : Icons.description_outlined,
+            icon: isFolder
+                ? Icons.folder_open_rounded
+                : Icons.description_outlined,
           ),
           if (onChangePath != null) ...[
             const SizedBox(height: 8),
@@ -166,11 +191,17 @@ class FilesCard extends StatelessWidget {
                 icon: const Icon(Icons.folder_open_rounded, size: 14),
                 label: Text(
                   l10n.isPersian ? 'تغییر مسیر' : 'Change Path',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF0EA5E9),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),

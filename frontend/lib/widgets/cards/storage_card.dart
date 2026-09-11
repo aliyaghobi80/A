@@ -58,11 +58,14 @@ class StorageCard extends StatelessWidget {
               final idx = entry.key;
               final drive = entry.value;
 
-              final isSsd = drive.type.toUpperCase().contains('SSD') ||
+              final isSsd =
+                  drive.type.toUpperCase().contains('SSD') ||
                   drive.type.toUpperCase().contains('NVME');
               final badgeColor = isSsd
                   ? (isDark ? const Color(0xFF06B6D4) : const Color(0xFF0891B2))
-                  : (isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706));
+                  : (isDark
+                        ? const Color(0xFFF59E0B)
+                        : const Color(0xFFD97706));
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,7 +73,9 @@ class StorageCard extends StatelessWidget {
                   if (idx > 0) ...[
                     const SizedBox(height: 14),
                     Divider(
-                      color: isDark ? const Color(0xFF1E2C4A) : const Color(0xFFF1F5F9),
+                      color: isDark
+                          ? const Color(0xFF1E2C4A)
+                          : const Color(0xFFF1F5F9),
                     ),
                     const SizedBox(height: 10),
                   ],
@@ -105,7 +110,9 @@ class StorageCard extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
-                                  color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                                  color: isDark
+                                      ? const Color(0xFFF1F5F9)
+                                      : const Color(0xFF0F172A),
                                 ),
                               ),
                             ),
@@ -113,7 +120,10 @@ class StorageCard extends StatelessWidget {
                             Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: badgeColor.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(4),
@@ -138,7 +148,9 @@ class StorageCard extends StatelessWidget {
                                       '•   ${drive.busType}',
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                        color: isDark
+                                            ? const Color(0xFF94A3B8)
+                                            : const Color(0xFF64748B),
                                       ),
                                     ),
                                   ),
@@ -155,7 +167,9 @@ class StorageCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                            color: isDark
+                                ? const Color(0xFF38BDF8)
+                                : const Color(0xFF0284C7),
                           ),
                         ),
                       ),

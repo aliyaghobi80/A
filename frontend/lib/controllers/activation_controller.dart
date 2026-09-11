@@ -33,7 +33,8 @@ class ActivationController extends GetxController {
       toolsDirectory.value = status.toolsDirectory;
       isConfigured.value = status.isConfigured;
       tools.assignAll(status.tools);
-    } catch (_) {} finally {
+    } catch (_) {
+    } finally {
       isScanningTools.value = false;
     }
   }
@@ -43,7 +44,9 @@ class ActivationController extends GetxController {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     final selectedPath = await FolderPickerService.pickFolder(
-      title: l10n.isPersian ? 'انتخاب پوشه ابزارهای فعالسازی (KMS Tools)' : 'Select KMS Activation Tools Folder',
+      title: l10n.isPersian
+          ? 'انتخاب پوشه ابزارهای فعالسازی (KMS Tools)'
+          : 'Select KMS Activation Tools Folder',
     );
 
     if (selectedPath != null && selectedPath.isNotEmpty) {
@@ -55,7 +58,9 @@ class ActivationController extends GetxController {
           await fetchToolsStatus();
 
           if (Get.isRegistered<SystemInfoController>()) {
-            Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
+            Get.find<SystemInfoController>().fetchSystemInfo(
+              forceRefresh: true,
+            );
           }
           if (context.mounted) {
             scaffoldMessenger.showSnackBar(
@@ -119,7 +124,11 @@ class ActivationController extends GetxController {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF0284C7), size: 24),
+            const Icon(
+              Icons.admin_panel_settings_rounded,
+              color: Color(0xFF0284C7),
+              size: 24,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -127,7 +136,9 @@ class ActivationController extends GetxController {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                  color: isDark
+                      ? const Color(0xFFF1F5F9)
+                      : const Color(0xFF0F172A),
                 ),
               ),
             ),
@@ -151,7 +162,9 @@ class ActivationController extends GetxController {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0284C7),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             label: Text(l10n.activateWindows),
           ),
@@ -185,7 +198,9 @@ class ActivationController extends GetxController {
           );
           _triggerAutoDetectPolling();
         } else {
-          final errorText = result.output.isNotEmpty ? result.output : result.message;
+          final errorText = result.output.isNotEmpty
+              ? result.output
+              : result.message;
           scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text('✕ ${l10n.windowsActivationFailed}: $errorText'),
@@ -231,7 +246,11 @@ class ActivationController extends GetxController {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFFD97706), size: 24),
+            const Icon(
+              Icons.admin_panel_settings_rounded,
+              color: Color(0xFFD97706),
+              size: 24,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -239,7 +258,9 @@ class ActivationController extends GetxController {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                  color: isDark
+                      ? const Color(0xFFF1F5F9)
+                      : const Color(0xFF0F172A),
                 ),
               ),
             ),
@@ -263,7 +284,9 @@ class ActivationController extends GetxController {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFD97706),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             label: Text(l10n.activateOffice),
           ),
@@ -297,7 +320,9 @@ class ActivationController extends GetxController {
           );
           _triggerAutoDetectPolling();
         } else {
-          final errorText = result.output.isNotEmpty ? result.output : result.message;
+          final errorText = result.output.isNotEmpty
+              ? result.output
+              : result.message;
           scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text('✕ ${l10n.officeActivationFailed}: $errorText'),

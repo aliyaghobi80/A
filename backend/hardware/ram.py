@@ -1,5 +1,6 @@
 import logging
 import ctypes
+import re
 from typing import Dict, Any, List
 
 from utils.powershell import run_powershell_json
@@ -17,6 +18,58 @@ SMBIOS_MEMORY_TYPES = {
     34: "LPDDR4",
     35: "LPDDR5",
 }
+
+
+def normalize_ram_slot(device_locator: Any, bank_label: Any) -> Dict[str, str]:
+    """Return a readable physical slot while preserving firmware-reported values.
+
+    Win32_PhysicalMemory exposes SMBIOS Type 17 DeviceLocator and BankLabel.
+    These fields are the most reliable non-invasive source available on Windows,
+    but their text is chosen by the firmware vendor. We only normalize patterns
+    whose mapping is unambiguous and never invent a slot from the module order.
+    """
+    locator = clean_string(device_locator, default="")
+    bank = clean_string(bank_label, default="")
+    combined = f"{locator} {bank}".upper()
+
+    direct = re.search(r"(?:DIMM|SLOT)[\s_-]*([A-H])[\s_-]*([1-8])\b", combined)
+    if direct:
+        physical = f"{direct.group(1)}{direct.group(2)}"
+        confidence = "high"
+    elif "CONTROLLER" not in combined:
+        channel_dimm = re.search(
+            r"CHANNEL[\s_-]*([A-H]).*?DIMM[\s_-]*(\d+)", combined
+        )
+        if channel_dimm:
+            # SMBIOS DIMM indexes are commonly zero-based: DIMM0 -> A1.
+            physical = f"{channel_dimm.group(1)}{int(channel_dimm.group(2)) + 1}"
+            confidence = "normalized"
+        else:
+            physical = locator or bank or "نامشخص"
+            confidence = "firmware" if (locator or bank) else "unknown"
+    else:
+        controller_slot = re.search(
+            r"CONTROLLER[\s_-]*(\d+).*?CHANNEL[\s_-]*([A-H]).*?DIMM[\s_-]*(\d+)",
+            combined,
+        )
+        if controller_slot:
+            physical = (
+                f"Controller {controller_slot.group(1)} / "
+                f"Channel {controller_slot.group(2)} / "
+                f"DIMM {controller_slot.group(3)}"
+            )
+        else:
+            physical = locator or bank or "نامشخص"
+        confidence = "firmware" if (locator or bank) else "unknown"
+
+    details = [value for value in (locator, bank) if value and value != physical]
+    return {
+        "slot": physical,
+        "device_locator": locator or "Not available",
+        "bank_label": bank or "Not available",
+        "slot_details": " | ".join(dict.fromkeys(details)),
+        "slot_confidence": confidence,
+    }
 
 class MEMORYSTATUSEX(ctypes.Structure):
     _fields_ = [
@@ -60,18 +113,29 @@ def get_ram_info() -> Dict[str, Any]:
         "module_summary": "Not available",
         "speed_mhz": "Not available",
         "speed_display": "Not available",
+        "total_slots": None,
         "modules": []
     }
 
     try:
         script = (
-            "Get-CimInstance Win32_PhysicalMemory | "
-            "Select-Object Capacity, Speed, ConfiguredClockSpeed, Manufacturer, PartNumber, SerialNumber, DeviceLocator, BankLabel, SMBIOSMemoryType | "
-            "ConvertTo-Json"
+            "$modules = @(Get-CimInstance Win32_PhysicalMemory | "
+            "Select-Object Capacity, Speed, ConfiguredClockSpeed, Manufacturer, PartNumber, SerialNumber, DeviceLocator, BankLabel, SMBIOSMemoryType); "
+            "$slotCount = (Get-CimInstance Win32_PhysicalMemoryArray | Measure-Object -Property MemoryDevices -Sum).Sum; "
+            "[PSCustomObject]@{ Modules = $modules; TotalSlots = $slotCount } | "
+            "ConvertTo-Json -Depth 4"
         )
         data = run_powershell_json(script)
-        
-        if isinstance(data, dict):
+        if isinstance(data, dict) and "Modules" in data:
+            module_data = data.get("Modules") or []
+            raw_modules = module_data if isinstance(module_data, list) else [module_data]
+            try:
+                total_slots = int(data.get("TotalSlots") or 0)
+                if total_slots >= len(raw_modules) and total_slots > 0:
+                    ram_result["total_slots"] = total_slots
+            except (TypeError, ValueError):
+                pass
+        elif isinstance(data, dict):
             raw_modules = [data]
         elif isinstance(data, list):
             raw_modules = data
@@ -111,13 +175,15 @@ def get_ram_info() -> Dict[str, Any]:
             smbios_type = mod.get("SMBIOSMemoryType")
             type_str = SMBIOS_MEMORY_TYPES.get(smbios_type, "RAM")
 
-            slot_locator = clean_string(mod.get("DeviceLocator"), default=f"Slot {idx + 1}")
+            slot_info = normalize_ram_slot(
+                mod.get("DeviceLocator"), mod.get("BankLabel")
+            )
             manufacturer = clean_string(mod.get("Manufacturer"), default="Not available")
             part_number = clean_part_number(mod.get("PartNumber"), default="-")
             serial_number = clean_serial_number(mod.get("SerialNumber"), default="-")
 
             modules_list.append({
-                "slot": slot_locator,
+                **slot_info,
                 "capacity_gb": mod_gb,
                 "capacity_display": mod_cap_display,
                 "speed_mhz": speed_int,

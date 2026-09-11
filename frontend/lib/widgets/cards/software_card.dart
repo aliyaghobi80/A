@@ -21,12 +21,17 @@ class SoftwareCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     final allGood = summary.allInstalled;
-    final badgeColor = allGood ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+    final badgeColor = allGood
+        ? const Color(0xFF10B981)
+        : const Color(0xFFF59E0B);
 
     return CardWrapper(
       icon: Icons.apps_rounded,
       title: l10n.software,
-      summarySubtitle: l10n.softwareSummaryCount(summary.installedCount, summary.totalCount),
+      summarySubtitle: l10n.softwareSummaryCount(
+        summary.installedCount,
+        summary.totalCount,
+      ),
       iconColor: const Color(0xFF6366F1),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -54,7 +59,9 @@ class SoftwareCard extends StatelessWidget {
                 l10n.noSoftwareConfigured,
                 style: TextStyle(
                   fontSize: 13,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: isDark
+                      ? const Color(0xFF94A3B8)
+                      : const Color(0xFF64748B),
                 ),
               ),
             )
@@ -62,7 +69,13 @@ class SoftwareCard extends StatelessWidget {
             ...software.asMap().entries.map((entry) {
               final index = entry.key;
               final item = entry.value;
-              return _buildSoftwareItem(context, item, isDark, l10n, isLast: index == software.length - 1);
+              return _buildSoftwareItem(
+                context,
+                item,
+                isDark,
+                l10n,
+                isLast: index == software.length - 1,
+              );
             }),
         ],
       ),
@@ -77,7 +90,9 @@ class SoftwareCard extends StatelessWidget {
     required bool isLast,
   }) {
     final isInstalled = item.isInstalled;
-    final statusColor = isInstalled ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final statusColor = isInstalled
+        ? const Color(0xFF10B981)
+        : const Color(0xFFEF4444);
 
     return Container(
       margin: EdgeInsets.only(bottom: isLast ? 0 : 10),
@@ -99,9 +114,10 @@ class SoftwareCard extends StatelessWidget {
             children: [
               Tooltip(
                 message: isInstalled
-                    ? (item.installLocation.isNotEmpty && item.installLocation != 'Not available'
-                        ? 'مسیر نصب:\n${item.installLocation}'
-                        : 'نرم‌افزار در رجیستری ویندوز ثبت شده است.')
+                    ? (item.installLocation.isNotEmpty &&
+                              item.installLocation != 'Not available'
+                          ? 'مسیر نصب:\n${item.installLocation}'
+                          : 'نرم‌افزار در رجیستری ویندوز ثبت شده است.')
                     : 'نرم‌افزار هنوز نصب نشده است.',
                 waitDuration: const Duration(milliseconds: 250),
                 child: Container(
@@ -111,7 +127,9 @@ class SoftwareCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Icon(
-                    isInstalled ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                    isInstalled
+                        ? Icons.check_circle_rounded
+                        : Icons.cancel_rounded,
                     size: 16,
                     color: statusColor,
                   ),
@@ -126,7 +144,9 @@ class SoftwareCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                      color: isDark
+                          ? const Color(0xFFF8FAFC)
+                          : const Color(0xFF0F172A),
                     ),
                   ),
                 ),
@@ -158,7 +178,8 @@ class SoftwareCard extends StatelessWidget {
               forceLtrValue: true,
               isMonospace: true,
             ),
-            if (item.productName != item.displayName && item.productName != 'Not available')
+            if (item.productName != item.displayName &&
+                item.productName != 'Not available')
               InfoRow(
                 label: l10n.modelProduct,
                 value: item.productName,
@@ -171,7 +192,8 @@ class SoftwareCard extends StatelessWidget {
               icon: Icons.travel_explore_rounded,
               forceLtrValue: true,
             ),
-            if (item.installLocation != 'Not available' && item.installLocation.isNotEmpty)
+            if (item.installLocation != 'Not available' &&
+                item.installLocation.isNotEmpty)
               InfoRow(
                 label: l10n.installLocation,
                 value: item.installLocation,

@@ -38,12 +38,18 @@ class ToolsSourceFoldersPage extends StatelessWidget {
               accentColor: const Color(0xFF2563EB),
               onPick: () => softwareCtrl.changePackagesDirectory(context),
               onRescan: () => softwareCtrl.fetchPackages(),
-              contents: packages.map((p) => _FileEntry(
-                    title: p.name,
-                    subtitle: p.filename,
-                    statusText: p.isInstalled ? 'نصب شده' : (p.isValid ? 'آماده' : 'نامعتبر'),
-                    isSuccess: p.isInstalled,
-                  )).toList(),
+              contents: packages
+                  .map(
+                    (p) => _FileEntry(
+                      title: p.name,
+                      subtitle: p.filename,
+                      statusText: p.isInstalled
+                          ? 'نصب شده'
+                          : (p.isValid ? 'آماده' : 'نامعتبر'),
+                      isSuccess: p.isInstalled,
+                    ),
+                  )
+                  .toList(),
               isDark: isDark,
               l10n: l10n,
             );
@@ -64,13 +70,19 @@ class ToolsSourceFoldersPage extends StatelessWidget {
               icon: Icons.extension_rounded,
               accentColor: const Color(0xFF0D9488),
               onPick: () => driverCtrl.selectFolderAndScan(context),
-              onRescan: dir.isNotEmpty ? () => driverCtrl.scanFolder(context, dir) : null,
-              contents: scanned.map((f) => _FileEntry(
-                    title: f.filename,
-                    subtitle: f.fileSizeDisplay,
-                    statusText: f.autoInstallSupported ? 'خودکار' : 'دستی',
-                    isSuccess: f.autoInstallSupported,
-                  )).toList(),
+              onRescan: dir.isNotEmpty
+                  ? () => driverCtrl.scanFolder(context, dir)
+                  : null,
+              contents: scanned
+                  .map(
+                    (f) => _FileEntry(
+                      title: f.filename,
+                      subtitle: f.fileSizeDisplay,
+                      statusText: f.autoInstallSupported ? 'خودکار' : 'دستی',
+                      isSuccess: f.autoInstallSupported,
+                    ),
+                  )
+                  .toList(),
               isDark: isDark,
               l10n: l10n,
             );
@@ -86,18 +98,24 @@ class ToolsSourceFoldersPage extends StatelessWidget {
 
             return _buildFolderSection(
               title: '۳. پوشه فعال‌سازی Windows و Office (KMS Tools)',
-              path: dir.isNotEmpty ? dir : 'پوشه ابزارهای فعال‌سازی انتخاب نشده است',
+              path: dir.isNotEmpty
+                  ? dir
+                  : 'پوشه ابزارهای فعال‌سازی انتخاب نشده است',
               isConfigured: isConfigured,
               icon: Icons.vpn_key_rounded,
               accentColor: const Color(0xFFD97706),
               onPick: () => activationCtrl.changeToolsDirectory(context),
               onRescan: () => activationCtrl.fetchToolsStatus(),
-              contents: tools.map((t) => _FileEntry(
-                    title: t.name,
-                    subtitle: t.description,
-                    statusText: t.statusText,
-                    isSuccess: t.isValid,
-                  )).toList(),
+              contents: tools
+                  .map(
+                    (t) => _FileEntry(
+                      title: t.name,
+                      subtitle: t.description,
+                      statusText: t.statusText,
+                      isSuccess: t.isValid,
+                    ),
+                  )
+                  .toList(),
               isDark: isDark,
               l10n: l10n,
             );
@@ -126,7 +144,10 @@ class ToolsSourceFoldersPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,13 +170,17 @@ class ToolsSourceFoldersPage extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                    color: isDark
+                        ? AppTheme.darkTextPrimary
+                        : AppTheme.lightTextPrimary,
                   ),
                 ),
               ),
               StatusDot(
                 label: isConfigured ? 'پوشه تنظیم شده' : 'ناموجود',
-                status: isConfigured ? BadgeStatus.success : BadgeStatus.warning,
+                status: isConfigured
+                    ? BadgeStatus.success
+                    : BadgeStatus.warning,
                 fontSize: 13,
               ),
             ],
@@ -169,7 +194,9 @@ class ToolsSourceFoldersPage extends StatelessWidget {
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+              border: Border.all(
+                color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+              ),
             ),
             child: Row(
               children: [
@@ -182,8 +209,12 @@ class ToolsSourceFoldersPage extends StatelessWidget {
                         fontSize: 13,
                         fontFamily: 'monospace',
                         color: isConfigured
-                            ? (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary)
-                            : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                            ? (isDark
+                                  ? AppTheme.darkTextPrimary
+                                  : AppTheme.lightTextPrimary)
+                            : (isDark
+                                  ? AppTheme.darkTextMuted
+                                  : AppTheme.lightTextMuted),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -196,7 +227,10 @@ class ToolsSourceFoldersPage extends StatelessWidget {
                   icon: const Icon(Icons.folder_open_rounded, size: 15),
                   label: const Text('انتخاب پوشه'),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     minimumSize: const Size(0, 34),
                   ),
                 ),
@@ -208,7 +242,10 @@ class ToolsSourceFoldersPage extends StatelessWidget {
                     label: const Text('اسکن'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accentColor,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       minimumSize: const Size(0, 34),
                     ),
                   ),
@@ -225,7 +262,12 @@ class ToolsSourceFoldersPage extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 'فایل یا ابزاری در این پوشه شناسایی نشد.',
-                style: TextStyle(fontSize: 13, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark
+                      ? AppTheme.darkTextMuted
+                      : AppTheme.lightTextMuted,
+                ),
               ),
             )
           else
@@ -244,7 +286,9 @@ class ToolsSourceFoldersPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF131D33) : Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+        ),
       ),
       child: Row(
         children: [
@@ -265,7 +309,9 @@ class ToolsSourceFoldersPage extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      color: isDark
+                          ? AppTheme.darkTextPrimary
+                          : AppTheme.lightTextPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -275,7 +321,12 @@ class ToolsSourceFoldersPage extends StatelessWidget {
                   const SizedBox(height: 1),
                   Text(
                     entry.subtitle,
-                    style: TextStyle(fontSize: 12, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark
+                          ? AppTheme.darkTextMuted
+                          : AppTheme.lightTextMuted,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

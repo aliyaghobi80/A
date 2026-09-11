@@ -10,11 +10,7 @@ class BatteryCard extends StatefulWidget {
   final BatteryInfo battery;
   final VoidCallback? onRefresh;
 
-  const BatteryCard({
-    super.key,
-    required this.battery,
-    this.onRefresh,
-  });
+  const BatteryCard({super.key, required this.battery, this.onRefresh});
 
   @override
   State<BatteryCard> createState() => _BatteryCardState();
@@ -57,11 +53,15 @@ class _BatteryCardState extends State<BatteryCard> {
             content: Text(
               _currentBattery.hasBattery
                   ? (l10n.isPersian
-                      ? '✓ تست باتری انجام شد: سلامت ${_currentBattery.healthPercent}٪ (${_currentBattery.healthGradeFa})'
-                      : '✓ Battery test complete: ${_currentBattery.healthPercent}% Health (${_currentBattery.healthGrade})')
-                  : (l10n.isPersian ? 'سیستم رومیزی است (بدون باتری)' : 'Desktop system (No battery)'),
+                        ? '✓ تست باتری انجام شد: سلامت ${_currentBattery.healthPercent}٪ (${_currentBattery.healthGradeFa})'
+                        : '✓ Battery test complete: ${_currentBattery.healthPercent}% Health (${_currentBattery.healthGrade})')
+                  : (l10n.isPersian
+                        ? 'سیستم رومیزی است (بدون باتری)'
+                        : 'Desktop system (No battery)'),
             ),
-            backgroundColor: _currentBattery.isHealthy ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+            backgroundColor: _currentBattery.isHealthy
+                ? const Color(0xFF10B981)
+                : const Color(0xFFF59E0B),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -98,13 +98,19 @@ class _BatteryCardState extends State<BatteryCard> {
       statusLabel = l10n.isPersian ? 'سیستم رومیزی (AC)' : 'Desktop (AC Power)';
     } else if (healthPct >= 80.0) {
       statusColor = const Color(0xFF10B981);
-      statusLabel = l10n.isPersian ? '✓ سلامت عالی ($healthPct٪)' : '✓ Excellent ($healthPct%)';
+      statusLabel = l10n.isPersian
+          ? '✓ سلامت عالی ($healthPct٪)'
+          : '✓ Excellent ($healthPct%)';
     } else if (healthPct >= 60.0) {
       statusColor = const Color(0xFFF59E0B);
-      statusLabel = l10n.isPersian ? '⚠ کارکرده ($healthPct٪)' : '⚠ Moderate ($healthPct%)';
+      statusLabel = l10n.isPersian
+          ? '⚠ کارکرده ($healthPct٪)'
+          : '⚠ Moderate ($healthPct%)';
     } else {
       statusColor = const Color(0xFFEF4444);
-      statusLabel = l10n.isPersian ? '✕ ضعیف ($healthPct٪)' : '✕ Poor ($healthPct%)';
+      statusLabel = l10n.isPersian
+          ? '✕ ضعیف ($healthPct٪)'
+          : '✕ Poor ($healthPct%)';
     }
 
     return CardWrapper(
@@ -138,7 +144,9 @@ class _BatteryCardState extends State<BatteryCard> {
               color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                color: isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFE2E8F0),
               ),
             ),
             child: Row(
@@ -159,19 +167,29 @@ class _BatteryCardState extends State<BatteryCard> {
                     children: [
                       Text(
                         hasBat
-                            ? (l10n.isPersian ? 'سلامت باتری: $healthPct٪' : 'Battery Health: $healthPct%')
-                            : (l10n.isPersian ? 'سیستم رومیزی (بدون باتری)' : 'Desktop Computer (No Battery)'),
+                            ? (l10n.isPersian
+                                  ? 'سلامت باتری: $healthPct٪'
+                                  : 'Battery Health: $healthPct%')
+                            : (l10n.isPersian
+                                  ? 'سیستم رومیزی (بدون باتری)'
+                                  : 'Desktop Computer (No Battery)'),
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
-                          color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                          color: isDark
+                              ? const Color(0xFFF8FAFC)
+                              : const Color(0xFF0F172A),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         hasBat
-                            ? (l10n.isPersian ? bat.summaryMessageFa : bat.summaryMessage)
-                            : (l10n.isPersian ? 'تغذیه مستقیم از برق شهری' : 'Running on direct AC power source'),
+                            ? (l10n.isPersian
+                                  ? bat.summaryMessageFa
+                                  : bat.summaryMessage)
+                            : (l10n.isPersian
+                                  ? 'تغذیه مستقیم از برق شهری'
+                                  : 'Running on direct AC power source'),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -205,8 +223,11 @@ class _BatteryCardState extends State<BatteryCard> {
             ),
             if (bat.designCapacityMwh > 0 && bat.fullChargeCapacityMwh > 0)
               InfoRow(
-                label: l10n.isPersian ? 'ظرفیت اولیه / فعلی' : 'Design / Full Capacity',
-                value: '${bat.designCapacityMwh} mWh  /  ${bat.fullChargeCapacityMwh} mWh',
+                label: l10n.isPersian
+                    ? 'ظرفیت اولیه / فعلی'
+                    : 'Design / Full Capacity',
+                value:
+                    '${bat.designCapacityMwh} mWh  /  ${bat.fullChargeCapacityMwh} mWh',
                 icon: Icons.bolt_rounded,
                 isMonospace: true,
               ),
@@ -224,7 +245,8 @@ class _BatteryCardState extends State<BatteryCard> {
                 isMonospace: true,
                 copyable: true,
               ),
-            if (bat.manufacturer != 'Not available' && bat.manufacturer != 'Unknown')
+            if (bat.manufacturer != 'Not available' &&
+                bat.manufacturer != 'Unknown')
               InfoRow(
                 label: l10n.manufacturer,
                 value: bat.manufacturer,
@@ -233,12 +255,16 @@ class _BatteryCardState extends State<BatteryCard> {
           ] else ...[
             InfoRow(
               label: l10n.isPersian ? 'نوع دستگاه' : 'Device Type',
-              value: l10n.isPersian ? 'کیس / مینی‌پی‌سی / سیستم رومیزی' : 'Desktop / Workstation PC',
+              value: l10n.isPersian
+                  ? 'کیس / مینی‌پی‌سی / سیستم رومیزی'
+                  : 'Desktop / Workstation PC',
               icon: Icons.desktop_windows_rounded,
             ),
             InfoRow(
               label: l10n.isPersian ? 'وضعیت برق' : 'Power Status',
-              value: l10n.isPersian ? 'برق مستقیم آداپتور و شبکه شهری' : 'Direct AC Mains Connected',
+              value: l10n.isPersian
+                  ? 'برق مستقیم آداپتور و شبکه شهری'
+                  : 'Direct AC Mains Connected',
               icon: Icons.electrical_services_rounded,
             ),
           ],
@@ -252,20 +278,32 @@ class _BatteryCardState extends State<BatteryCard> {
                   ? const SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF10B981)),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF10B981),
+                      ),
                     )
                   : const Icon(Icons.refresh_rounded, size: 16),
               label: Text(
                 _isTesting
-                    ? (l10n.isPersian ? 'در حال تست سلامت باتری...' : 'Testing Battery Health...')
-                    : (l10n.isPersian ? 'بررسی مجدد سلامت باتری' : 'Test Battery Health Again'),
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    ? (l10n.isPersian
+                          ? 'در حال تست سلامت باتری...'
+                          : 'Testing Battery Health...')
+                    : (l10n.isPersian
+                          ? 'بررسی مجدد سلامت باتری'
+                          : 'Test Battery Health Again'),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF10B981),
                 side: const BorderSide(color: Color(0xFF10B981)),
                 padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),

@@ -162,7 +162,10 @@ class BackendProcessManager {
 
   static Future<bool> _ensureBackendRunning() async {
     // 1. Fast check: Check default activePort first (120ms)
-    if (await isBackendRunningOnPort(activePort, const Duration(milliseconds: 120))) {
+    if (await isBackendRunningOnPort(
+      activePort,
+      const Duration(milliseconds: 120),
+    )) {
       debugPrint(
         '[BackendProcessManager] Connected to active backend on port $activePort.',
       );
@@ -173,7 +176,10 @@ class BackendProcessManager {
     final portChecks = await Future.wait(
       candidatePorts.map((p) async {
         if (p == activePort) return null;
-        return (await isBackendRunningOnPort(p, const Duration(milliseconds: 180)))
+        return (await isBackendRunningOnPort(
+              p,
+              const Duration(milliseconds: 180),
+            ))
             ? p
             : null;
       }),
@@ -246,7 +252,13 @@ class BackendProcessManager {
             );
             _process = await Process.start(
               cmd,
-              [scriptFile.path, '--port', '$targetPort', '--parent-pid', '$pid'],
+              [
+                scriptFile.path,
+                '--port',
+                '$targetPort',
+                '--parent-pid',
+                '$pid',
+              ],
               workingDirectory: workDir,
               mode: ProcessStartMode.detached,
             );
@@ -267,7 +279,9 @@ class BackendProcessManager {
       final delayMs = i < 8 ? 100 : (i < 20 ? 300 : 500);
       await Future.delayed(Duration(milliseconds: delayMs));
 
-      final checkTimeout = i < 8 ? const Duration(milliseconds: 250) : const Duration(milliseconds: 1200);
+      final checkTimeout = i < 8
+          ? const Duration(milliseconds: 250)
+          : const Duration(milliseconds: 1200);
 
       // Prioritize targetPort first
       if (await isBackendRunningOnPort(targetPort, checkTimeout)) {
@@ -309,7 +323,12 @@ class BackendProcessManager {
     } catch (_) {}
     if (Platform.isWindows) {
       try {
-        Process.runSync('taskkill.exe', ['/F', '/IM', 'backend_server.exe', '/T'], runInShell: false);
+        Process.runSync('taskkill.exe', [
+          '/F',
+          '/IM',
+          'backend_server.exe',
+          '/T',
+        ], runInShell: false);
       } catch (_) {}
     }
   }

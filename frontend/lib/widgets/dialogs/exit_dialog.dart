@@ -19,7 +19,11 @@ class ExitDialog {
                 color: const Color(0xFFEF4444).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.power_settings_new_rounded, color: Color(0xFFEF4444), size: 22),
+              child: const Icon(
+                Icons.power_settings_new_rounded,
+                color: Color(0xFFEF4444),
+                size: 22,
+              ),
             ),
             const SizedBox(width: 12),
             Text(
@@ -27,7 +31,9 @@ class ExitDialog {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
-                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                color: isDark
+                    ? const Color(0xFFF1F5F9)
+                    : const Color(0xFF0F172A),
               ),
             ),
           ],
@@ -40,13 +46,18 @@ class ExitDialog {
             color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
           ),
         ),
-        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        actionsPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         actions: [
           OutlinedButton(
             onPressed: () => Navigator.of(dialogCtx).pop(),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text('انصراف'),
           ),
@@ -63,7 +74,9 @@ class ExitDialog {
               backgroundColor: const Color(0xFFEF4444),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
         ],

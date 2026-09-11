@@ -44,16 +44,34 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
         return true;
       }).toList();
 
-      final readyPackages = visiblePackages.where((p) => !p.isInstalled && p.isValid && !p.isPortable).toList();
-      final installedPackages = visiblePackages.where((p) => p.isInstalled && !p.isPortable).toList();
-      final portablePackages = visiblePackages.where((p) => p.isPortable).toList();
+      final readyPackages = visiblePackages
+          .where((p) => !p.isInstalled && p.isValid && !p.isPortable)
+          .toList();
+      final readyIds = readyPackages.map((package) => package.id).toSet();
+      final selectedReadyIds = selectedPackageIds.intersection(readyIds);
+      final allReadySelected =
+          readyIds.isNotEmpty && selectedReadyIds.length == readyIds.length;
+      final installedPackages = visiblePackages
+          .where((p) => p.isInstalled && !p.isPortable)
+          .toList();
+      final portablePackages = visiblePackages
+          .where((p) => p.isPortable)
+          .toList();
 
       final filteredPackages = visiblePackages.where((p) {
         if (selectedCategory == 'all') return true;
-        if (selectedCategory == 'ready') return !p.isInstalled && p.isValid && !p.isPortable;
-        if (selectedCategory == 'installed') return p.isInstalled && !p.isPortable;
-        if (selectedCategory == 'portable' || selectedCategory == 'tools') return p.isPortable;
-        return p.publisher.toLowerCase().contains(selectedCategory.toLowerCase()) ||
+        if (selectedCategory == 'ready') {
+          return !p.isInstalled && p.isValid && !p.isPortable;
+        }
+        if (selectedCategory == 'installed') {
+          return p.isInstalled && !p.isPortable;
+        }
+        if (selectedCategory == 'portable' || selectedCategory == 'tools') {
+          return p.isPortable;
+        }
+        return p.publisher.toLowerCase().contains(
+              selectedCategory.toLowerCase(),
+            ) ||
             p.name.toLowerCase().contains(selectedCategory.toLowerCase());
       }).toList();
 
@@ -62,7 +80,10 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
           final isNarrow = constraints.maxWidth < 750;
 
           return SingleChildScrollView(
-            padding: EdgeInsets.symmetric(horizontal: isNarrow ? 12 : 20, vertical: 16),
+            padding: EdgeInsets.symmetric(
+              horizontal: isNarrow ? 12 : 20,
+              vertical: 16,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -72,7 +93,12 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   decoration: BoxDecoration(
                     color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+                    border: Border.all(
+                      color: isDark
+                          ? AppTheme.darkBorder
+                          : AppTheme.lightBorder,
+                      width: 1.2,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -86,7 +112,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  l10n.isPersian ? 'نصب و مدیریت نرم‌افزارهای کاربردی' : 'Software Deployment',
+                                  l10n.isPersian
+                                      ? 'نصب و مدیریت نرم‌افزارهای کاربردی'
+                                      : 'Software Deployment',
                                   style: const TextStyle(
                                     fontSize: 16.5,
                                     fontWeight: FontWeight.w800,
@@ -94,11 +122,15 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  dir.isNotEmpty ? dir : 'پوشه مخزن نرم‌افزارها تنظیم نشده است',
+                                  dir.isNotEmpty
+                                      ? dir
+                                      : 'پوشه مخزن نرم‌افزارها تنظیم نشده است',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontFamily: 'monospace',
-                                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                    color: isDark
+                                        ? AppTheme.darkTextMuted
+                                        : AppTheme.lightTextMuted,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -115,9 +147,16 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
-                              color: (readyPackages.isNotEmpty ? const Color(0xFF0284C7) : AppTheme.statusSuccess).withValues(alpha: 0.12),
+                              color:
+                                  (readyPackages.isNotEmpty
+                                          ? const Color(0xFF0284C7)
+                                          : AppTheme.statusSuccess)
+                                      .withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -125,28 +164,54 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
-                                color: readyPackages.isNotEmpty ? const Color(0xFF0284C7) : AppTheme.statusSuccess,
+                                color: readyPackages.isNotEmpty
+                                    ? const Color(0xFF0284C7)
+                                    : AppTheme.statusSuccess,
                               ),
                             ),
                           ),
                           OutlinedButton.icon(
-                            onPressed: isScanning ? null : () => softwareCtrl.changePackagesDirectory(context),
-                            icon: const Icon(Icons.folder_open_rounded, size: 16),
+                            onPressed: isScanning
+                                ? null
+                                : () => softwareCtrl.changePackagesDirectory(
+                                    context,
+                                  ),
+                            icon: const Icon(
+                              Icons.folder_open_rounded,
+                              size: 16,
+                            ),
                             label: const Text('انتخاب پوشه'),
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
                               minimumSize: const Size(0, 36),
                             ),
                           ),
                           ElevatedButton.icon(
-                            onPressed: isScanning ? null : () => softwareCtrl.fetchPackages(),
+                            onPressed: isScanning
+                                ? null
+                                : () => softwareCtrl.fetchPackages(),
                             icon: isScanning
-                                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
                                 : const Icon(Icons.refresh_rounded, size: 16),
-                            label: Text(isScanning ? 'در حال اسکن...' : 'اسکن مجدد'),
+                            label: Text(
+                              isScanning ? 'در حال اسکن...' : 'اسکن مجدد',
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: accent,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
                               minimumSize: const Size(0, 36),
                             ),
                           ),
@@ -160,17 +225,31 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
                 // 2. Batch Progress (If running)
                 if (isBatchRunning) ...[
-                  _buildBatchProgressPanel(batchStatus.summaryMessage, softwareCtrl, isDark, accent),
+                  _buildBatchProgressPanel(
+                    batchStatus.summaryMessage,
+                    softwareCtrl,
+                    isDark,
+                    accent,
+                  ),
                   const SizedBox(height: 12),
                 ],
 
                 // 3. Category Filter Chips + Deduplication Toggle + Bulk Toolbar (Responsive Layout)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                    color: isDark
+                        ? const Color(0xFF0F172A)
+                        : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                    border: Border.all(
+                      color: isDark
+                          ? AppTheme.darkBorder
+                          : AppTheme.lightBorder,
+                    ),
                   ),
                   child: Wrap(
                     spacing: 10,
@@ -181,14 +260,34 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _buildFilterTab('all', 'همه (${visiblePackages.length})', isDark, accent),
+                          _buildFilterTab(
+                            'all',
+                            'همه (${visiblePackages.length})',
+                            isDark,
+                            accent,
+                          ),
                           const SizedBox(width: 6),
-                          _buildFilterTab('ready', 'آماده نصب (${readyPackages.length})', isDark, accent),
+                          _buildFilterTab(
+                            'ready',
+                            'آماده نصب (${readyPackages.length})',
+                            isDark,
+                            accent,
+                          ),
                           const SizedBox(width: 6),
-                          _buildFilterTab('installed', 'نصب شده (${installedPackages.length})', isDark, accent),
+                          _buildFilterTab(
+                            'installed',
+                            'نصب شده (${installedPackages.length})',
+                            isDark,
+                            accent,
+                          ),
                           if (portablePackages.isNotEmpty) ...[
                             const SizedBox(width: 6),
-                            _buildFilterTab('portable', 'ابزارها (${portablePackages.length})', isDark, accent),
+                            _buildFilterTab(
+                              'portable',
+                              'ابزارها (${portablePackages.length})',
+                              isDark,
+                              accent,
+                            ),
                           ],
                         ],
                       ),
@@ -200,25 +299,38 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                             onTap: () => softwareCtrl.toggleHideDuplicates(),
                             borderRadius: BorderRadius.circular(6),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
                                 color: hideDuplicates
-                                    ? accent.withValues(alpha: isDark ? 0.22 : 0.12)
+                                    ? accent.withValues(
+                                        alpha: isDark ? 0.22 : 0.12,
+                                      )
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
                                   color: hideDuplicates
                                       ? accent.withValues(alpha: 0.5)
-                                      : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                                      : (isDark
+                                            ? AppTheme.darkBorder
+                                            : AppTheme.lightBorder),
                                 ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    hideDuplicates ? Icons.filter_alt_rounded : Icons.filter_alt_off_rounded,
+                                    hideDuplicates
+                                        ? Icons.filter_alt_rounded
+                                        : Icons.filter_alt_off_rounded,
                                     size: 15,
-                                    color: hideDuplicates ? accent : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                                    color: hideDuplicates
+                                        ? accent
+                                        : (isDark
+                                              ? AppTheme.darkTextMuted
+                                              : AppTheme.lightTextMuted),
                                   ),
                                   const SizedBox(width: 5),
                                   Text(
@@ -227,8 +339,14 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                                         : 'مخفی کردن تکراری‌ها',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      fontWeight: hideDuplicates ? FontWeight.w800 : FontWeight.w500,
-                                      color: hideDuplicates ? accent : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                                      fontWeight: hideDuplicates
+                                          ? FontWeight.w800
+                                          : FontWeight.w500,
+                                      color: hideDuplicates
+                                          ? accent
+                                          : (isDark
+                                                ? AppTheme.darkTextMuted
+                                                : AppTheme.lightTextMuted),
                                     ),
                                   ),
                                 ],
@@ -237,44 +355,85 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                           ),
                           const SizedBox(width: 12),
 
-                          Checkbox(
-                            value: selectedPackageIds.length == readyPackages.length && readyPackages.isNotEmpty,
-                            activeColor: accent,
-                            onChanged: readyPackages.isEmpty
+                          InkWell(
+                            onTap: readyIds.isEmpty
                                 ? null
-                                : (val) {
-                                    setState(() {
-                                      if (val == true) {
-                                        selectedPackageIds.addAll(readyPackages.map((p) => p.id));
-                                      } else {
-                                        selectedPackageIds.clear();
-                                      }
-                                    });
-                                  },
-                          ),
-                          Text(
-                            'انتخاب همه (${selectedPackageIds.length})',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
+                                : () => setState(() {
+                                    if (allReadySelected) {
+                                      selectedPackageIds.removeAll(readyIds);
+                                    } else {
+                                      selectedPackageIds.addAll(readyIds);
+                                    }
+                                  }),
+                            borderRadius: BorderRadius.circular(8),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 44),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Checkbox(
+                                    value: allReadySelected,
+                                    activeColor: accent,
+                                    onChanged: readyIds.isEmpty
+                                        ? null
+                                        : (_) => setState(() {
+                                            if (allReadySelected) {
+                                              selectedPackageIds.removeAll(
+                                                readyIds,
+                                              );
+                                            } else {
+                                              selectedPackageIds.addAll(
+                                                readyIds,
+                                              );
+                                            }
+                                          }),
+                                  ),
+                                  Text(
+                                    allReadySelected
+                                        ? 'لغو انتخاب همه (${selectedReadyIds.length})'
+                                        : 'انتخاب همه (${selectedReadyIds.length})',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? AppTheme.darkTextPrimary
+                                          : AppTheme.lightTextPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 10),
                           ElevatedButton.icon(
-                            onPressed: (isBatchRunning || (readyPackages.isEmpty && selectedPackageIds.isEmpty))
+                            onPressed:
+                                (isBatchRunning ||
+                                    (readyPackages.isEmpty &&
+                                        selectedReadyIds.isEmpty))
                                 ? null
                                 : () => softwareCtrl.startAutoInstallAll(
-                                      context,
-                                      targetPackageIds: selectedPackageIds.isNotEmpty
-                                          ? selectedPackageIds.toList()
-                                          : null,
-                                    ),
-                            icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                                    context,
+                                    targetPackageIds:
+                                        selectedReadyIds.isNotEmpty
+                                        ? selectedReadyIds.toList()
+                                        : null,
+                                  ),
+                            icon: const Icon(
+                              Icons.play_arrow_rounded,
+                              size: 16,
+                            ),
                             label: Text(
-                              selectedPackageIds.isNotEmpty
-                                  ? 'نصب انتخابی (${selectedPackageIds.length})'
+                              selectedReadyIds.isNotEmpty
+                                  ? 'نصب انتخابی (${selectedReadyIds.length})'
                                   : 'نصب خودکار همه آماده‌ها (${readyPackages.length})',
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: accent,
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 6,
+                              ),
                               minimumSize: const Size(0, 36),
                             ),
                           ),
@@ -291,9 +450,11 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   EmptyStateWidget(
                     icon: Icons.apps_outage_rounded,
                     title: 'هیچ نرم‌افزاری در این دسته یافت نشد',
-                    subtitle: 'پوشه نرم‌افزارها را انتخاب کنید یا فیلتر نمایش را تغییر دهید.',
+                    subtitle:
+                        'پوشه نرم‌افزارها را انتخاب کنید یا فیلتر نمایش را تغییر دهید.',
                     action: ElevatedButton.icon(
-                      onPressed: () => softwareCtrl.changePackagesDirectory(context),
+                      onPressed: () =>
+                          softwareCtrl.changePackagesDirectory(context),
                       icon: const Icon(Icons.folder_open_rounded, size: 16),
                       label: const Text('انتخاب پوشه نرم‌افزارها'),
                       style: ElevatedButton.styleFrom(backgroundColor: accent),
@@ -301,23 +462,42 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   )
                 else
                   ...filteredPackages.map((pkg) {
-                    final isThisInstalling = softwareCtrl.isCurrentInstalling(pkg);
-                    final isThisUninstalling = softwareCtrl.isCurrentUninstalling(pkg);
-                    return _buildPackageRow(pkg, softwareCtrl, isThisInstalling, isThisUninstalling, isDark, accent);
+                    final isThisInstalling = softwareCtrl.isCurrentInstalling(
+                      pkg,
+                    );
+                    final isThisUninstalling = softwareCtrl
+                        .isCurrentUninstalling(pkg);
+                    return _buildPackageRow(
+                      pkg,
+                      softwareCtrl,
+                      isThisInstalling,
+                      isThisUninstalling,
+                      isDark,
+                      accent,
+                    );
                   }),
-                  if (packages.isNotEmpty && softwareCtrl.directoryExists) ...[
-                    Builder(
-                      builder: (context) {
-                        final sysCtrl = Get.isRegistered<SystemInfoController>()
-                            ? Get.find<SystemInfoController>()
-                            : null;
-                        final isOfficeInstalled =
-                            sysCtrl?.systemInfo.value?.officeActivation.installed ?? false;
-                        if (isOfficeInstalled) return const SizedBox.shrink();
-                        return _buildOfficeReminderBanner(context, softwareCtrl, isDark);
-                      },
-                    ),
-                  ],
+                if (packages.isNotEmpty && softwareCtrl.directoryExists) ...[
+                  Builder(
+                    builder: (context) {
+                      final sysCtrl = Get.isRegistered<SystemInfoController>()
+                          ? Get.find<SystemInfoController>()
+                          : null;
+                      final isOfficeInstalled =
+                          sysCtrl
+                              ?.systemInfo
+                              .value
+                              ?.officeActivation
+                              .installed ??
+                          false;
+                      if (isOfficeInstalled) return const SizedBox.shrink();
+                      return _buildOfficeReminderBanner(
+                        context,
+                        softwareCtrl,
+                        isDark,
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           );
@@ -363,7 +543,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
             color: isSelected
                 ? Colors.white
-                : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
+                : (isDark
+                      ? AppTheme.darkTextSecondary
+                      : AppTheme.lightTextSecondary),
           ),
         ),
       ),
@@ -373,7 +555,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
   Widget _buildPackageIcon(SoftwarePackage pkg, Color accent, bool isDark) {
     if (pkg.iconBase64 != null && pkg.iconBase64!.isNotEmpty) {
       try {
-        final clean = pkg.iconBase64!.contains(',') ? pkg.iconBase64!.split(',').last : pkg.iconBase64!;
+        final clean = pkg.iconBase64!.contains(',')
+            ? pkg.iconBase64!.split(',').last
+            : pkg.iconBase64!;
         final bytes = base64Decode(clean.trim());
         if (bytes.isNotEmpty) {
           return ClipRRect(
@@ -381,12 +565,15 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
             child: Image.memory(
               bytes,
               fit: BoxFit.contain,
-              errorBuilder: (ctx, err, stack) => Icon(Icons.apps_rounded, size: 24, color: accent),
+              errorBuilder: (ctx, err, stack) =>
+                  Icon(Icons.apps_rounded, size: 24, color: accent),
             ),
           );
         }
       } catch (e) {
-        debugPrint('[SoftwareInstallPage] Error decoding icon for ${pkg.id}: $e');
+        debugPrint(
+          '[SoftwareInstallPage] Error decoding icon for ${pkg.id}: $e',
+        );
       }
     }
     return Icon(Icons.apps_rounded, size: 24, color: accent);
@@ -408,13 +595,19 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: isSelected
-            ? (isDark ? accent.withValues(alpha: 0.16) : accent.withValues(alpha: 0.08))
+            ? (isDark
+                  ? accent.withValues(alpha: 0.16)
+                  : accent.withValues(alpha: 0.08))
             : (isDark ? AppTheme.darkCard : AppTheme.lightCard),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isSelected
               ? accent
-              : (isInstalled ? (isDark ? AppTheme.darkBorder : AppTheme.lightBorder) : const Color(0xFF0284C7).withValues(alpha: isDark ? 0.5 : 0.35)),
+              : (isInstalled
+                    ? (isDark ? AppTheme.darkBorder : AppTheme.lightBorder)
+                    : const Color(
+                        0xFF0284C7,
+                      ).withValues(alpha: isDark ? 0.5 : 0.35)),
           width: isSelected ? 2.0 : 1.2,
         ),
         boxShadow: isSelected
@@ -434,9 +627,13 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
               value: isSelected,
               activeColor: accent,
               checkColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
               side: BorderSide(
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                color: isDark
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF64748B),
                 width: 1.8,
               ),
               onChanged: (val) {
@@ -478,7 +675,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -508,7 +707,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   '${pkg.publisher.isNotEmpty ? pkg.publisher : "کاربردی"} • ${pkg.fileSizeDisplay}${pkg.filename.isNotEmpty ? " • ${pkg.filename}" : ""}',
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    color: isDark
+                        ? AppTheme.darkTextMuted
+                        : AppTheme.lightTextMuted,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -519,12 +720,49 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
           const SizedBox(width: 10),
 
+          if (isInstalled && pkg.isMicrosoftOfficePackage) ...[
+            OutlinedButton.icon(
+              onPressed: ctrl.officeShortcutPackageId.value == pkg.id
+                  ? null
+                  : () => ctrl.createOfficeShortcuts(context, pkg),
+              icon: ctrl.officeShortcutPackageId.value == pkg.id
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_to_home_screen_rounded, size: 17),
+              label: Text(
+                ctrl.officeShortcutPackageId.value == pkg.id
+                    ? 'در حال ساخت...'
+                    : 'ساخت شورتکات‌ها',
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+
           // Status Badge
           StatusBadge(
-            label: pkg.isPortable
+            label: pkg.isWindowsUpdateBlocker
+                ? (pkg.windowsUpdateBlocked
+                      ? 'آپدیت بسته است'
+                      : (pkg.windowsUpdateStateKnown
+                            ? 'آپدیت فعال است'
+                            : 'وضعیت نامشخص'))
+                : pkg.isPortable
                 ? 'آماده اجرا'
                 : (isInstalled ? 'نصب شده' : 'آماده نصب'),
-            status: pkg.isPortable
+            status: pkg.isWindowsUpdateBlocker
+                ? (pkg.windowsUpdateBlocked
+                      ? BadgeStatus.neutral
+                      : (pkg.windowsUpdateStateKnown
+                            ? BadgeStatus.success
+                            : BadgeStatus.info))
+                : pkg.isPortable
                 ? BadgeStatus.info
                 : (isInstalled ? BadgeStatus.success : BadgeStatus.info),
             fontSize: 12,
@@ -534,18 +772,74 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
           // Action Button
           if (isInstalling)
-            const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
           else if (pkg.isPortable)
-            ElevatedButton.icon(
-              onPressed: () => ctrl.openInstalledApp(context, pkg),
-              icon: const Icon(Icons.open_in_new_rounded, size: 15),
-              label: const Text('باز کردن'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0284C7),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                minimumSize: const Size(0, 32),
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (pkg.isWindowsUpdateBlocker) ...[
+                  OutlinedButton.icon(
+                    onPressed: () => ctrl.pinPackageToTaskbar(context, pkg),
+                    icon: const Icon(Icons.push_pin_rounded, size: 17),
+                    label: const Text('پین به تسک‌بار'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                ElevatedButton.icon(
+                  onPressed:
+                      pkg.isWindowsUpdateBlocker &&
+                          ctrl.windowsUpdateActionPackageId.value == pkg.id
+                      ? null
+                      : () => pkg.isWindowsUpdateBlocker
+                            ? ctrl.setWindowsUpdateState(context, pkg)
+                            : ctrl.openInstalledApp(context, pkg),
+                  icon:
+                      pkg.isWindowsUpdateBlocker &&
+                          ctrl.windowsUpdateActionPackageId.value == pkg.id
+                      ? const SizedBox(
+                          width: 17,
+                          height: 17,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(
+                          pkg.isWindowsUpdateBlocker
+                              ? (pkg.windowsUpdateBlocked
+                                    ? Icons.system_update_alt_rounded
+                                    : Icons.update_disabled_rounded)
+                              : Icons.open_in_new_rounded,
+                          size: 17,
+                        ),
+                  label: Text(
+                    pkg.isWindowsUpdateBlocker
+                        ? (ctrl.windowsUpdateActionPackageId.value == pkg.id
+                              ? 'در حال اعمال...'
+                              : (pkg.windowsUpdateBlocked
+                                    ? 'فعال کردن آپدیت'
+                                    : 'بستن آپدیت'))
+                        : 'باز کردن',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        pkg.isWindowsUpdateBlocker && pkg.windowsUpdateBlocked
+                        ? const Color(0xFF059669)
+                        : const Color(0xFF0284C7),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    minimumSize: const Size(0, 44),
+                  ),
+                ),
+              ],
             )
           else if (isInstalled)
             Row(
@@ -556,22 +850,42 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   icon: const Icon(Icons.open_in_new_rounded, size: 14),
                   label: const Text('باز کردن'),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     minimumSize: const Size(0, 32),
                   ),
                 ),
                 const SizedBox(width: 6),
                 OutlinedButton.icon(
-                  onPressed: isUninstalling ? null : () => ctrl.uninstallPackageInteractive(context, pkg),
+                  onPressed: isUninstalling
+                      ? null
+                      : () => ctrl.uninstallPackageInteractive(context, pkg),
                   icon: isUninstalling
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.delete_outline_rounded, size: 15, color: AppTheme.statusDanger),
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 15,
+                          color: AppTheme.statusDanger,
+                        ),
                   label: Text(
                     'حذف',
-                    style: TextStyle(color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
+                    style: TextStyle(
+                      color: isDark
+                          ? AppTheme.darkTextPrimary
+                          : AppTheme.lightTextPrimary,
+                    ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     minimumSize: const Size(0, 32),
                   ),
                 ),
@@ -584,7 +898,10 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
               label: const Text('نصب'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: accent,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 minimumSize: const Size(0, 32),
               ),
             ),
@@ -593,7 +910,12 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
     );
   }
 
-  Widget _buildBatchProgressPanel(String status, SoftwareController ctrl, bool isDark, Color accent) {
+  Widget _buildBatchProgressPanel(
+    String status,
+    SoftwareController ctrl,
+    bool isDark,
+    Color accent,
+  ) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -603,12 +925,22 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
       ),
       child: Row(
         children: [
-          const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.5)),
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
               status.isNotEmpty ? status : 'در حال نصب بسته نرم‌افزاری...',
-              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: isDark
+                    ? AppTheme.darkTextPrimary
+                    : AppTheme.lightTextPrimary,
+              ),
             ),
           ),
         ],
@@ -616,7 +948,11 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
     );
   }
 
-  Widget _buildOfficeReminderBanner(BuildContext context, SoftwareController softwareCtrl, bool isDark) {
+  Widget _buildOfficeReminderBanner(
+    BuildContext context,
+    SoftwareController softwareCtrl,
+    bool isDark,
+  ) {
     final sysCtrl = Get.isRegistered<SystemInfoController>()
         ? Get.find<SystemInfoController>()
         : null;
@@ -639,7 +975,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   gradient: LinearGradient(
                     colors: [
                       Colors.transparent,
-                      isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                      isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFCBD5E1),
                     ],
                   ),
                 ),
@@ -653,7 +991,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   Icon(
                     Icons.dashboard_customize_rounded,
                     size: 14,
-                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    color: isDark
+                        ? const Color(0xFF64748B)
+                        : const Color(0xFF94A3B8),
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -661,7 +1001,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      color: isDark
+                          ? const Color(0xFF64748B)
+                          : const Color(0xFF94A3B8),
                     ),
                   ),
                 ],
@@ -673,7 +1015,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                      isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFCBD5E1),
                       Colors.transparent,
                     ],
                   ),
@@ -763,7 +1107,10 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
               Builder(
                 builder: (context) {
                   final officePkg = softwareCtrl.packages.firstWhereOrNull(
-                    (p) => p.installerType == 'office_cmd' || p.id == 'office_2024_pro_plus' || p.name.toLowerCase().contains('office'),
+                    (p) =>
+                        p.installerType == 'office_cmd' ||
+                        p.id == 'office_2024_pro_plus' ||
+                        p.name.toLowerCase().contains('office'),
                   );
 
                   return Row(
@@ -771,17 +1118,31 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                     children: [
                       if (officePkg != null) ...[
                         ElevatedButton.icon(
-                          onPressed: () => softwareCtrl.startAutoInstallAll(context, targetPackageIds: [officePkg.id]),
-                          icon: const Icon(Icons.play_circle_filled_rounded, size: 15),
+                          onPressed: () => softwareCtrl.startAutoInstallAll(
+                            context,
+                            targetPackageIds: [officePkg.id],
+                          ),
+                          icon: const Icon(
+                            Icons.play_circle_filled_rounded,
+                            size: 15,
+                          ),
                           label: const Text(
                             'نصب خودکار آفیس ۲۰۲۴',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFEA580C),
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 9,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                             elevation: 1.5,
                           ),
                         ),
@@ -792,13 +1153,23 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                         icon: const Icon(Icons.folder_open_rounded, size: 15),
                         label: const Text(
                           'پوشه آفیس',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: officeColor,
-                          side: BorderSide(color: officeColor.withValues(alpha: 0.6)),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          side: BorderSide(
+                            color: officeColor.withValues(alpha: 0.6),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 9,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ],

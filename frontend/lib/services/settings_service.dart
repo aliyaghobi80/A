@@ -2,16 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 
-enum DisplayMode {
-  simple,
-  advanced,
-}
+enum DisplayMode { simple, advanced }
 
 class AppSettings {
   final String languageCode; // 'fa' or 'en'
   final DisplayMode displayMode;
   final String themeMode; // 'light' (default), 'dark', 'system'
-  final String accentColorName; // 'blue' (default), 'purple', 'green', 'orange', 'red', 'teal', 'neutral'
+  final String
+  accentColorName; // 'blue' (default), 'purple', 'green', 'orange', 'red', 'teal', 'neutral'
   final String? customLogoPath;
   final String uiDensity; // 'comfortable', 'medium' (default), 'compact'
   final String temperatureUnit; // 'C' (default) or 'F'
@@ -69,19 +67,19 @@ class AppSettings {
   }
 
   Map<String, dynamic> toJson() => {
-        'languageCode': languageCode,
-        'displayMode': displayMode.name,
-        'themeMode': themeMode,
-        'accentColorName': accentColorName,
-        'customLogoPath': customLogoPath,
-        'uiDensity': uiDensity,
-        'temperatureUnit': temperatureUnit,
-        'autoScanOnStartup': autoScanOnStartup,
-        'notificationsEnabled': notificationsEnabled,
-        'softwareDirectory': softwareDirectory,
-        'driverDirectory': driverDirectory,
-        'toolsDirectory': toolsDirectory,
-      };
+    'languageCode': languageCode,
+    'displayMode': displayMode.name,
+    'themeMode': themeMode,
+    'accentColorName': accentColorName,
+    'customLogoPath': customLogoPath,
+    'uiDensity': uiDensity,
+    'temperatureUnit': temperatureUnit,
+    'autoScanOnStartup': autoScanOnStartup,
+    'notificationsEnabled': notificationsEnabled,
+    'softwareDirectory': softwareDirectory,
+    'driverDirectory': driverDirectory,
+    'toolsDirectory': toolsDirectory,
+  };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     return AppSettings(
@@ -89,7 +87,8 @@ class AppSettings {
       displayMode: (json['displayMode'] == 'advanced')
           ? DisplayMode.advanced
           : DisplayMode.simple,
-      themeMode: json['themeMode'] as String? ??
+      themeMode:
+          json['themeMode'] as String? ??
           ((json['isDarkMode'] as bool? ?? false) ? 'dark' : 'light'),
       accentColorName: json['accentColorName'] as String? ?? 'blue',
       customLogoPath: json['customLogoPath'] as String?,
@@ -112,7 +111,8 @@ class SettingsService {
     try {
       String? basePath;
       if (Platform.isWindows) {
-        basePath = Platform.environment['APPDATA'] ??
+        basePath =
+            Platform.environment['APPDATA'] ??
             Platform.environment['LOCALAPPDATA'] ??
             Platform.environment['USERPROFILE'];
       }

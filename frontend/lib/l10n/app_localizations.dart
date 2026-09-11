@@ -4,15 +4,16 @@ import 'app_en.dart';
 import 'app_fa.dart';
 
 abstract class AppLocalizations {
-  static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
+  static const LocalizationsDelegate<AppLocalizations> delegate =
+      _AppLocalizationsDelegate();
 
-  static const List<Locale> supportedLocales = [
-    Locale('fa'),
-    Locale('en'),
-  ];
+  static const List<Locale> supportedLocales = [Locale('fa'), Locale('en')];
 
   static AppLocalizations of(BuildContext context) {
-    final localized = Localizations.of<AppLocalizations>(context, AppLocalizations);
+    final localized = Localizations.of<AppLocalizations>(
+      context,
+      AppLocalizations,
+    );
     if (localized != null) {
       return localized;
     }
@@ -277,7 +278,8 @@ abstract class AppLocalizations {
   String qcPassedCategoriesCount(int passed, int total);
 }
 
-class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
@@ -285,7 +287,9 @@ class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> 
 
   @override
   Future<AppLocalizations> load(Locale locale) {
-    return SynchronousFuture<AppLocalizations>(AppLocalizations.fromLocale(locale));
+    return SynchronousFuture<AppLocalizations>(
+      AppLocalizations.fromLocale(locale),
+    );
   }
 
   @override

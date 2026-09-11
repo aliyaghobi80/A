@@ -11,7 +11,8 @@ class CacheService {
     try {
       String? basePath;
       if (Platform.isWindows) {
-        basePath = Platform.environment['APPDATA'] ??
+        basePath =
+            Platform.environment['APPDATA'] ??
             Platform.environment['LOCALAPPDATA'] ??
             Platform.environment['USERPROFILE'];
       }
@@ -52,7 +53,9 @@ class CacheService {
         if (content.trim().isNotEmpty) {
           final Map<String, dynamic> data = json.decode(content);
           if (data['status'] == 'success' || data.containsKey('cpu')) {
-            debugPrint('[CacheService] Successfully loaded cached system info.');
+            debugPrint(
+              '[CacheService] Successfully loaded cached system info.',
+            );
             return SystemInfo.fromJson(data);
           }
         }

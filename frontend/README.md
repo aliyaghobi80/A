@@ -1,6 +1,6 @@
-# Central System Checker - Frontend (مرکزی سیستم چکر)
+# Markazi System Checker - Frontend (مرکزی سیستم چکر)
 
-Desktop frontend application for **Central System Checker** built with Flutter for Windows.
+Desktop frontend application for **Markazi System Checker** built with Flutter for Windows.
 
 ## Features
 - **Bilingual Localization**: English & Persian (Farsi) with native RTL support

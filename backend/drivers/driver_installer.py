@@ -159,16 +159,23 @@ def _has_direct_installer(dir_path: str) -> bool:
     return False
 
 
-def _collect_driver_candidates(dir_path: str, current_depth: int = 0, max_depth: int = 2) -> List[str]:
+def _collect_driver_candidates(dir_path: str, current_depth: int = 0, max_depth: Optional[int] = None) -> List[str]:
     """Recursively collects driver package candidates or extracts from motherboard folders."""
     found = []
-    if current_depth > max_depth or not os.path.isdir(dir_path):
+    if (max_depth is not None and current_depth > max_depth) or not os.path.isdir(dir_path):
         return found
     try:
+        package_name = os.path.basename(dir_path).lower()
+        if current_depth == 0 and package_name.startswith(("drv_", "driver_")):
+            if any(name.lower().endswith((".inf", ".exe", ".msi", ".cmd", ".bat"))
+                   for _, _, names in os.walk(dir_path) for name in names):
+                return [dir_path]
         items = os.listdir(dir_path)
         subdirs = [
             os.path.join(dir_path, d) for d in items
             if os.path.isdir(os.path.join(dir_path, d))
+            and not os.path.islink(os.path.join(dir_path, d))
+            and not os.path.isjunction(os.path.join(dir_path, d))
             and d.lower() not in _IGNORED_DRIVER_DIR_NAMES
             and not d.startswith(".")
         ]
@@ -257,7 +264,7 @@ def intelligent_scan_drivers(custom_dir: Optional[str] = None) -> Dict[str, Any]
             full = os.path.join(target_dir, e)
             if os.path.isdir(full):
                 # May be a driver folder or a container folder (like Motherboard model)
-                candidates.extend(_collect_driver_candidates(full, current_depth=0, max_depth=2))
+                candidates.extend(_collect_driver_candidates(full))
             elif os.path.isfile(full):
                 ext = os.path.splitext(e)[1].lower()
                 if ext in (".exe", ".inf", ".msi"):
@@ -359,10 +366,6 @@ def start_intelligent_driver_install(
             if p.get("is_valid", True)
             and p.get("match", {}).get("recommendation") != "skip"
         ]
-        # Robust fallback: if nothing met strict filter, take all valid packages
-        if not target_pkgs:
-            target_pkgs = [p for p in all_pkgs if p.get("is_valid", True)]
-
     if not target_pkgs:
         return {
             "success": False,
@@ -376,7 +379,7 @@ def launch_interactive_driver_installer(package_id: str, custom_dir: Optional[st
     """
     Launches a driver package's installer interactively for manual installation.
     If it's an EXE/MSI/Script, launches it elevated without silent flags so the setup UI appears.
-    Also starts InstallerAutoPilot in background to automatically handle dialogs.
+    Manual mode leaves all wizard decisions to the technician.
     """
     global _cached_packages_map
     if not _cached_packages_map or package_id not in _cached_packages_map:
@@ -386,28 +389,16 @@ def launch_interactive_driver_installer(package_id: str, custom_dir: Optional[st
     if not pkg:
         return {"success": False, "message": f"بسته درایور با شناسه {package_id} یافت نشد."}
 
-    installer_path = pkg.get("installer_path") or pkg.get("installer_file") or pkg.get("source_path")
+    installer_path = pkg.get("manual_installer_path") or pkg.get("installer_path") or pkg.get("installer_file") or pkg.get("source_path")
     if not installer_path or not os.path.exists(installer_path):
         return {"success": False, "message": f"فایل نصبی یافت نشد: {installer_path}"}
 
     working_dir = os.path.dirname(installer_path) if os.path.isfile(installer_path) else installer_path
-    method = pkg.get("install_method", "setup_exe")
+    method = pkg.get("manual_install_method") or pkg.get("install_method", "setup_exe")
     display_name = pkg.get("display_name", "Driver Package")
 
     try:
         from packages.manager import _launch_elevated
-        from packages.auto_wizard import InstallerAutoPilot
-
-        # Start auto-pilot in background to assist with Language/OK/Next/Begin Install dialogs
-        try:
-            autopilot = InstallerAutoPilot(
-                target_title_keywords=[display_name, os.path.basename(installer_path), "intel", "graphics", "driver"],
-                timeout_seconds=90,
-            )
-            autopilot.run_in_background()
-        except Exception:
-            pass
-
         if method == "msiexec":
             sys_root = os.environ.get("SystemRoot", r"C:\Windows")
             msi_exe = os.path.join(sys_root, "System32", "msiexec.exe")

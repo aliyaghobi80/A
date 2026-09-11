@@ -17,7 +17,7 @@ import zipfile
 import subprocess
 import urllib.request
 
-APP_VERSION = "1.1.6"
+APP_VERSION = "1.1.11"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
 STAGE_DIR = os.path.join(DIST_DIR, f"MarkaziSystemChecker-{APP_VERSION}")
@@ -199,8 +199,6 @@ def step_sync_release_folder(backend_exe: str):
         "msvcp140_atomic_wait.dll",
         "msvcp140_codecvt_ids.dll",
         "vcomp140.dll",
-        "ucrtbase.dll",
-        "d3dcompiler_47.dll",
     ]
     for dll in vc_dlls:
         src_dll = os.path.join(system32, dll)
@@ -208,7 +206,14 @@ def step_sync_release_folder(backend_exe: str):
             shutil.copy2(src_dll, os.path.join(FLUTTER_RELEASE_DIR, dll))
             shutil.copy2(src_dll, os.path.join(dest_backend_dir, dll))
 
-    print(f" * Bundled Visual C++ & Universal C Runtime DLLs for 100% clean-machine Windows compatibility.")
+    # OS DLLs must come from the target Windows installation, not this build PC.
+    # Remove stale copies left by previous builds in these two exact build dirs.
+    for directory in (FLUTTER_RELEASE_DIR, dest_backend_dir):
+        for name in ("ucrtbase.dll", "d3dcompiler_47.dll"):
+            stale = os.path.join(directory, name)
+            if os.path.isfile(stale):
+                os.remove(stale)
+    print(" * Bundled VC runtime DLLs; target Windows supplies OS components.")
 
     # 3. Create clean logs folder without lingering log files
     logs_dir = os.path.join(FLUTTER_RELEASE_DIR, "logs")
@@ -228,15 +233,9 @@ def step_stage_portable_bundle():
     if os.path.commonpath([resolved_stage, resolved_dist]) != resolved_dist or resolved_stage == resolved_dist:
         raise RuntimeError(f"Unsafe staging directory: {resolved_stage}")
     if os.path.isdir(resolved_stage):
-        try:
-            shutil.rmtree(resolved_stage)
-        except Exception as e:
-            print(f"[*] Note: Could not fully clean stage dir (files in use): {e}")
+        shutil.rmtree(resolved_stage)
     os.makedirs(resolved_stage, exist_ok=True)
-    try:
-        shutil.copytree(FLUTTER_RELEASE_DIR, STAGE_DIR, dirs_exist_ok=True)
-    except Exception as e:
-        print(f"[*] Copytree warning (files may be in use): {e}")
+    shutil.copytree(FLUTTER_RELEASE_DIR, STAGE_DIR, dirs_exist_ok=True)
     print(f"[OK] Staged portable directory at: {STAGE_DIR}")
 
 def step_create_portable_zip():
@@ -255,10 +254,7 @@ def step_create_portable_zip():
                     continue
                 abs_file = os.path.join(root, file)
                 rel_file = os.path.relpath(abs_file, os.path.dirname(STAGE_DIR))
-                try:
-                    zf.write(abs_file, rel_file)
-                except Exception as e:
-                    print(f"[*] Warning: Skipped unreadable/locked file {rel_file}: {e}")
+                zf.write(abs_file, rel_file)
 
     size_mb = os.path.getsize(zip_path) / (1024 * 1024)
     print(f"[OK] Portable ZIP created: {zip_path} ({size_mb:.2f} MB)")

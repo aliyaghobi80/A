@@ -13,12 +13,13 @@ class ThemeLanguageController extends GetxController {
   final RxBool autoScanOnStartup = true.obs;
   final RxBool notificationsEnabled = true.obs;
 
-  // Active navigation page index (0 to 5)
+  // Active navigation page index (0 to 6)
   final RxInt activeNavIndex = 0.obs;
 
   bool get isDarkMode => themeMode.value == ThemeMode.dark;
   bool get isPersian => currentLocale.value.languageCode == 'fa';
-  Color get currentAccentColor => AppTheme.getAccentColor(accentColorName.value);
+  Color get currentAccentColor =>
+      AppTheme.getAccentColor(accentColorName.value);
 
   double get densityPaddingFactor {
     switch (uiDensity.value) {
@@ -50,7 +51,7 @@ class ThemeLanguageController extends GetxController {
   }
 
   void setNavIndex(int index) {
-    if (index >= 0 && index <= 5) {
+    if (index >= 0 && index <= 6) {
       activeNavIndex.value = index;
     }
   }

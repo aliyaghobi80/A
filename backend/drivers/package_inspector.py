@@ -163,13 +163,13 @@ def parse_inf_file(inf_path: str) -> Dict[str, Any]:
     if not os.path.isfile(inf_path):
         return res
 
-    encodings = ["utf-8", "utf-16", "utf-16-le", "cp1252", "latin1"]
+    encodings = ["utf-8-sig", "utf-16", "utf-16-le", "cp1252", "latin1"]
     content = ""
     for enc in encodings:
         try:
-            with open(inf_path, "r", encoding=enc, errors="replace") as f:
+            with open(inf_path, "r", encoding=enc, errors="strict") as f:
                 content = f.read()
-                if content and "[" in content:
+                if content and "[" in content and "\x00" not in content:
                     break
         except Exception:
             continue
@@ -288,8 +288,25 @@ def classify_driver_category(
     Returns (category_key, category_persian_name).
     """
     hints_text = " ".join(name_hints).lower()
+    package_hint = (name_hints[0] if name_hints else "").lower().replace("-", "_")
     inf_c = inf_class.lower()
     hw_text = " ".join(hardware_ids or []).upper()
+
+    # The bundle name is more reliable than one aggregated INF class when a
+    # vendor ships base, extension and software-component INFs together.
+    strong_hints = (
+        ("audio", ("drv_audio",)),
+        ("bluetooth", ("drv_bt_", "bluetooth")),
+        ("lan", ("drv_lan", "ethernet")),
+        ("wifi", ("drv_wifi", "wlan", "wireless")),
+        ("gpu", ("drv_vga", "graphics", "display")),
+        ("storage", ("drv_rst", "vmd", "rapid_storage")),
+        ("system_mei", ("drv_npu", "management_engine", "drv_mei")),
+        ("audio", ("drv_ucm_realtek",)),
+    )
+    for category, tokens in strong_hints:
+        if any(token in package_hint for token in tokens):
+            return category, DRIVER_CATEGORIES[category]["fa"]
 
     # 1. INF Class matching
     if inf_c == "display":
@@ -383,6 +400,8 @@ class DriverPackage:
         extraction_dir: Optional[str] = None,
         is_safe: bool = True,
         notes: str = "",
+        inf_files: Optional[List[str]] = None,
+        supported_windows: Optional[List[str]] = None,
     ):
         self.package_id = package_id
         self.display_name = display_name
@@ -404,6 +423,8 @@ class DriverPackage:
         self.extraction_dir = extraction_dir
         self.is_safe = is_safe
         self.notes = notes
+        self.inf_files = inf_files or []
+        self.supported_windows = supported_windows or []
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -416,8 +437,10 @@ class DriverPackage:
             "source_path": self.source_path,
             "relative_path": self.relative_path,
             "installer_file": os.path.basename(self.installer_file) if self.installer_file else "",
-            "installer_path": self.installer_file,
-            "install_method": self.install_method,
+            "installer_path": self.inf_files[0] if self.inf_files else self.installer_file,
+            "install_method": "pnputil" if self.inf_files else self.install_method,
+            "manual_installer_path": self.installer_file,
+            "manual_install_method": self.install_method,
             "silent_args": self.silent_args,
             "size_bytes": self.size_bytes,
             "file_size_display": _format_size(self.size_bytes),
@@ -429,37 +452,11 @@ class DriverPackage:
             "alternative_installers": [os.path.basename(a) for a in self.alternative_installers],
             "is_safe": self.is_safe,
             "notes": self.notes,
+            "inf_files": list(self.inf_files),
+            "supported_windows": list(self.supported_windows),
         }
 
 
-def _resolve_installer_entrypoint(root_dir: str) -> Tuple[str, str, List[str], List[str]]:
-    """
-    Evaluates all executable/script/inf candidates in a directory tree.
-    Returns: (primary_installer_path, install_method, silent_args, alternative_installers)
-    """
-    candidates_exe = []
-    candidates_script = []
-    candidates_msi = []
-    candidates_inf = []
-
-    for r, _, files in os.walk(root_dir):
-        for f in files:
-            full = os.path.join(r, f)
-            ext = os.path.splitext(f)[1].lower()
-            if ext == ".exe":
-                candidates_exe.append(full)
-            elif ext in (".cmd", ".bat"):
-                candidates_script.append(full)
-            elif ext == ".msi":
-                candidates_msi.append(full)
-            elif ext == ".inf":
-                candidates_inf.append(full)
-
-    # 1. ASUS unified motherboard driver setup
-    for exe in candidates_exe:
-        if os.path.basename(exe).lower() == "asussetup.exe":
-            alts = [c for c in candidates_exe if c != exe]
-            return exe, "asus_setup", ["-s", "-norestart"], alts
 
 def get_driver_exe_silent_args(file_path: str) -> List[str]:
     """Returns vendor-specific silent switches for driver executables (matching 1.1.3)."""
@@ -523,6 +520,10 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
         if os.path.basename(scr).lower() in trusted_scripts:
             return scr, "script", [], [c for c in candidates_script if c != scr]
 
+    # INF payloads often contain service/helper EXEs. They are not installers.
+    if candidates_inf:
+        return candidates_inf[0], "pnputil", [], candidates_inf[1:] + candidates_exe
+
     # 4. Any root or shallow EXE
     if candidates_exe:
         # Sort by depth
@@ -552,6 +553,22 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
     rel_path = os.path.relpath(entry_path, driver_root)
     base_name = os.path.basename(entry_path)
     parent_folder = os.path.basename(os.path.dirname(entry_path))
+    rel_lower = rel_path.lower().replace("\\", "/")
+    path_parts = {part.strip(" ._-()[]") for part in rel_lower.split("/")}
+    is_firmware = (
+        any(word in rel_lower for word in ("uninstall", "unins000", "biosflash", "bios_update", "bios-update"))
+        or bool(path_parts.intersection({"bios", "uefi", "firmware", "ec firmware", "embedded controller"}))
+    )
+    if is_firmware:
+        logger.info("Excluded removal/firmware utility from driver installation: %s", rel_path)
+        return None
+
+    version_hint = rel_path.lower().replace("-", "_")
+    supported_windows = []
+    if re.search(r"(?:^|_)w(?:in)?11(?:_|$)", version_hint):
+        supported_windows.append("11")
+    if re.search(r"(?:^|_)w(?:in)?10(?:_|$)", version_hint):
+        supported_windows.append("10")
 
     # Determine Package Type
     if os.path.isfile(entry_path):
@@ -597,7 +614,7 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
         all_infs = [entry_path]
 
     inf_data_list = []
-    for inf_f in all_infs[:6]:  # Parse up to first 6 INFs for speed
+    for inf_f in sorted(all_infs):
         inf_data_list.append(parse_inf_file(inf_f))
 
     # Aggregate Hardware IDs & INF metadata
@@ -649,7 +666,10 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
             provider = pe_meta["company_name"]
 
     # Classify category
-    name_hints = [base_name, parent_folder, pe_meta.get("file_description", ""), pe_meta.get("product_name", "")]
+    name_hints = [base_name]
+    if os.path.isfile(entry_path):
+        name_hints.append(parent_folder)
+    name_hints.extend([pe_meta.get("file_description", ""), pe_meta.get("product_name", "")])
     name_hints.extend(model_names[:3])
     category_key, category_fa = classify_driver_category(name_hints, inf_class, list(combined_hw_ids))
 
@@ -709,4 +729,6 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
         provider=provider,
         alternative_installers=alts,
         extraction_dir=extracted_temp_dir,
+        inf_files=sorted(all_infs),
+        supported_windows=supported_windows,
     )

@@ -25,7 +25,8 @@ class CpuCard extends StatelessWidget {
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
         decoration: BoxDecoration(
-          color: (isDark ? const Color(0xFF3B82F6) : const Color(0xFF2563EB)).withValues(alpha: 0.12),
+          color: (isDark ? const Color(0xFF3B82F6) : const Color(0xFF2563EB))
+              .withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
@@ -48,7 +49,9 @@ class CpuCard extends StatelessWidget {
               color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(9),
               border: Border.all(
-                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                color: isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFE2E8F0),
               ),
             ),
             child: Row(
@@ -61,7 +64,9 @@ class CpuCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        color: isDark
+                            ? const Color(0xFFF8FAFC)
+                            : const Color(0xFF0F172A),
                         letterSpacing: -0.2,
                       ),
                     ),

@@ -3,6 +3,7 @@
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "startup_log.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -10,6 +11,7 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project)
 FlutterWindow::~FlutterWindow() {}
 
 bool FlutterWindow::OnCreate() {
+  LogStartup("Creating Flutter window");
   if (!Win32Window::OnCreate()) {
     return false;
   }
@@ -22,14 +24,18 @@ bool FlutterWindow::OnCreate() {
       frame.right - frame.left, frame.bottom - frame.top, project_);
   // Ensure that basic setup of the controller was successful.
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
+    LogStartup("Flutter engine/view creation failed");
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
+    KillTimer(GetHandle(), 1);
+    LogStartup("First Flutter frame rendered");
     this->Show();
   });
+  SetTimer(GetHandle(), 1, 30000, nullptr);
 
   // Flutter can complete the first frame before the "show window" callback is
   // registered. The following call ensures a frame is pending to ensure the
@@ -40,8 +46,10 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
-  // Ensure child backend processes are terminated immediately upon window close without console window
-  WinExec("taskkill.exe /F /IM backend_server.exe /T", SW_HIDE);
+  KillTimer(GetHandle(), 1);
+  LogStartup("Window closed");
+  // The backend's parent watchdog owns process cleanup. Never kill other
+  // sessions' backend processes by image name.
 
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
@@ -54,6 +62,17 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == WM_TIMER && wparam == 1) {
+    KillTimer(hwnd, 1);
+    LogStartup("No first frame after 30 seconds");
+    this->Show();
+    MessageBoxW(hwnd,
+        L"The application has not rendered its first frame.\n"
+        L"Check the graphics driver and Windows updates, then restart the application.\n"
+        L"Diagnostics: %LOCALAPPDATA%\\MarkaziSystemChecker\\logs\\startup.log",
+        L"Markazi System Checker - Startup diagnostics", MB_OK | MB_ICONWARNING);
+    return 0;
+  }
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
@@ -66,7 +85,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 
   switch (message) {
     case WM_FONTCHANGE:
-      flutter_controller_->engine()->ReloadSystemFonts();
+      if (flutter_controller_ && flutter_controller_->engine()) {
+        flutter_controller_->engine()->ReloadSystemFonts();
+      }
       break;
   }
 

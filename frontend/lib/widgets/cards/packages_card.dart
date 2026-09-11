@@ -336,7 +336,10 @@ class PackagesCard extends StatelessWidget {
             ...packages.map(
               (pkg) => _buildPackageRow(context, pkg, isDark, l10n),
             ),
-            if (!isOfficeInstalled && onOpenOfficeFolder != null && packages.isNotEmpty && directoryExists)
+            if (!isOfficeInstalled &&
+                onOpenOfficeFolder != null &&
+                packages.isNotEmpty &&
+                directoryExists)
               _buildOfficeReminderBanner(context, isDark, l10n),
           ],
         ],
@@ -366,7 +369,9 @@ class PackagesCard extends StatelessWidget {
                   gradient: LinearGradient(
                     colors: [
                       Colors.transparent,
-                      isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                      isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFCBD5E1),
                     ],
                   ),
                 ),
@@ -380,7 +385,9 @@ class PackagesCard extends StatelessWidget {
                   Icon(
                     Icons.dashboard_customize_rounded,
                     size: 14,
-                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    color: isDark
+                        ? const Color(0xFF64748B)
+                        : const Color(0xFF94A3B8),
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -388,7 +395,9 @@ class PackagesCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      color: isDark
+                          ? const Color(0xFF64748B)
+                          : const Color(0xFF94A3B8),
                     ),
                   ),
                 ],
@@ -400,7 +409,9 @@ class PackagesCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                      isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFCBD5E1),
                       Colors.transparent,
                     ],
                   ),
@@ -714,9 +725,17 @@ class PackagesCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0284C7),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
               ),
             )
           else if (installAllowed)

@@ -5,10 +5,11 @@ class AppLocalizationsEn implements AppLocalizations {
   bool get isPersian => false;
 
   @override
-  String get appName => 'Central System Checker';
+  String get appName => 'Markazi System Checker';
 
   @override
-  String get appSubtitle => 'Automated Hardware, OS, Software & Driver Verification';
+  String get appSubtitle =>
+      'Automated Hardware, OS, Software & Driver Verification';
 
   @override
   String get liveInspector => 'LIVE INSPECTOR';
@@ -20,10 +21,12 @@ class AppLocalizationsEn implements AppLocalizations {
   String get advancedMode => 'Advanced';
 
   @override
-  String get simpleModeTooltip => 'Simple Mode: Fast Invoice Comparison & Checklists';
+  String get simpleModeTooltip =>
+      'Simple Mode: Fast Invoice Comparison & Checklists';
 
   @override
-  String get advancedModeTooltip => 'Advanced Mode: Complete Diagnostics, Drivers & Software';
+  String get advancedModeTooltip =>
+      'Advanced Mode: Complete Diagnostics, Drivers & Software';
 
   @override
   String get languageEn => 'EN';
@@ -74,10 +77,12 @@ class AppLocalizationsEn implements AppLocalizations {
   String get systemStatus => 'System Status';
 
   @override
-  String get simpleModeHeaderTitle => 'Quick System Verification & Invoice Check';
+  String get simpleModeHeaderTitle =>
+      'Quick System Verification & Invoice Check';
 
   @override
-  String get simpleModeHeaderSubtitle => 'Compare detected hardware components, drivers, software, and company files with your invoice.';
+  String get simpleModeHeaderSubtitle =>
+      'Compare detected hardware components, drivers, software, and company files with your invoice.';
 
   @override
   String get invoiceCheckBadge => 'INVOICE CHECK';
@@ -140,7 +145,8 @@ class AppLocalizationsEn implements AppLocalizations {
   String get maxClockSpeed => 'Max Clock Speed';
 
   @override
-  String coresThreads(dynamic cores, dynamic threads) => '$cores Cores / $threads Threads';
+  String coresThreads(dynamic cores, dynamic threads) =>
+      '$cores Cores / $threads Threads';
 
   @override
   String get totalCapacity => 'Total Capacity';
@@ -170,7 +176,8 @@ class AppLocalizationsEn implements AppLocalizations {
   String get driverVersion => 'Driver Version';
 
   @override
-  String gpusDetected(int count) => '$count GPU${count == 1 ? '' : 's'} Detected';
+  String gpusDetected(int count) =>
+      '$count GPU${count == 1 ? '' : 's'} Detected';
 
   @override
   String get noGpuDetected => 'No GPU detected';
@@ -251,7 +258,8 @@ class AppLocalizationsEn implements AppLocalizations {
   String get disconnected => 'Disconnected';
 
   @override
-  String activeAdaptersCount(int active, int total) => '$active Active / $total Total';
+  String activeAdaptersCount(int active, int total) =>
+      '$active Active / $total Total';
 
   @override
   String get noNetworkDetected => 'No network adapters detected';
@@ -279,7 +287,8 @@ class AppLocalizationsEn implements AppLocalizations {
   String get driverCategory => 'Category';
 
   @override
-  String driverSummaryCount(int healthy, int total) => '$healthy / $total Important Drivers OK';
+  String driverSummaryCount(int healthy, int total) =>
+      '$healthy / $total Important Drivers OK';
 
   // Software Requirements & Discovery
   @override
@@ -337,7 +346,8 @@ class AppLocalizationsEn implements AppLocalizations {
   String get softwareStatus => 'Software Status';
 
   @override
-  String softwareSummaryCount(int installed, int total) => '$installed / $total Installed';
+  String softwareSummaryCount(int installed, int total) =>
+      '$installed / $total Installed';
 
   @override
   String get allSoftwareInstalled => 'All Required Software Installed';
@@ -364,7 +374,8 @@ class AppLocalizationsEn implements AppLocalizations {
   String get confirmInstallTitle => 'Confirm Software Installation';
 
   @override
-  String confirmInstallMessage(String name) => 'Are you sure you want to install $name?';
+  String confirmInstallMessage(String name) =>
+      'Are you sure you want to install $name?';
 
   @override
   String get availableToInstall => 'Available to Install';
@@ -388,7 +399,8 @@ class AppLocalizationsEn implements AppLocalizations {
   String get confirmUninstallTitle => 'Confirm Uninstallation';
 
   @override
-  String confirmUninstallMessage(String name) => 'Are you sure you want to completely uninstall $name from this system?';
+  String confirmUninstallMessage(String name) =>
+      'Are you sure you want to completely uninstall $name from this system?';
 
   @override
   String uninstallSuccess(String name) => '$name uninstalled successfully';
@@ -422,7 +434,8 @@ class AppLocalizationsEn implements AppLocalizations {
   String get file => 'File';
 
   @override
-  String filesSummaryCount(int present, int total) => '$present / $total Present';
+  String filesSummaryCount(int present, int total) =>
+      '$present / $total Present';
 
   @override
   String get allFilesPresent => 'All Required Files Present';
@@ -478,10 +491,12 @@ class AppLocalizationsEn implements AppLocalizations {
   String get activationCompleted => 'Activation Completed';
 
   @override
-  String get windowsActivationCompleted => 'Windows activation completed successfully.';
+  String get windowsActivationCompleted =>
+      'Windows activation completed successfully.';
 
   @override
-  String get officeActivationCompleted => 'Microsoft Office activation completed successfully.';
+  String get officeActivationCompleted =>
+      'Microsoft Office activation completed successfully.';
 
   @override
   String get activationFailed => 'Activation Failed';
@@ -536,7 +551,8 @@ class AppLocalizationsEn implements AppLocalizations {
       'Are you sure you want to run the configured Windows activation tool with Administrator privileges (Run as Administrator)?';
 
   @override
-  String get confirmActivateOfficeTitle => 'Confirm Microsoft Office Activation';
+  String get confirmActivateOfficeTitle =>
+      'Confirm Microsoft Office Activation';
 
   @override
   String get confirmActivateOfficeMessage =>
@@ -597,13 +613,15 @@ class AppLocalizationsEn implements AppLocalizations {
   String get noProblemsFound => 'No problems found; system is fully ready.';
 
   @override
-  String get prepareSystemDescription => 'Select desired corrective actions to execute automatically in sequence.';
+  String get prepareSystemDescription =>
+      'Select desired corrective actions to execute automatically in sequence.';
 
   @override
   String get confirmPrepareSystemTitle => 'Confirm System Preparation';
 
   @override
-  String get confirmPrepareSystemMessage => 'The selected actions will be executed sequentially with Administrator elevation. Proceed?';
+  String get confirmPrepareSystemMessage =>
+      'The selected actions will be executed sequentially with Administrator elevation. Proceed?';
 
   @override
   String get selectActionsToExecute => 'Select Actions to Execute';
@@ -615,7 +633,6 @@ class AppLocalizationsEn implements AppLocalizations {
   String qcProblemsFound(int count) => '$count item(s) need attention';
 
   @override
-  String qcPassedCategoriesCount(int passed, int total) => '$passed of $total categories passed';
+  String qcPassedCategoriesCount(int passed, int total) =>
+      '$passed of $total categories passed';
 }
-
-

@@ -10,10 +10,7 @@ class QuickQcModal extends StatelessWidget {
   const QuickQcModal({super.key});
 
   static void show(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => const QuickQcModal(),
-    );
+    showDialog(context: context, builder: (ctx) => const QuickQcModal());
   }
 
   @override
@@ -44,7 +41,9 @@ class QuickQcModal extends StatelessWidget {
                   Icon(
                     isPass ? Icons.verified_rounded : Icons.gpp_maybe_rounded,
                     size: 28,
-                    color: isPass ? AppTheme.statusSuccess : AppTheme.statusWarning,
+                    color: isPass
+                        ? AppTheme.statusSuccess
+                        : AppTheme.statusWarning,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -53,7 +52,9 @@ class QuickQcModal extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        color: isDark
+                            ? AppTheme.darkTextPrimary
+                            : AppTheme.lightTextPrimary,
                       ),
                     ),
                   ),
@@ -67,27 +68,41 @@ class QuickQcModal extends StatelessWidget {
               ),
 
               const SizedBox(height: 16),
-              Divider(height: 1, color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+              Divider(
+                height: 1,
+                color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+              ),
               const SizedBox(height: 16),
 
               // Status Summary Banner
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
-                  color: (isPass ? AppTheme.statusSuccess : AppTheme.statusWarning)
-                      .withValues(alpha: isDark ? 0.18 : 0.1),
+                  color:
+                      (isPass ? AppTheme.statusSuccess : AppTheme.statusWarning)
+                          .withValues(alpha: isDark ? 0.18 : 0.1),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: (isPass ? AppTheme.statusSuccess : AppTheme.statusWarning)
-                        .withValues(alpha: 0.4),
+                    color:
+                        (isPass
+                                ? AppTheme.statusSuccess
+                                : AppTheme.statusWarning)
+                            .withValues(alpha: 0.4),
                     width: 1.2,
                   ),
                 ),
                 child: Row(
                   children: [
                     StatusDot(
-                      label: isPass ? 'سیستم آماده تحویل است ✓' : 'نیاز به بررسی و اقدام فنی ⚠',
-                      status: isPass ? BadgeStatus.success : BadgeStatus.warning,
+                      label: isPass
+                          ? 'سیستم آماده تحویل است ✓'
+                          : 'نیاز به بررسی و اقدام فنی ⚠',
+                      status: isPass
+                          ? BadgeStatus.success
+                          : BadgeStatus.warning,
                       fontSize: 14,
                     ),
                     const Spacer(),
@@ -96,7 +111,9 @@ class QuickQcModal extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
-                        color: isPass ? AppTheme.statusSuccess : AppTheme.statusWarning,
+                        color: isPass
+                            ? AppTheme.statusSuccess
+                            : AppTheme.statusWarning,
                       ),
                     ),
                   ],
@@ -119,11 +136,20 @@ class QuickQcModal extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w800,
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    color: isDark
+                        ? AppTheme.darkTextMuted
+                        : AppTheme.lightTextMuted,
                   ),
                 ),
                 const SizedBox(height: 10),
-                ...report.categories.map((cat) => _buildCheckItem(cat.name, cat.displayName, cat.state == QcState.pass, isDark)),
+                ...report.categories.map(
+                  (cat) => _buildCheckItem(
+                    cat.name,
+                    cat.displayName,
+                    cat.state == QcState.pass,
+                    isDark,
+                  ),
+                ),
               ],
 
               const SizedBox(height: 18),
@@ -136,7 +162,10 @@ class QuickQcModal extends StatelessWidget {
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
                     ),
                     child: const Text('بستن پنجره'),
                   ),
@@ -149,7 +178,12 @@ class QuickQcModal extends StatelessWidget {
     );
   }
 
-  Widget _buildCheckItem(String name, String displayName, bool isPass, bool isDark) {
+  Widget _buildCheckItem(
+    String name,
+    String displayName,
+    bool isPass,
+    bool isDark,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5.0),
       child: Row(
@@ -166,7 +200,9 @@ class QuickQcModal extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w700,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                color: isDark
+                    ? AppTheme.darkTextPrimary
+                    : AppTheme.lightTextPrimary,
               ),
             ),
           ),

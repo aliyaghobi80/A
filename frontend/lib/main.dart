@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
 import 'controllers/activation_controller.dart';
 import 'controllers/driver_install_controller.dart';
+import 'controllers/device_settings_controller.dart';
 import 'controllers/qc_controller.dart';
 import 'controllers/software_controller.dart';
 import 'controllers/system_info_controller.dart';
@@ -20,6 +21,7 @@ import 'widgets/dialogs/exit_dialog.dart';
 import 'widgets/error_view.dart';
 import 'widgets/loading_view.dart';
 import 'widgets/pages/driver_install_page.dart';
+import 'widgets/pages/device_settings_page.dart';
 import 'widgets/pages/license_status_page.dart';
 import 'widgets/pages/settings_page.dart';
 import 'widgets/pages/software_install_page.dart';
@@ -31,7 +33,10 @@ void main() async {
   // Pre-warm backend process asynchronously in parallel with Flutter startup
   unawaited(BackendProcessManager.ensureBackendRunning());
 
-  final settings = await SettingsService.loadSettings();
+  final settings = await SettingsService.loadSettings().timeout(
+    const Duration(seconds: 3),
+    onTimeout: () => const AppSettings(),
+  );
 
   // Initialize GetX Controllers
   final themeLanguageCtrl = Get.put(ThemeLanguageController());
@@ -40,14 +45,15 @@ void main() async {
   Get.put(SystemInfoController());
   Get.put(SoftwareController());
   Get.put(DriverInstallController());
+  Get.put(DeviceSettingsController());
   Get.put(ActivationController());
   Get.put(QcController());
 
-  runApp(const CentralSystemCheckerApp());
+  runApp(const MarkaziSystemCheckerApp());
 }
 
-class CentralSystemCheckerApp extends StatelessWidget {
-  const CentralSystemCheckerApp({super.key});
+class MarkaziSystemCheckerApp extends StatelessWidget {
+  const MarkaziSystemCheckerApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +106,8 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingObserver {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -152,7 +159,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 if (error.isNotEmpty && info == null) {
                   return ErrorView(
                     errorMessage: error,
-                    onRetry: () => systemCtrl.fetchSystemInfo(forceRefresh: true),
+                    onRetry: () =>
+                        systemCtrl.fetchSystemInfo(forceRefresh: true),
                   );
                 }
 
@@ -165,7 +173,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                     // Adaptive Responsive Sidebar (220px desktop, 70px compact rail for tablet / small screens)
                     AppSidebar(
                       selectedIndex: navIndex,
-                      onItemSelected: (idx) => themeLanguageCtrl.setNavIndex(idx),
+                      onItemSelected: (idx) =>
+                          themeLanguageCtrl.setNavIndex(idx),
                       isCompact: isCompactScreen,
                     ),
 
@@ -176,7 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                           // Global AppHeader (Sticky on top)
                           const GlobalAppHeader(),
 
-                          // 6-Page Navigation Content Stack
+                          // 7-Page Navigation Content Stack
                           Expanded(
                             child: IndexedStack(
                               index: navIndex,
@@ -192,6 +201,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                                 // Page 4: ابزارها
                                 const ToolsSourceFoldersPage(),
                                 // Page 5: تنظیمات
+                                const DeviceSettingsPage(),
+                                // Page 6: تنظیمات برنامه
                                 const SettingsPage(),
                               ],
                             ),

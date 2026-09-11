@@ -32,7 +32,9 @@ class SettingsPage extends StatelessWidget {
               style: TextStyle(
                 fontSize: 19,
                 fontWeight: FontWeight.w800,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                color: isDark
+                    ? AppTheme.darkTextPrimary
+                    : AppTheme.lightTextPrimary,
               ),
             ),
             const SizedBox(height: 14),
@@ -42,11 +44,32 @@ class SettingsPage extends StatelessWidget {
               title: 'حالت تم (Theme Mode)',
               child: Row(
                 children: [
-                  _buildThemeOption('روشن (پیش‌فرض)', Icons.light_mode_rounded, currentTheme == ThemeMode.light, () => themeCtrl.setThemeMode(ThemeMode.light), isDark, accent),
+                  _buildThemeOption(
+                    'روشن (پیش‌فرض)',
+                    Icons.light_mode_rounded,
+                    currentTheme == ThemeMode.light,
+                    () => themeCtrl.setThemeMode(ThemeMode.light),
+                    isDark,
+                    accent,
+                  ),
                   const SizedBox(width: 12),
-                  _buildThemeOption('تیره (Dark)', Icons.dark_mode_rounded, currentTheme == ThemeMode.dark, () => themeCtrl.setThemeMode(ThemeMode.dark), isDark, accent),
+                  _buildThemeOption(
+                    'تیره (Dark)',
+                    Icons.dark_mode_rounded,
+                    currentTheme == ThemeMode.dark,
+                    () => themeCtrl.setThemeMode(ThemeMode.dark),
+                    isDark,
+                    accent,
+                  ),
                   const SizedBox(width: 12),
-                  _buildThemeOption('همگام با سیستم', Icons.brightness_auto_rounded, currentTheme == ThemeMode.system, () => themeCtrl.setThemeMode(ThemeMode.system), isDark, accent),
+                  _buildThemeOption(
+                    'همگام با سیستم',
+                    Icons.brightness_auto_rounded,
+                    currentTheme == ThemeMode.system,
+                    () => themeCtrl.setThemeMode(ThemeMode.system),
+                    isDark,
+                    accent,
+                  ),
                 ],
               ),
               isDark: isDark,
@@ -70,35 +93,64 @@ class SettingsPage extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? colorVal
-                            : (isDark ? AppTheme.darkCard : const Color(0xFFF8FAFC)),
+                            : (isDark
+                                  ? AppTheme.darkCard
+                                  : const Color(0xFFF8FAFC)),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: isSelected ? colorVal : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                          color: isSelected
+                              ? colorVal
+                              : (isDark
+                                    ? AppTheme.darkBorder
+                                    : AppTheme.lightBorder),
                           width: isSelected ? 2.0 : 1.2,
                         ),
                         boxShadow: isSelected
-                            ? [BoxShadow(color: colorVal.withValues(alpha: 0.35), blurRadius: 8, spreadRadius: 0)]
+                            ? [
+                                BoxShadow(
+                                  color: colorVal.withValues(alpha: 0.35),
+                                  blurRadius: 8,
+                                  spreadRadius: 0,
+                                ),
+                              ]
                             : [],
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(width: 16, height: 16, decoration: BoxDecoration(
-                            color: isSelected ? Colors.white.withValues(alpha: 0.3) : colorVal,
-                            shape: BoxShape.circle,
-                            border: isSelected ? Border.all(color: Colors.white, width: 1.5) : null,
-                          )),
+                          Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Colors.white.withValues(alpha: 0.3)
+                                  : colorVal,
+                              shape: BoxShape.circle,
+                              border: isSelected
+                                  ? Border.all(color: Colors.white, width: 1.5)
+                                  : null,
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             colorName,
                             style: TextStyle(
                               fontSize: 13,
-                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                              color: isSelected ? Colors.white : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextPrimary),
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: isSelected
+                                  ? Colors.white
+                                  : (isDark
+                                        ? AppTheme.darkTextSecondary
+                                        : AppTheme.lightTextPrimary),
                             ),
                           ),
                         ],
@@ -122,24 +174,44 @@ class SettingsPage extends StatelessWidget {
                     height: 64,
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                      color: isDark
+                          ? const Color(0xFF0F172A)
+                          : const Color(0xFFF8FAFC),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDark
+                            ? AppTheme.darkBorder
+                            : AppTheme.lightBorder,
+                      ),
                     ),
-                    child: customLogo != null && File(customLogo).existsSync()
-                        ? Image.file(File(customLogo), fit: BoxFit.contain)
-                        : Image.asset('assets/logo/camputermarkazi.png', fit: BoxFit.contain),
+                    child: ClipOval(
+                      child: customLogo != null && File(customLogo).existsSync()
+                          ? Image.file(File(customLogo), fit: BoxFit.cover)
+                          : Image.asset(
+                              'assets/logo/camputermarkazi.png',
+                              fit: BoxFit.cover,
+                            ),
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
-                      customLogo != null ? 'لوگوی سفارشی در برنامه بارگذاری شده است.' : 'لوگوی پیش‌فرض شرکت کامپیوتر مرکزی فعال است.',
-                      style: TextStyle(fontSize: 13.5, color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
+                      customLogo != null
+                          ? 'لوگوی سفارشی در برنامه بارگذاری شده است.'
+                          : 'لوگوی پیش‌فرض شرکت کامپیوتر مرکزی فعال است.',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        color: isDark
+                            ? AppTheme.darkTextPrimary
+                            : AppTheme.lightTextPrimary,
+                      ),
                     ),
                   ),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      final path = await FolderPickerService.pickFolder(title: 'انتخاب فایل تصویر لوگو (PNG)');
+                      final path = await FolderPickerService.pickFolder(
+                        title: 'انتخاب فایل تصویر لوگو (PNG)',
+                      );
                       if (path != null && path.isNotEmpty) {
                         themeCtrl.setCustomLogo(path);
                       }
@@ -151,7 +223,13 @@ class SettingsPage extends StatelessWidget {
                     const SizedBox(width: 8),
                     TextButton(
                       onPressed: () => themeCtrl.setCustomLogo(null),
-                      child: const Text('بازنشانی به پیش‌فرض', style: TextStyle(fontSize: 13, color: AppTheme.statusDanger)),
+                      child: const Text(
+                        'بازنشانی به پیش‌فرض',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppTheme.statusDanger,
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -166,11 +244,27 @@ class SettingsPage extends StatelessWidget {
               title: 'زبان و مشخصات رابط کاربری',
               child: Row(
                 children: [
-                  Text('زبان نمایش: ', style: TextStyle(fontSize: 13.5, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted)),
+                  Text(
+                    'زبان نمایش: ',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: isDark
+                          ? AppTheme.darkTextMuted
+                          : AppTheme.lightTextMuted,
+                    ),
+                  ),
                   const SizedBox(width: 8),
-                  ChoiceChip(label: const Text('فارسی (پیش‌فرض)'), selected: isFa, onSelected: (_) => themeCtrl.setLocale(const Locale('fa'))),
+                  ChoiceChip(
+                    label: const Text('فارسی (پیش‌فرض)'),
+                    selected: isFa,
+                    onSelected: (_) => themeCtrl.setLocale(const Locale('fa')),
+                  ),
                   const SizedBox(width: 8),
-                  ChoiceChip(label: const Text('English'), selected: !isFa, onSelected: (_) => themeCtrl.setLocale(const Locale('en'))),
+                  ChoiceChip(
+                    label: const Text('English'),
+                    selected: !isFa,
+                    onSelected: (_) => themeCtrl.setLocale(const Locale('en')),
+                  ),
                 ],
               ),
               isDark: isDark,
@@ -187,7 +281,10 @@ class SettingsPage extends StatelessWidget {
                     await themeCtrl.resetToDefaults();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تنظیمات به حالت اولیه بازنشانی شدند.'), backgroundColor: Color(0xFF64748B)),
+                        const SnackBar(
+                          content: Text('تنظیمات به حالت اولیه بازنشانی شدند.'),
+                          backgroundColor: Color(0xFF64748B),
+                        ),
                       );
                     }
                   },
@@ -199,7 +296,10 @@ class SettingsPage extends StatelessWidget {
                     await themeCtrl.persistSettings();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('✓ تنظیمات با موفقیت ذخیره شدند.'), backgroundColor: AppTheme.statusSuccess),
+                        const SnackBar(
+                          content: Text('✓ تنظیمات با موفقیت ذخیره شدند.'),
+                          backgroundColor: AppTheme.statusSuccess,
+                        ),
                       );
                     }
                   },
@@ -214,18 +314,34 @@ class SettingsPage extends StatelessWidget {
     });
   }
 
-  Widget _buildSettingCard({required String title, required Widget child, required bool isDark}) {
+  Widget _buildSettingCard({
+    required String title,
+    required Widget child,
+    required bool isDark,
+  }) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder, width: 1.2),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary)),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: isDark
+                  ? AppTheme.darkTextPrimary
+                  : AppTheme.lightTextPrimary,
+            ),
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -233,7 +349,14 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildThemeOption(String label, IconData icon, bool isSelected, VoidCallback onTap, bool isDark, Color accent) {
+  Widget _buildThemeOption(
+    String label,
+    IconData icon,
+    bool isSelected,
+    VoidCallback onTap,
+    bool isDark,
+    Color accent,
+  ) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
@@ -243,27 +366,49 @@ class SettingsPage extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isDark ? accent.withValues(alpha: 0.20) : accent.withValues(alpha: 0.10))
+                ? (isDark
+                      ? accent.withValues(alpha: 0.20)
+                      : accent.withValues(alpha: 0.10))
                 : (isDark ? AppTheme.darkCard : const Color(0xFFF8FAFC)),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? accent : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+              color: isSelected
+                  ? accent
+                  : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
               width: isSelected ? 2.0 : 1.2,
             ),
             boxShadow: isSelected
-                ? [BoxShadow(color: accent.withValues(alpha: 0.25), blurRadius: 10, spreadRadius: 0)]
+                ? [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.25),
+                      blurRadius: 10,
+                      spreadRadius: 0,
+                    ),
+                  ]
                 : [],
           ),
           child: Column(
             children: [
-              Icon(icon, size: 24, color: isSelected ? accent : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextMuted)),
+              Icon(
+                icon,
+                size: 24,
+                color: isSelected
+                    ? accent
+                    : (isDark
+                          ? AppTheme.darkTextSecondary
+                          : AppTheme.lightTextMuted),
+              ),
               const SizedBox(height: 6),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected ? (isDark ? accent : accent) : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextPrimary),
+                  color: isSelected
+                      ? (isDark ? accent : accent)
+                      : (isDark
+                            ? AppTheme.darkTextSecondary
+                            : AppTheme.lightTextPrimary),
                 ),
               ),
             ],

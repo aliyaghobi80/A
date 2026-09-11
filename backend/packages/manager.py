@@ -23,6 +23,8 @@ from typing import Dict, Any, List, Optional
 
 from utils.powershell import get_hidden_subprocess_kwargs
 from software.registry import get_app_path_from_registry
+from packages.office_shortcuts import ensure_office_desktop_shortcuts
+from windows.device_settings import get_windows_identity, pin_to_taskbar
 
 logger = logging.getLogger(__name__)
 
@@ -1606,6 +1608,16 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             dup["duplicate_of"] = canonical["id"]
             dup["duplicate_count"] = 0
 
+    # Windows Update is a machine-wide state. Read it once and expose the same
+    # verified state on every WUB executable (x86/x64) shown in the package list.
+    wub_packages = [package for package in packages if _is_windows_update_blocker(package)]
+    if wub_packages:
+        update_state = _windows_update_service_status()
+        state_known = update_state.get("start") is not None
+        for package in wub_packages:
+            package["windows_update_blocked"] = bool(update_state.get("disabled", False))
+            package["windows_update_state_known"] = state_known
+
     # Sort alphabetically by display name
     packages.sort(key=lambda p: (p.get("is_duplicate", False), p["name"].lower()))
 
@@ -1747,17 +1759,6 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
     launched, launch_code, launch_error = _launch_elevated(executable, parameters, working_dir)
 
     if launched:
-        # Launch auto-pilot assistant in background to automatically handle Language/OK/Next dialogs if they pop up
-        try:
-            from packages.auto_wizard import InstallerAutoPilot
-            autopilot = InstallerAutoPilot(
-                target_title_keywords=[target_pkg.get("name", ""), target_pkg.get("filename", ""), target_pkg.get("folder_name", "")],
-                timeout_seconds=90,
-            )
-            autopilot.run_in_background()
-        except Exception:
-            pass
-
         return {
             "success": True,
             "cancelled": False,
@@ -1926,7 +1927,6 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
     # Start auto-pilot in background to automatically advance wizard dialogs (OK, Next, Agree, Finish, Reboot Later)
     from packages.auto_wizard import InstallerAutoPilot
     autopilot = InstallerAutoPilot(target_title_keywords=keywords or [], timeout_seconds=timeout_seconds)
-    autopilot.run_in_background()
 
     try:
         is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
@@ -1935,18 +1935,32 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
 
     if is_admin:
         try:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 command,
                 cwd=working_dir,
-                timeout=timeout_seconds,
-                capture_output=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 **get_hidden_subprocess_kwargs(),
             )
-            return int(result.returncode)
+            autopilot.add_pid(process.pid)
+            autopilot.run_in_background()
+            try:
+                process.wait(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                # Do not kill an installer halfway through a transaction.
+                return -2
+            return int(process.returncode)
         finally:
             autopilot.stop()
 
     info = _SHELLEXECUTEINFOW()
+    native_kernel = ctypes.windll.kernel32
+    native_kernel.GetProcessId.argtypes = [wintypes.HANDLE]
+    native_kernel.GetProcessId.restype = wintypes.DWORD
+    native_kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    native_kernel.WaitForSingleObject.restype = wintypes.DWORD
+    native_kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    native_kernel.CloseHandle.argtypes = [wintypes.HANDLE]
     info.cbSize = ctypes.sizeof(_SHELLEXECUTEINFOW)
     info.fMask = SEE_MASK_NOCLOSEPROCESS
     info.lpVerb = "runas"
@@ -1966,9 +1980,10 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
 
     try:
         try:
-            pid = kernel32.GetProcessId(info.hProcess)
+            pid = ctypes.windll.kernel32.GetProcessId(info.hProcess)
             if pid:
                 autopilot.add_pid(pid)
+                autopilot.run_in_background()
         except Exception:
             pass
 
@@ -2008,6 +2023,149 @@ def _silent_install_command(pkg: Dict[str, Any]) -> List[str]:
             return []
         return [path, *parsed]
     return []
+
+
+def _is_windows_update_blocker(pkg: Dict[str, Any]) -> bool:
+    haystack = " ".join(
+        str(pkg.get(key, ""))
+        for key in ("name", "filename", "relative_path", "full_path", "product_name")
+    ).lower()
+    compact = re.sub(r"[^a-z0-9]+", "", haystack)
+    return "windowsupdateblocker" in compact or re.search(r"(?:^|[^a-z])wub(?:_x64)?\.exe", haystack) is not None
+
+
+def _windows_update_service_status() -> Dict[str, Any]:
+    status: Dict[str, Any] = {"service": "wuauserv", "running": None, "start": None}
+    if os.name != "nt":
+        return status
+    try:
+        query = subprocess.run(
+            ["sc.exe", "query", "wuauserv"], capture_output=True, text=True,
+            timeout=15, **get_hidden_subprocess_kwargs()
+        )
+        output = f"{query.stdout}\n{query.stderr}".lower()
+        status["running"] = "running" in output
+    except Exception:
+        pass
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Services\wuauserv",
+        ) as key:
+            status["start"] = int(winreg.QueryValueEx(key, "Start")[0])
+    except Exception:
+        pass
+    status["disabled"] = status.get("start") == 4 and status.get("running") is False
+    return status
+
+
+def _disable_windows_update_with_wub(
+    pkg: Dict[str, Any], *, allow_home: bool = False, automatic: bool = False
+) -> Dict[str, Any]:
+    identity = get_windows_identity()
+    if identity.get("is_home") and not allow_home:
+        message = (
+            f"{identity.get('label', 'Windows Home')} اورجینال است؛ بهتر است Windows Update باز بماند. "
+            + ("اجرای خودکار WUB رد شد." if automatic else "برای ادامه، تأیید شما لازم است.")
+        )
+        return {
+            "success": bool(automatic),
+            "skipped": bool(automatic),
+            "requires_confirmation": not automatic,
+            "home_guard": True,
+            "windows": identity,
+            "message": message,
+            "package_id": pkg.get("id"),
+            "name": pkg.get("name", "Windows Update Blocker"),
+        }
+
+    executable = os.path.abspath(pkg.get("full_path", ""))
+    if not os.path.isfile(executable):
+        return {"success": False, "message": "فایل اجرایی Windows Update Blocker پیدا نشد."}
+    try:
+        # Official WUB switches: Disable service + Protect service settings.
+        exit_code = _run_elevated_and_wait([executable, "/D", "/P"], os.path.dirname(executable), 90)
+        state = _windows_update_service_status()
+        state_known = state.get("start") is not None
+        verified_disabled = bool(state.get("disabled", False))
+        success = exit_code == 0 and (verified_disabled or not state_known)
+        return {
+            "success": success,
+            "skipped": False,
+            "exit_code": exit_code,
+            "update_service": state,
+            "windows_update_blocked": verified_disabled,
+            "package_id": pkg.get("id"),
+            "name": pkg.get("name", "Windows Update Blocker"),
+            "message": (
+                "Windows Update غیرفعال و تنظیمات سرویس محافظت شد؛ ری‌استارت انجام نمی‌شود."
+                if success
+                else f"Windows Update Blocker با کد {exit_code} پایان یافت، اما غیرفعال‌شدن سرویس تأیید نشد."
+            ),
+        }
+    except Exception as exc:
+        return {"success": False, "message": f"اجرای Windows Update Blocker ناموفق بود: {exc}"}
+
+
+def _enable_windows_update_with_wub(pkg: Dict[str, Any]) -> Dict[str, Any]:
+    """Enable Windows Update with WUB without forcing a restart."""
+    executable = os.path.abspath(pkg.get("full_path", ""))
+    if not os.path.isfile(executable):
+        return {"success": False, "message": "فایل اجرایی Windows Update Blocker پیدا نشد."}
+    try:
+        exit_code = _run_elevated_and_wait([executable, "/E"], os.path.dirname(executable), 90)
+        state = _windows_update_service_status()
+        state_known = state.get("start") is not None
+        verified_enabled = state_known and state.get("start") != 4
+        success = exit_code == 0 and (verified_enabled or not state_known)
+        return {
+            "success": success,
+            "skipped": False,
+            "exit_code": exit_code,
+            "update_service": state,
+            "windows_update_blocked": bool(state.get("disabled", False)),
+            "package_id": pkg.get("id"),
+            "name": pkg.get("name", "Windows Update Blocker"),
+            "message": (
+                "Windows Update فعال شد؛ برای این عملیات ری‌استارت انجام نشد."
+                if success
+                else "فعال‌سازی Windows Update تأیید نشد؛ وضعیت سرویس را بررسی کنید."
+            ),
+        }
+    except Exception as exc:
+        return {"success": False, "message": f"فعال‌سازی Windows Update ناموفق بود: {exc}"}
+
+
+def set_windows_update_state(
+    target_identifier: str,
+    *,
+    enable: bool,
+    custom_dir: Optional[str] = None,
+    confirm_home_update_block: bool = False,
+) -> Dict[str, Any]:
+    """Set the requested Windows Update state using the selected WUB package."""
+    data = scan_packages(custom_dir)
+    target_pkg = _find_package(data, target_identifier)
+    if not target_pkg or not _is_windows_update_blocker(target_pkg):
+        return {"success": False, "message": "Windows Update Blocker در پوشه نرم‌افزارها پیدا نشد."}
+    if enable:
+        return _enable_windows_update_with_wub(target_pkg)
+    return _disable_windows_update_with_wub(
+        target_pkg,
+        allow_home=confirm_home_update_block,
+        automatic=False,
+    )
+
+
+def pin_package_to_taskbar(target_identifier: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:
+    data = scan_packages(custom_dir)
+    pkg = _find_package(data, target_identifier)
+    if not pkg:
+        return {"success": False, "message": "برنامه برای ساخت میانبر Taskbar پیدا نشد."}
+    executable = os.path.abspath(pkg.get("full_path", ""))
+    if not os.path.isfile(executable):
+        return {"success": False, "message": "فایل اجرایی برنامه پیدا نشد."}
+    return pin_to_taskbar(pkg.get("name", "Program"), executable, icon=f"{executable},0")
 
 
 def _install_office_automated(pkg: Dict[str, Any], timeout_seconds: int = 900) -> Dict[str, Any]:
@@ -2058,6 +2216,7 @@ def _install_office_automated(pkg: Dict[str, Any], timeout_seconds: int = 900) -
     if off_info.get("installed"):
         ver = off_info.get("version", "")
         prod = off_info.get("product_name", "Microsoft Office 2024")
+        shortcuts = ensure_office_desktop_shortcuts()
         return {
             "success": True,
             "skipped": False,
@@ -2069,8 +2228,10 @@ def _install_office_automated(pkg: Dict[str, Any], timeout_seconds: int = 900) -
             "verification_state": "verified",
             "package_id": pkg.get("id"),
             "name": pkg.get("name", prod),
+            "desktop_shortcuts": shortcuts,
         }
     elif exit_code == 0:
+        shortcuts = ensure_office_desktop_shortcuts()
         return {
             "success": True,
             "skipped": False,
@@ -2082,6 +2243,7 @@ def _install_office_automated(pkg: Dict[str, Any], timeout_seconds: int = 900) -
             "verification_state": "exit_code_only",
             "package_id": pkg.get("id"),
             "name": pkg.get("name", "Microsoft Office 2024"),
+            "desktop_shortcuts": shortcuts,
         }
     else:
         return {
@@ -2129,8 +2291,22 @@ def silent_install_package(target_identifier: str, custom_dir: Optional[str] = N
             "verified_installed": False,
         }
 
+    if _is_windows_update_blocker(target_pkg):
+        return _disable_windows_update_with_wub(target_pkg, automatic=True)
+
     # Special handling for Microsoft Office automation
     if target_pkg.get("installer_type") == "office_cmd" or "setup_office" in os.path.basename(target_pkg.get("full_path", "")).lower():
+        if target_pkg.get("is_installed"):
+            shortcuts = ensure_office_desktop_shortcuts()
+            return {
+                "success": True,
+                "skipped": True,
+                "message": f"آفیس قبلاً نصب شده است. {shortcuts.get('message', '')}",
+                "verified_installed": True,
+                "desktop_shortcuts": shortcuts,
+                "package_id": target_pkg.get("id"),
+                "name": target_pkg.get("name"),
+            }
         return _install_office_automated(target_pkg, timeout_seconds=max(timeout_seconds, 900))
 
     # Skip if already installed
@@ -2258,7 +2434,12 @@ def silent_install_package(target_identifier: str, custom_dir: Optional[str] = N
     }
 
 
-def open_package(target_identifier: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:
+def open_package(
+    target_identifier: str,
+    custom_dir: Optional[str] = None,
+    *,
+    confirm_home_update_block: bool = False,
+) -> Dict[str, Any]:
     """
     Opens/launches the installed application on Windows.
     """
@@ -2277,6 +2458,13 @@ def open_package(target_identifier: str, custom_dir: Optional[str] = None) -> Di
 
     if not target_pkg:
         return {"success": False, "message": f"برنامه {target_identifier} یافت نشد."}
+
+    if _is_windows_update_blocker(target_pkg):
+        return _disable_windows_update_with_wub(
+            target_pkg,
+            allow_home=confirm_home_update_block,
+            automatic=False,
+        )
 
     exe_path = target_pkg.get("installed_exe_path")
     if not exe_path or not os.path.isfile(exe_path):
