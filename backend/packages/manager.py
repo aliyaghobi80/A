@@ -19,6 +19,7 @@ import struct
 import logging
 import winreg
 import subprocess
+import time
 from typing import Dict, Any, List, Optional
 
 from utils.powershell import get_hidden_subprocess_kwargs
@@ -1999,6 +2000,46 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
         ctypes.windll.kernel32.CloseHandle(info.hProcess)
 
 
+def _run_elevated_raw_and_wait(
+    executable: str,
+    parameters: str,
+    working_dir: str,
+    timeout_seconds: int,
+) -> int:
+    """Run an official uninstall command and wait for its process handle."""
+    info = _SHELLEXECUTEINFOW()
+    native_kernel = ctypes.windll.kernel32
+    native_kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    native_kernel.WaitForSingleObject.restype = wintypes.DWORD
+    native_kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    native_kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    info.cbSize = ctypes.sizeof(_SHELLEXECUTEINFOW)
+    info.fMask = SEE_MASK_NOCLOSEPROCESS
+    info.lpVerb = "runas"
+    info.lpFile = executable
+    info.lpParameters = parameters or None
+    info.lpDirectory = working_dir or None
+    info.nShow = 1
+
+    ctypes.set_last_error(0)
+    if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(info)):
+        error = ctypes.get_last_error() or native_kernel.GetLastError()
+        return ERROR_CANCELLED if error == ERROR_CANCELLED else -int(error or 1)
+    if not info.hProcess:
+        return 0
+
+    try:
+        wait_result = native_kernel.WaitForSingleObject(info.hProcess, timeout_seconds * 1000)
+        if wait_result != 0:
+            return -2
+        exit_code = wintypes.DWORD()
+        if not native_kernel.GetExitCodeProcess(info.hProcess, ctypes.byref(exit_code)):
+            return -3
+        return int(exit_code.value)
+    finally:
+        native_kernel.CloseHandle(info.hProcess)
+
+
 def _silent_install_command(pkg: Dict[str, Any]) -> List[str]:
     path = os.path.abspath(pkg.get("full_path", ""))
     extension = os.path.splitext(path)[1].lower()
@@ -2672,27 +2713,53 @@ def uninstall_package(target_identifier: str, custom_dir: Optional[str] = None) 
 
         work_dir = os.path.dirname(exe_path) if os.path.exists(os.path.dirname(exe_path)) else ""
 
-        ret = ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", exe_path, args, work_dir, 1
+        exit_code = _run_elevated_raw_and_wait(
+            exe_path,
+            args,
+            work_dir,
+            timeout_seconds=300,
         )
 
-        if ret > 32:
-            return {
-                "success": True,
-                "message": f"حذف‌کننده {pkg_name} با موفقیت اجرا شد. لطفاً منتظر اتمام فرآیند حذف بمانید.",
-            }
-        else:
-            err = ctypes.GetLastError()
-            if err == 1223 or ret == 5:
-                return {
-                    "success": False,
-                    "cancelled": True,
-                    "message": f"عملیات حذف {pkg_name} توسط کاربر لغو شد.",
-                }
+        if exit_code == ERROR_CANCELLED:
             return {
                 "success": False,
-                "message": f"خطا در اجرای حذف‌کننده {pkg_name} (کد: {ret})",
+                "cancelled": True,
+                "message": f"عملیات حذف {pkg_name} توسط کاربر لغو شد.",
             }
+        if exit_code == -2:
+            return {
+                "success": False,
+                "timed_out": True,
+                "message": f"زمان انتظار برای حذف {pkg_name} تمام شد؛ فرآیند در حال اجرا رها شد تا حذف ناقص نشود.",
+            }
+        if exit_code not in (0, 3010):
+            return {
+                "success": False,
+                "exit_code": exit_code,
+                "message": f"حذف {pkg_name} با کد {exit_code} به پایان رسید و موفق تأیید نشد.",
+            }
+
+        verified = _wait_for_uninstall_registration_removal(
+            pkg_name,
+            aliases=aliases,
+            publisher=target_pkg.get("publisher", ""),
+            install_location=target_pkg.get("install_location", ""),
+        )
+        if not verified:
+            return {
+                "success": False,
+                "verified_uninstalled": False,
+                "exit_code": exit_code,
+                "message": f"حذف‌کننده {pkg_name} بسته شد، اما برنامه هنوز در ویندوز ثبت شده است.",
+            }
+
+        return {
+            "success": True,
+            "verified_uninstalled": True,
+            "exit_code": exit_code,
+            "reboot_required": exit_code == 3010,
+            "message": f"✓ {pkg_name} به‌طور کامل حذف و نتیجه در ویندوز تأیید شد.",
+        }
 
     except Exception as e:
         logger.error(f"Uninstall error for {pkg_name}: {e}")
@@ -2804,6 +2871,30 @@ def _build_uninstall_invocation(entry: Dict[str, Any]) -> tuple[str, str]:
             args = f"/S {args}".strip()
 
     return exe_path, args.strip()
+
+
+def _wait_for_uninstall_registration_removal(
+    display_name: str,
+    *,
+    aliases: Optional[List[str]] = None,
+    publisher: str = "",
+    install_location: str = "",
+    timeout_seconds: float = 15.0,
+) -> bool:
+    """Poll Windows ARP registration until removal is verifiably complete."""
+    deadline = time.monotonic() + max(timeout_seconds, 0.0)
+    while True:
+        remaining = _find_uninstall_entry(
+            display_name,
+            aliases=aliases,
+            publisher=publisher,
+            install_location=install_location,
+        )
+        if remaining is None:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.5)
 
 
 _UNINSTALL_NAME_SUFFIX_RE = re.compile(

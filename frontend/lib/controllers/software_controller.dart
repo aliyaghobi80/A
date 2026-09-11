@@ -142,8 +142,8 @@ class SoftwareController extends GetxController {
     }
   }
 
-  Future<void> scanPackages({bool silent = false}) async {
-    if (isClosed || isScanning.value) return;
+  Future<void> scanPackages({bool silent = false, bool force = false}) async {
+    if (isClosed || (isScanning.value && !force)) return;
     final generation = ++_scanGeneration;
     if (!silent) {
       isScanning.value = true;
@@ -893,6 +893,10 @@ class SoftwareController extends GetxController {
             ),
           );
         } else if (isSuccess) {
+          // The backend waits for the official uninstaller and verifies
+          // Windows registration removal. Refresh before showing success so
+          // this card cannot retain a stale "installed" state.
+          await scanPackages(silent: true, force: true);
           scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text(
@@ -905,7 +909,9 @@ class SoftwareController extends GetxController {
               behavior: SnackBarBehavior.floating,
             ),
           );
-          _startAutoDetectionPollUninstall(pkg, scaffoldMessenger);
+          if (res['verified_uninstalled'] != true) {
+            _startAutoDetectionPollUninstall(pkg, scaffoldMessenger);
+          }
         } else {
           scaffoldMessenger.showSnackBar(
             SnackBar(

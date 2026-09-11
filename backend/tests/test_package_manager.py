@@ -99,6 +99,48 @@ class PackageManagerTests(unittest.TestCase):
         self.assertTrue(result["manual_required"])
         opener.assert_called_once_with()
 
+    def test_uninstall_waits_and_reports_only_verified_completion(self):
+        package = {
+            "id": "vlc",
+            "relative_path": "VLC Player/Setup.exe",
+            "filename": "Setup.exe",
+            "name": "VLC media player",
+            "publisher": "VideoLAN",
+            "install_location": r"C:\Program Files\VideoLAN\VLC",
+            "is_installed": True,
+        }
+        entry = {
+            "command": r'"C:\Program Files\VideoLAN\VLC\uninstall.exe"',
+            "windows_installer": False,
+        }
+        with (
+            mock.patch.object(manager, "scan_packages", return_value={"packages": [package]}),
+            mock.patch.object(manager, "_find_uninstall_entry", return_value=entry),
+            mock.patch.object(
+                manager,
+                "_build_uninstall_invocation",
+                return_value=(r"C:\Program Files\VideoLAN\VLC\uninstall.exe", "/S"),
+            ),
+            mock.patch.object(manager.os.path, "exists", return_value=True),
+            mock.patch.object(manager, "_run_elevated_raw_and_wait", return_value=0) as runner,
+            mock.patch.object(
+                manager,
+                "_wait_for_uninstall_registration_removal",
+                return_value=True,
+            ) as verifier,
+        ):
+            result = manager.uninstall_package("vlc")
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["verified_uninstalled"])
+        runner.assert_called_once_with(
+            r"C:\Program Files\VideoLAN\VLC\uninstall.exe",
+            "/S",
+            r"C:\Program Files\VideoLAN\VLC",
+            timeout_seconds=300,
+        )
+        verifier.assert_called_once()
+
     def test_blocks_renamed_windows_binary(self):
         result = manager._validate_installer(
             r"C:\Packages\vlc.exe",
