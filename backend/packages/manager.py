@@ -1240,6 +1240,50 @@ def _is_ignored_file_or_dir(root: str, filename: str, base_dir: Optional[str] = 
 
     return False
 
+
+def _is_64_bit_windows() -> bool:
+    """Detect the Windows OS architecture even from a 32-bit process."""
+    architecture = " ".join(
+        [
+            os.environ.get("PROCESSOR_ARCHITECTURE", ""),
+            os.environ.get("PROCESSOR_ARCHITEW6432", ""),
+        ]
+    ).lower()
+    return "amd64" in architecture or "arm64" in architecture or ctypes.sizeof(ctypes.c_void_p) == 8
+
+
+def _select_windows_update_blocker_variant(
+    packages: List[Dict[str, Any]],
+    *,
+    is_64_bit: Optional[bool] = None,
+) -> List[Dict[str, Any]]:
+    """Expose only the WUB executable matching the current Windows architecture."""
+    wub_packages = [package for package in packages if _is_windows_update_blocker(package)]
+    if len(wub_packages) <= 1:
+        return packages
+
+    use_64_bit = _is_64_bit_windows() if is_64_bit is None else is_64_bit
+
+    def is_x64_variant(package: Dict[str, Any]) -> bool:
+        stem = os.path.splitext(str(package.get("filename", "")))[0].lower()
+        return stem in {"wub_x64", "wubx64"}
+
+    preferred = [
+        package
+        for package in wub_packages
+        if is_x64_variant(package) == use_64_bit
+    ]
+    if not preferred:
+        preferred = wub_packages
+
+    keep_ids = {id(package) for package in preferred}
+    return [
+        package
+        for package in packages
+        if not _is_windows_update_blocker(package) or id(package) in keep_ids
+    ]
+
+
 def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
     """
     Recursively scans supported Windows installer formats, validates that EXE
@@ -1550,6 +1594,11 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "icon_base64": icon_data,
             "silent_arguments": silent_args,
         })
+
+    # WUB archives normally include both Wub.exe and Wub_x64.exe. Only expose
+    # the executable matching the current OS; generic duplicate handling then
+    # collapses any remaining copies of that same architecture.
+    packages = _select_windows_update_blocker_variant(packages)
 
     # -------------------------------------------------------------
     # Deduplication Cluster Engine

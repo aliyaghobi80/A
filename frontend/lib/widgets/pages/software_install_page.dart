@@ -17,7 +17,6 @@ class SoftwareInstallPage extends StatefulWidget {
 }
 
 class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
-  String selectedCategory = 'all';
   final Set<String> selectedPackageIds = {};
 
   @override
@@ -30,50 +29,42 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
     return Obx(() {
       final packages = softwareCtrl.packages;
-      final hideDuplicates = softwareCtrl.hideDuplicates.value;
       final isScanning = softwareCtrl.isScanning.value;
       final isBatchRunning = softwareCtrl.isBatchInstalling.value;
+      final isBatchUninstalling = softwareCtrl.isBatchUninstalling.value;
       final batchStatus = softwareCtrl.batchStatus.value;
       final dir = softwareCtrl.packagesDirectory;
 
-      final totalDuplicates = packages.where((p) => p.isDuplicate).length;
-
-      // Filtered active list according to hideDuplicates and category
-      final visiblePackages = packages.where((p) {
-        if (hideDuplicates && p.isDuplicate) return false;
-        return true;
-      }).toList();
+      // Duplicate installers are always hidden; the canonical entry remains.
+      final visiblePackages = packages.where((p) => !p.isDuplicate).toList();
 
       final readyPackages = visiblePackages
           .where((p) => !p.isInstalled && p.isValid && !p.isPortable)
           .toList();
       final readyIds = readyPackages.map((package) => package.id).toSet();
       final selectedReadyIds = selectedPackageIds.intersection(readyIds);
-      final allReadySelected =
-          readyIds.isNotEmpty && selectedReadyIds.length == readyIds.length;
       final installedPackages = visiblePackages
           .where((p) => p.isInstalled && !p.isPortable)
           .toList();
-      final portablePackages = visiblePackages
-          .where((p) => p.isPortable)
+      final selectablePackages = visiblePackages
+          .where((package) => package.isValid && !package.isPortable)
           .toList();
-
-      final filteredPackages = visiblePackages.where((p) {
-        if (selectedCategory == 'all') return true;
-        if (selectedCategory == 'ready') {
-          return !p.isInstalled && p.isValid && !p.isPortable;
-        }
-        if (selectedCategory == 'installed') {
-          return p.isInstalled && !p.isPortable;
-        }
-        if (selectedCategory == 'portable' || selectedCategory == 'tools') {
-          return p.isPortable;
-        }
-        return p.publisher.toLowerCase().contains(
-              selectedCategory.toLowerCase(),
-            ) ||
-            p.name.toLowerCase().contains(selectedCategory.toLowerCase());
-      }).toList();
+      final selectableIds = selectablePackages
+          .map((package) => package.id)
+          .toSet();
+      final selectedVisibleIds = selectedPackageIds.intersection(selectableIds);
+      final allVisibleSelected =
+          selectableIds.isNotEmpty &&
+          selectedVisibleIds.length == selectableIds.length;
+      final selectionValue = allVisibleSelected
+          ? true
+          : (selectedVisibleIds.isEmpty ? false : null);
+      final selectedInstalledPackages = installedPackages
+          .where((package) => selectedPackageIds.contains(package.id))
+          .toList();
+      final hasSelection = selectedVisibleIds.isNotEmpty;
+      final installTargetIds = hasSelection ? selectedReadyIds : readyIds;
+      final filteredPackages = visiblePackages;
 
       return LayoutBuilder(
         builder: (context, constraints) {
@@ -234,12 +225,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   const SizedBox(height: 12),
                 ],
 
-                // 3. Category Filter Chips + Deduplication Toggle + Bulk Toolbar (Responsive Layout)
+                // 3. Compact bulk-action toolbar
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: isDark
                         ? const Color(0xFF0F172A)
@@ -252,192 +240,137 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                     ),
                   ),
                   child: Wrap(
-                    spacing: 10,
+                    spacing: 8,
                     runSpacing: 8,
-                    alignment: WrapAlignment.spaceBetween,
+                    alignment: WrapAlignment.start,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildFilterTab(
-                            'all',
-                            'همه (${visiblePackages.length})',
-                            isDark,
-                            accent,
-                          ),
-                          const SizedBox(width: 6),
-                          _buildFilterTab(
-                            'ready',
-                            'آماده نصب (${readyPackages.length})',
-                            isDark,
-                            accent,
-                          ),
-                          const SizedBox(width: 6),
-                          _buildFilterTab(
-                            'installed',
-                            'نصب شده (${installedPackages.length})',
-                            isDark,
-                            accent,
-                          ),
-                          if (portablePackages.isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            _buildFilterTab(
-                              'portable',
-                              'ابزارها (${portablePackages.length})',
-                              isDark,
-                              accent,
-                            ),
-                          ],
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Deduplication Toggle Chip
-                          InkWell(
-                            onTap: () => softwareCtrl.toggleHideDuplicates(),
-                            borderRadius: BorderRadius.circular(6),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 9,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: hideDuplicates
-                                    ? accent.withValues(
-                                        alpha: isDark ? 0.22 : 0.12,
-                                      )
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: hideDuplicates
-                                      ? accent.withValues(alpha: 0.5)
-                                      : (isDark
-                                            ? AppTheme.darkBorder
-                                            : AppTheme.lightBorder),
+                      Semantics(
+                        button: true,
+                        checked: allVisibleSelected,
+                        label: allVisibleSelected
+                            ? 'لغو انتخاب همه نرم‌افزارها'
+                            : 'انتخاب همه نرم‌افزارها',
+                        child: InkWell(
+                          onTap: selectableIds.isEmpty
+                              ? null
+                              : () => setState(() {
+                                  if (allVisibleSelected) {
+                                    selectedPackageIds.removeAll(selectableIds);
+                                  } else {
+                                    selectedPackageIds.addAll(selectableIds);
+                                  }
+                                }),
+                          borderRadius: BorderRadius.circular(8),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 44),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Checkbox(
+                                  tristate: true,
+                                  value: selectionValue,
+                                  activeColor: accent,
+                                  onChanged: selectableIds.isEmpty
+                                      ? null
+                                      : (_) => setState(() {
+                                          if (allVisibleSelected) {
+                                            selectedPackageIds.removeAll(
+                                              selectableIds,
+                                            );
+                                          } else {
+                                            selectedPackageIds.addAll(
+                                              selectableIds,
+                                            );
+                                          }
+                                        }),
                                 ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    hideDuplicates
-                                        ? Icons.filter_alt_rounded
-                                        : Icons.filter_alt_off_rounded,
-                                    size: 15,
-                                    color: hideDuplicates
-                                        ? accent
-                                        : (isDark
-                                              ? AppTheme.darkTextMuted
-                                              : AppTheme.lightTextMuted),
+                                Text(
+                                  allVisibleSelected
+                                      ? 'لغو انتخاب همه'
+                                      : 'انتخاب همه',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark
+                                        ? AppTheme.darkTextPrimary
+                                        : AppTheme.lightTextPrimary,
                                   ),
-                                  const SizedBox(width: 5),
+                                ),
+                                if (selectedVisibleIds.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
                                   Text(
-                                    totalDuplicates > 0
-                                        ? 'مخفی کردن تکراری‌ها ($totalDuplicates)'
-                                        : 'مخفی کردن تکراری‌ها',
+                                    '(${selectedVisibleIds.length})',
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: hideDuplicates
-                                          ? FontWeight.w800
-                                          : FontWeight.w500,
-                                      color: hideDuplicates
-                                          ? accent
-                                          : (isDark
-                                                ? AppTheme.darkTextMuted
-                                                : AppTheme.lightTextMuted),
+                                      color: accent,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                 ],
-                              ),
+                                const SizedBox(width: 10),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 12),
-
-                          InkWell(
-                            onTap: readyIds.isEmpty
-                                ? null
-                                : () => setState(() {
-                                    if (allReadySelected) {
-                                      selectedPackageIds.removeAll(readyIds);
-                                    } else {
-                                      selectedPackageIds.addAll(readyIds);
-                                    }
-                                  }),
-                            borderRadius: BorderRadius.circular(8),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(minHeight: 44),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Checkbox(
-                                    value: allReadySelected,
-                                    activeColor: accent,
-                                    onChanged: readyIds.isEmpty
-                                        ? null
-                                        : (_) => setState(() {
-                                            if (allReadySelected) {
-                                              selectedPackageIds.removeAll(
-                                                readyIds,
-                                              );
-                                            } else {
-                                              selectedPackageIds.addAll(
-                                                readyIds,
-                                              );
-                                            }
-                                          }),
-                                  ),
-                                  Text(
-                                    allReadySelected
-                                        ? 'لغو انتخاب همه (${selectedReadyIds.length})'
-                                        : 'انتخاب همه (${selectedReadyIds.length})',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? AppTheme.darkTextPrimary
-                                          : AppTheme.lightTextPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                ],
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed:
+                            isBatchRunning ||
+                                isBatchUninstalling ||
+                                selectedInstalledPackages.isEmpty
+                            ? null
+                            : () async {
+                                final removed = await softwareCtrl
+                                    .uninstallSelectedPackages(
+                                      context,
+                                      selectedInstalledPackages,
+                                    );
+                                if (mounted && removed.isNotEmpty) {
+                                  setState(
+                                    () => selectedPackageIds.removeAll(removed),
+                                  );
+                                }
+                              },
+                        icon: isBatchUninstalling
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.delete_outline_rounded,
+                                size: 18,
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          ElevatedButton.icon(
-                            onPressed:
-                                (isBatchRunning ||
-                                    (readyPackages.isEmpty &&
-                                        selectedReadyIds.isEmpty))
-                                ? null
-                                : () => softwareCtrl.startAutoInstallAll(
-                                    context,
-                                    targetPackageIds:
-                                        selectedReadyIds.isNotEmpty
-                                        ? selectedReadyIds.toList()
-                                        : null,
-                                  ),
-                            icon: const Icon(
-                              Icons.play_arrow_rounded,
-                              size: 16,
-                            ),
-                            label: Text(
-                              selectedReadyIds.isNotEmpty
-                                  ? 'نصب انتخابی (${selectedReadyIds.length})'
-                                  : 'نصب خودکار همه آماده‌ها (${readyPackages.length})',
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: accent,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 6,
+                        label: Text(
+                          selectedInstalledPackages.isEmpty
+                              ? 'حذف انتخابی'
+                              : 'حذف انتخابی (${selectedInstalledPackages.length})',
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFEF4444),
+                          minimumSize: const Size(0, 44),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed:
+                            isBatchRunning ||
+                                isBatchUninstalling ||
+                                installTargetIds.isEmpty
+                            ? null
+                            : () => softwareCtrl.startAutoInstallAll(
+                                context,
+                                targetPackageIds: installTargetIds.toList(),
                               ),
-                              minimumSize: const Size(0, 36),
-                            ),
-                          ),
-                        ],
+                        icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                        label: Text('نصب خودکار (${installTargetIds.length})'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accent,
+                          minimumSize: const Size(0, 44),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
                       ),
                     ],
                   ),
@@ -450,8 +383,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   EmptyStateWidget(
                     icon: Icons.apps_outage_rounded,
                     title: 'هیچ نرم‌افزاری در این دسته یافت نشد',
-                    subtitle:
-                        'پوشه نرم‌افزارها را انتخاب کنید یا فیلتر نمایش را تغییر دهید.',
+                    subtitle: 'پوشه نرم‌افزارها را انتخاب یا دوباره اسکن کنید.',
                     action: ElevatedButton.icon(
                       onPressed: () =>
                           softwareCtrl.changePackagesDirectory(context),
@@ -504,52 +436,6 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
         },
       );
     });
-  }
-
-  Widget _buildFilterTab(String cat, String label, bool isDark, Color accent) {
-    final isSelected = selectedCategory == cat;
-
-    return InkWell(
-      onTap: () => setState(() => selectedCategory = cat),
-      borderRadius: BorderRadius.circular(8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? accent
-              : (isDark ? const Color(0xFF162238) : const Color(0xFFF1F5F9)),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected
-                ? accent
-                : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
-            width: 1.2,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: accent.withValues(alpha: isDark ? 0.35 : 0.15),
-                    blurRadius: 6,
-                    offset: const Offset(0, 1),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected
-                ? Colors.white
-                : (isDark
-                      ? AppTheme.darkTextSecondary
-                      : AppTheme.lightTextSecondary),
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildPackageIcon(SoftwarePackage pkg, Color accent, bool isDark) {

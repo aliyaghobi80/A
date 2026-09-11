@@ -259,6 +259,33 @@ class PackageManagerTests(unittest.TestCase):
                 self.assertFalse(result["manual_install_supported"])
                 self.assertEqual(result["validation_code"], "portable_tool")
 
+    def test_wub_architecture_filter_keeps_only_x64_on_64_bit_windows(self):
+        packages = [
+            {"id": "wub32", "name": "Windows Update Blocker", "filename": "Wub.exe"},
+            {"id": "wub64", "name": "Windows Update Blocker", "filename": "Wub_x64.exe"},
+            {"id": "vlc", "name": "VLC media player", "filename": "Setup.exe"},
+        ]
+
+        filtered = manager._select_windows_update_blocker_variant(
+            packages,
+            is_64_bit=True,
+        )
+
+        self.assertEqual([package["id"] for package in filtered], ["wub64", "vlc"])
+
+    def test_wub_architecture_filter_keeps_plain_exe_on_32_bit_windows(self):
+        packages = [
+            {"id": "wub32", "name": "Windows Update Blocker", "filename": "Wub.exe"},
+            {"id": "wub64", "name": "Windows Update Blocker", "filename": "Wub_x64.exe"},
+        ]
+
+        filtered = manager._select_windows_update_blocker_variant(
+            packages,
+            is_64_bit=False,
+        )
+
+        self.assertEqual([package["id"] for package in filtered], ["wub32"])
+
     def test_scan_packages_marks_wub_with_open_action_and_installed_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             wub_path = os.path.join(temp_dir, "Wub_x64.exe")

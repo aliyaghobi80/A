@@ -14,11 +14,9 @@ class SoftwareController extends GetxController {
 
   final Rx<PackagesResponse> packagesResponse = PackagesResponse.empty().obs;
   final RxBool isScanning = false.obs;
-  final RxBool hideDuplicates = true.obs;
-
-  void toggleHideDuplicates() => hideDuplicates.toggle();
   final RxString installingPackageId = ''.obs;
   final RxString uninstallingPackageId = ''.obs;
+  final RxBool isBatchUninstalling = false.obs;
   final RxString windowsUpdateActionPackageId = ''.obs;
   final RxString officeShortcutPackageId = ''.obs;
 
@@ -938,6 +936,103 @@ class SoftwareController extends GetxController {
     }
   }
 
+  Future<Set<String>> uninstallSelectedPackages(
+    BuildContext context,
+    List<SoftwarePackage> selectedPackages,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final eligible = selectedPackages
+        .where((package) => package.isInstalled && !package.isPortable)
+        .toList();
+    if (eligible.isEmpty || isBatchUninstalling.value) return <String>{};
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444)),
+            const SizedBox(width: 10),
+            Text(
+              l10n.isPersian
+                  ? 'حذف برنامه‌های انتخابی'
+                  : 'Uninstall selected apps',
+            ),
+          ],
+        ),
+        content: Text(
+          l10n.isPersian
+              ? '${eligible.length} برنامه به‌ترتیب حذف می‌شوند. سیستم به‌صورت خودکار ری‌استارت نخواهد شد.'
+              : '${eligible.length} apps will be uninstalled sequentially. The system will not restart automatically.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.delete_forever_rounded, size: 18),
+            label: Text(l10n.isPersian ? 'شروع حذف' : 'Start uninstall'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return <String>{};
+
+    final removedIds = <String>{};
+    final failures = <String>[];
+    isBatchUninstalling.value = true;
+    try {
+      for (final package in eligible) {
+        final targetId = package.relativePath.isNotEmpty
+            ? package.relativePath
+            : package.id;
+        uninstallingPackageId.value = targetId;
+        try {
+          final result = await _apiService.uninstallPackage(targetId);
+          if (result['success'] == true &&
+              result['verified_uninstalled'] == true) {
+            removedIds.add(package.id);
+          } else {
+            failures.add(package.name);
+            if (result['cancelled'] == true) break;
+          }
+        } catch (_) {
+          failures.add(package.name);
+        }
+      }
+      await scanPackages(silent: true, force: true);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              failures.isEmpty
+                  ? (l10n.isPersian
+                        ? '✓ ${removedIds.length} برنامه با موفقیت حذف شد.'
+                        : '✓ ${removedIds.length} apps were uninstalled.')
+                  : (l10n.isPersian
+                        ? '${removedIds.length} حذف موفق؛ ${failures.length} مورد نیازمند بررسی است.'
+                        : '${removedIds.length} removed; ${failures.length} require attention.'),
+            ),
+            backgroundColor: failures.isEmpty
+                ? const Color(0xFF059669)
+                : const Color(0xFFD97706),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      uninstallingPackageId.value = '';
+      isBatchUninstalling.value = false;
+    }
+    return removedIds;
+  }
+
   void _startAutoDetectionPollUninstall(
     SoftwarePackage pkg,
     ScaffoldMessengerState scaffoldMessenger,
@@ -1007,7 +1102,7 @@ class SoftwareController extends GetxController {
                 p.autoInstallSupported &&
                 p.isValid &&
                 !p.isInstalled &&
-                (!hideDuplicates.value || !p.isDuplicate),
+                !p.isDuplicate,
           )
           .toList();
     }
