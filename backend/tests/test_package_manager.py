@@ -33,6 +33,31 @@ class PackageManagerTests(unittest.TestCase):
         self.assertEqual(executable, r"C:\Program Files\Vendor App\uninstall.exe")
         self.assertEqual(arguments, "--remove")
 
+    def test_verified_nsis_uninstaller_gets_case_sensitive_silent_switch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            uninstaller = os.path.join(temp_dir, "uninstall.exe")
+            with open(uninstaller, "wb") as stream:
+                stream.write(b"MZ\x00Nullsoft Install System\x00")
+
+            executable, arguments = manager._build_uninstall_invocation(
+                {"command": f'"{uninstaller}"', "windows_installer": False}
+            )
+
+        self.assertEqual(executable, uninstaller)
+        self.assertEqual(arguments, "/S")
+
+    def test_unknown_uninstaller_does_not_receive_guessed_switches(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            uninstaller = os.path.join(temp_dir, "uninstall.exe")
+            with open(uninstaller, "wb") as stream:
+                stream.write(b"MZ\x00Unknown vendor uninstaller\x00")
+
+            _, arguments = manager._build_uninstall_invocation(
+                {"command": f'"{uninstaller}"', "windows_installer": False}
+            )
+
+        self.assertEqual(arguments, "")
+
     def test_kmplayer_remove_only_suffix_matches_safely(self):
         candidate = {
             "display_name": "KMPlayer 64X (remove only)",

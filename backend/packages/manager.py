@@ -2731,6 +2731,24 @@ def _split_uninstall_command(command: str) -> tuple[str, str]:
     return parts[0].strip('"'), parts[1].strip() if len(parts) > 1 else ""
 
 
+def _detect_uninstaller_family(exe_path: str) -> str:
+    """Identify well-known uninstall engines from the executable itself."""
+    if not exe_path or not os.path.isfile(exe_path):
+        return ""
+
+    try:
+        # NSIS launchers keep one of these signatures in the executable image.
+        # Limiting the read keeps this check cheap even for unusually large files.
+        with open(exe_path, "rb") as executable:
+            image = executable.read(16 * 1024 * 1024).lower()
+        if b"nullsoft" in image or b"nsis" in image:
+            return "nsis"
+    except OSError as exc:
+        logger.debug("Could not inspect uninstaller %s: %s", exe_path, exc)
+
+    return ""
+
+
 def _build_uninstall_invocation(entry: Dict[str, Any]) -> tuple[str, str]:
     """Build a safe, no-restart invocation from an official uninstall entry."""
     command = str(entry.get("command") or "").strip()
@@ -2777,6 +2795,13 @@ def _build_uninstall_invocation(entry: Dict[str, Any]) -> tuple[str, str]:
                 args += " /norestart"
             if "REBOOT=" not in args.upper():
                 args += " REBOOT=ReallySuppress"
+    elif _detect_uninstaller_family(exe_path) == "nsis":
+        # NSIS uses the case-sensitive /S switch for a fully unattended
+        # uninstall. Normalize an incorrectly-cased token if one was stored.
+        if re.search(r"(?i)(^|\s)/s(?=\s|$)", args):
+            args = re.sub(r"(?i)(^|\s)/s(?=\s|$)", r"\1/S", args, count=1)
+        else:
+            args = f"/S {args}".strip()
 
     return exe_path, args.strip()
 
