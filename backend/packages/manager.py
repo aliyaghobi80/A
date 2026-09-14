@@ -1977,6 +1977,7 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
     # Start auto-pilot in background to automatically advance wizard dialogs (OK, Next, Agree, Finish, Reboot Later)
     from packages.auto_wizard import InstallerAutoPilot
     autopilot = InstallerAutoPilot(target_title_keywords=keywords or [], timeout_seconds=timeout_seconds)
+    deadline = time.monotonic() + timeout_seconds
 
     try:
         is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
@@ -1998,6 +1999,8 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
                 process.wait(timeout=timeout_seconds)
             except subprocess.TimeoutExpired:
                 # Do not kill an installer halfway through a transaction.
+                return -2
+            if not autopilot.wait_for_children(deadline - time.monotonic()):
                 return -2
             return int(process.returncode)
         finally:
@@ -2043,6 +2046,8 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
         exit_code = wintypes.DWORD()
         if not ctypes.windll.kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(exit_code)):
             return -3
+        if not autopilot.wait_for_children(deadline - time.monotonic()):
+            return -2
         return int(exit_code.value)
     finally:
         autopilot.stop()

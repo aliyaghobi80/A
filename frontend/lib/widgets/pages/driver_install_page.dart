@@ -551,6 +551,10 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
         statusColor = const Color(0xFF10B981);
         statusBadgeText = 'به‌روز است';
         badgeStatus = BadgeStatus.success;
+      } else if (match.confidence == 'UNKNOWN') {
+        statusColor = const Color(0xFFF59E0B);
+        statusBadgeText = 'بررسی توسط نصاب';
+        badgeStatus = BadgeStatus.warning;
       } else if (!match.isMatched) {
         statusColor = const Color(0xFF64748B);
         statusBadgeText = 'نامربوط';

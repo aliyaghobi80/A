@@ -8,6 +8,34 @@ from packages.auto_wizard import InstallerAutoPilot
 
 
 class InstallerSafetyTests(unittest.TestCase):
+    def test_vc2010_license_enables_install_without_toggling_other_checkbox(self):
+        pilot = InstallerAutoPilot(target_pids={123})
+        pilot._get_child_windows = MagicMock(return_value=[
+            (1, 'MICROSOFT SOFTWARE LICENSE TERMS', 'Static'),
+            (2, 'I have read and accept the license terms.', 'Button'),
+            (3, 'Yes, send information about my setup experiences to Microsoft Corporation.', 'Button'),
+            (4, 'Install', 'Button'),
+        ])
+        pilot._check_control = MagicMock(return_value=True)
+        pilot._click_button = MagicMock(return_value=True)
+        with patch('packages.auto_wizard.user32') as api:
+            api.IsWindowEnabled.return_value = True
+            api.GetWindowLongPtrW.side_effect = lambda hwnd, _: 3 if hwnd in (2, 3) else 0
+            self.assertTrue(pilot.process_window(10))
+        pilot._check_control.assert_called_once_with(2, True)
+        pilot._click_button.assert_called_once_with(4, 'Install')
+
+    def test_child_and_grandchild_are_tracked_but_unrelated_process_is_not(self):
+        pilot = InstallerAutoPilot(target_pids={123})
+        with patch('packages.auto_wizard._process_parents', return_value={123: 50, 456: 123, 789: 456, 999: 50}):
+            pilot._refresh_child_pids()
+        self.assertEqual(pilot.target_pids, {123, 456, 789})
+
+    def test_wait_does_not_finish_while_prerequisite_child_is_running(self):
+        pilot = InstallerAutoPilot(target_pids={123})
+        with patch('packages.auto_wizard._process_parents', return_value={456: 123}):
+            self.assertFalse(pilot.wait_for_children(0))
+
     def test_generic_title_does_not_authorize_other_process(self):
         pilot = InstallerAutoPilot(target_pids={123}, target_title_keywords=['setup'])
         with patch('packages.auto_wizard.user32') as api, patch('packages.auto_wizard._get_process_id_for_window', return_value=456):

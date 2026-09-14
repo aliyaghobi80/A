@@ -31,7 +31,7 @@ def get_storage_info() -> List[Dict[str, Any]]:
 
         if raw_wmi:
             for i, disk in enumerate(raw_wmi):
-                idx = disk.get("Index") or i
+                idx = disk.get("Index") if disk.get("Index") is not None else i
                 try:
                     idx_int = int(idx)
                 except (ValueError, TypeError):
@@ -186,9 +186,25 @@ def get_connected_usb_drives() -> List[Dict[str, Any]]:
     import ctypes
     import struct
     import os
+    from ctypes import wintypes
 
     drives: List[Dict[str, Any]] = []
     try:
+        # Explicit pointer-sized signatures avoid truncating volume handles on
+        # 64-bit Windows and preserve the full 64-bit capacity returned by Win32.
+        api = ctypes.windll.kernel32
+        api.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+                                   wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+        api.CreateFileW.restype = wintypes.HANDLE
+        api.DeviceIoControl.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPVOID,
+                                       wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD,
+                                       ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID]
+        api.CloseHandle.argtypes = [wintypes.HANDLE]
+        api.GetDiskFreeSpaceExW.argtypes = [wintypes.LPCWSTR,
+                                          ctypes.POINTER(ctypes.c_ulonglong),
+                                          ctypes.POINTER(ctypes.c_ulonglong),
+                                          ctypes.POINTER(ctypes.c_ulonglong)]
+        api.GetDiskFreeSpaceExW.restype = wintypes.BOOL
         bitmask = ctypes.windll.kernel32.GetLogicalDrives()
         system_drive = (os.environ.get("SystemDrive") or "C:").upper().rstrip("\\")
 
@@ -223,7 +239,7 @@ def get_connected_usb_drives() -> List[Dict[str, Any]]:
                     0,
                     None
                 )
-                if h != -1 and h != 0:
+                if h not in (None, 0, -1, ctypes.c_void_p(-1).value):
                     query = (ctypes.c_ulong * 3)(0, 0, 0)
                     out_buf = ctypes.create_string_buffer(1024)
                     bytes_returned = ctypes.c_ulong()
@@ -281,12 +297,16 @@ def get_connected_usb_drives() -> List[Dict[str, Any]]:
             free_bytes = ctypes.c_ulonglong(0)
             total_bytes = ctypes.c_ulonglong(0)
             total_free = ctypes.c_ulonglong(0)
-            ctypes.windll.kernel32.GetDiskFreeSpaceExW(
+            space_ok = ctypes.windll.kernel32.GetDiskFreeSpaceExW(
                 root_path,
                 ctypes.byref(free_bytes),
                 ctypes.byref(total_bytes),
                 ctypes.byref(total_free)
             )
+
+            if not space_ok:
+                logger.warning("Could not read capacity of volume %s", letter)
+                continue
 
             t_bytes = total_bytes.value
             f_bytes = total_free.value

@@ -169,6 +169,10 @@ def extract_driver_archive(archive_path: str, dest_dir: str) -> bool:
             sevenz_bin = _find_7z_exe()
             if sevenz_bin:
                 success = _extract_with_7z(sevenz_bin, archive_path, dest_dir)
+            else:
+                tar_bin = _find_tar_exe()
+                if tar_bin:
+                    success = _extract_with_tar(tar_bin, archive_path, dest_dir)
 
     elif ext == ".7z":
         # 7-Zip or WinRAR
@@ -246,6 +250,10 @@ def auto_unpack_driver_archives(target_dir: str) -> List[str]:
                                 extracted_dirs.append(dest_folder)
                         else:
                             logger.warning(f"[ArchiveExtractor] Failed to extract archive: {archive_path}")
+                    # os.walk captured dirs before extraction. Include new
+                    # directories so nested ZIP/RAR/7z archives are visited too.
+                    if os.path.isdir(dest_folder) and archive_stem not in dirs:
+                        dirs.append(archive_stem)
 
     except Exception as e:
         logger.error(f"[ArchiveExtractor] Error during archive scan in {target_dir}: {e}")

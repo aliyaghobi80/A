@@ -16,6 +16,52 @@ from drivers.hardware_matcher import match_package_to_hardware
 
 
 class DriverRegressionTests(unittest.TestCase):
+    def test_opaque_downloads_are_separate_even_in_driver_named_folder(self):
+        with tempfile.TemporaryDirectory() as root:
+            folder = Path(root) / 'driver_laptop'
+            folder.mkdir()
+            expected = []
+            for name in ('alksdfjasd.exe', 'alsdfklasjdf.exe', 'alksdfoiw0eifh.exe'):
+                path = folder / name
+                path.write_bytes(b'MZ')
+                expected.append(str(path))
+            self.assertCountEqual(_collect_driver_candidates(str(folder)), expected)
+
+    def test_opaque_exe_is_unknown_not_incompatible(self):
+        result = match_package_to_hardware({'install_method': 'setup_exe', 'hardware_ids': []}, [])
+        self.assertEqual(result['confidence'], 'UNKNOWN')
+        self.assertEqual(result['recommendation'], 'optional')
+
+    def test_newly_extracted_nested_archive_is_scanned(self):
+        import io
+        with tempfile.TemporaryDirectory() as root:
+            inner = io.BytesIO()
+            with zipfile.ZipFile(inner, 'w') as archive:
+                archive.writestr('opaque.exe', b'MZ')
+            with zipfile.ZipFile(Path(root) / 'outer.zip', 'w') as archive:
+                archive.writestr('inner.zip', inner.getvalue())
+            auto_unpack_driver_archives(root)
+            self.assertTrue((Path(root) / 'outer' / 'inner' / 'opaque.exe').exists())
+
+    @unittest.skipUnless(os.path.isfile(r'C:\Program Files\WinRAR\Rar.exe'), 'RAR CLI unavailable')
+    def test_real_rar_extracts_all_opaque_installers_without_executing_them(self):
+        import subprocess
+        from utils.powershell import get_hidden_subprocess_kwargs
+        with tempfile.TemporaryDirectory() as root:
+            source = Path(root) / 'source'
+            source.mkdir()
+            names = ['alksdfjasd.exe', 'alsdfklasjdf.exe', 'alksdfoiw0eifh.exe']
+            for name in names:
+                (source / name).write_bytes(b'MZ fixture, never execute')
+            archive = Path(root) / 'drivers.rar'
+            subprocess.run([r'C:\Program Files\WinRAR\Rar.exe', 'a', '-ep', '-inul',
+                            str(archive), *[str(source / name) for name in names]],
+                           check=True, timeout=20, **get_hidden_subprocess_kwargs())
+            output = Path(root) / 'extracted'
+            self.assertTrue(extract_driver_archive(str(archive), str(output)))
+            self.assertCountEqual(_collect_driver_candidates(str(output)),
+                                  [str(output / name) for name in names])
+
     def test_vendor_folder_category_overrides_aggregated_inf_class(self):
         from drivers.package_inspector import classify_driver_category
         self.assertEqual(classify_driver_category(['DRV_Audio_RTK'], 'net')[0], 'audio')

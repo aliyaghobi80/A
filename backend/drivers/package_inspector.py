@@ -690,8 +690,7 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
         display_name = f"{clean_zip} Driver"
     else:
         # Fallback to category name
-        vendor_prefix = provider or "Hardware"
-        display_name = f"{vendor_prefix} {DRIVER_CATEGORIES.get(category_key, {}).get('en', 'Driver')}"
+        display_name = os.path.splitext(base_name)[0]
 
     # Calculate size and fingerprint
     size_bytes = 0

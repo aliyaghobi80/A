@@ -107,6 +107,7 @@ _ACCEPT_CHECKBOX_KEYWORDS = [
     "accept the agreement",
     "accept the terms",
     "accept the license",
+    "read and accept the license terms",
     "agree to the terms",
     "read and agree",
     "have read and agree",
@@ -122,6 +123,7 @@ _ACCEPT_CHECKBOX_KEYWORDS = [
 
 _LICENSE_PAGE_KEYWORDS = [
     "license agreement",
+    "software license terms",
     "licence agreement",
     "end user license",
     "terms and conditions",
@@ -172,6 +174,62 @@ def _get_process_id_for_window(hwnd: int) -> int:
     return pid.value
 
 
+def _process_parents() -> Dict[int, int]:
+    """Take a read-only process snapshot, including detached installer children."""
+    class Entry(ctypes.Structure):
+        _fields_ = [("size", wintypes.DWORD), ("usage", wintypes.DWORD),
+                    ("pid", wintypes.DWORD), ("heap", ctypes.c_size_t),
+                    ("module", wintypes.DWORD), ("threads", wintypes.DWORD),
+                    ("parent", wintypes.DWORD), ("priority", wintypes.LONG),
+                    ("flags", wintypes.DWORD), ("exe", wintypes.WCHAR * 260)]
+    kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    kernel32.Process32FirstW.argtypes = [wintypes.HANDLE, wintypes.LPVOID]
+    kernel32.Process32NextW.argtypes = [wintypes.HANDLE, wintypes.LPVOID]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    handle = kernel32.CreateToolhelp32Snapshot(2, 0)
+    if handle in (None, ctypes.c_void_p(-1).value):
+        return {}
+    parents = {}
+    try:
+        entry = Entry()
+        entry.size = ctypes.sizeof(entry)
+        ok = kernel32.Process32FirstW(handle, ctypes.byref(entry))
+        while ok:
+            parents[entry.pid] = entry.parent
+            ok = kernel32.Process32NextW(handle, ctypes.byref(entry))
+        return parents
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _is_installer_process(pid: int) -> bool:
+    """Do not wait forever for a player/browser launched by the finished wizard."""
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD,
+                                                  wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    handle = kernel32.OpenProcess(0x1000, False, pid)
+    if not handle:
+        return True
+    try:
+        path = ctypes.create_unicode_buffer(32768)
+        size = wintypes.DWORD(len(path))
+        if not kernel32.QueryFullProcessImageNameW(handle, 0, path, ctypes.byref(size)):
+            return True
+        name = os.path.basename(path.value).lower()
+        if any(word in name for word in ('setup', 'install', 'redist', 'msiexec', 'dpinst')):
+            return True
+        normalized = os.path.normcase(path.value)
+        for variable in ('ProgramFiles', 'ProgramFiles(x86)'):
+            root = os.environ.get(variable)
+            if root and normalized.startswith(os.path.normcase(root) + os.sep):
+                return False
+        return True
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 class InstallerAutoPilot:
     """
     Monitors and automatically navigates installer windows for a given target process or window title.
@@ -191,6 +249,29 @@ class InstallerAutoPilot:
 
     def stop(self):
         self._stop_event.set()
+
+    def _refresh_child_pids(self):
+        parents = _process_parents()
+        known = set(self.target_pids)
+        while True:
+            children = {pid for pid, parent in parents.items() if parent in known}
+            expanded = known | children
+            if expanded == known:
+                break
+            known = expanded
+        self.target_pids.update(known)
+
+    def wait_for_children(self, timeout_seconds: float) -> bool:
+        deadline = time.monotonic() + max(0, timeout_seconds)
+        while not self._stop_event.is_set():
+            self._refresh_child_pids()
+            live = _process_parents()
+            if not any(_is_installer_process(pid) for pid in self.target_pids.intersection(live)):
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            self._stop_event.wait(0.4)
+        return False
 
     def run_in_background(self) -> threading.Thread:
         thread = threading.Thread(target=self._run_loop, daemon=True, name="InstallerAutoPilot")
@@ -384,6 +465,7 @@ class InstallerAutoPilot:
                 break
 
             # Find all matching top-level windows
+            self._refresh_child_pids()
             matching_windows = []
 
             def enum_proc(hwnd, _):

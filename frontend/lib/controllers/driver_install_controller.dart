@@ -95,9 +95,7 @@ class DriverInstallController extends GetxController {
   Set<String> get installablePackageIds => scanResult.value.packages
       .where((package) {
         final match = package.match;
-        return match != null &&
-            match.isMatched &&
-            match.recommendation == 'recommended';
+        return match == null || match.recommendation != 'skip';
       })
       .map((package) => package.packageId)
       .toSet();
@@ -253,12 +251,10 @@ class DriverInstallController extends GetxController {
 
   Future<void> installAllDrivers(BuildContext context) async {
     final pkgs = scanResult.value.packages;
-    final recommended = pkgs.where((p) {
+    final targetList = pkgs.where((p) {
       final m = p.match;
-      return m != null && m.isMatched && m.recommendation == 'recommended';
+      return m == null || m.recommendation != 'skip';
     }).toList();
-
-    final targetList = recommended.isNotEmpty ? recommended : pkgs;
 
     if (targetList.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -275,7 +271,7 @@ class DriverInstallController extends GetxController {
       context,
       title: 'تأیید نصب همه درایورها',
       message:
-          'تمامی بسته‌های معتبر و سازگار (${targetList.length} بسته) به ترتیب در صف نصب قرار خواهند گرفت.',
+          'این ${targetList.length} بسته به ترتیب اجرا می‌شوند. سازگاری بسته‌های با مشخصات نامشخص توسط نصاب سازنده بررسی خواهد شد.',
       packageIds: targetList.map((p) => p.packageId).toList(),
     );
 

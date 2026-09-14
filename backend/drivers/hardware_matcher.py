@@ -248,6 +248,17 @@ def match_package_to_hardware(
         is_matched = False
 
     if not is_matched or not best_match_device:
+        if not pkg_hw_ids and package_dict.get("install_method") in ("setup_exe", "msiexec", "asus_setup"):
+            return {
+                "is_matched": False, "confidence": "UNKNOWN",
+                "status": "needs_install",
+                "status_fa": "آماده اجرا؛ سازگاری توسط نصاب سازنده بررسی می‌شود",
+                "status_en": "Ready; vendor installer checks compatibility",
+                "matched_device_name": "", "matched_device_id": "",
+                "installed_version": "", "package_version": pkg_version,
+                "recommendation": "optional",
+                "reasons": ["بسته شناسه سخت‌افزاری قابل استخراج ندارد؛ نام فایل دلیل رد آن نیست."],
+            }
         return {
             "is_matched": False,
             "confidence": "NOT_APPLICABLE",
