@@ -299,13 +299,17 @@ def disable_all_startup_apps() -> Dict[str, Any]:
     except Exception:
         pass
     opened = _open_settings("ms-settings:startupapps")
+    from windows.startup_status import get_startup_status
+    state = get_startup_status()
     return {
-        "success": True,
+        "success": state['all_disabled'] is True,
+        "startup": state,
         "settings_opened": opened,
         "registry_changed": registry_changed,
         "packaged_changed": packaged_changed,
         "changed_count": registry_changed + packaged_changed,
-        "message": f"همهٔ ورودی‌های قابل‌کنترل Startup خاموش شدند ({registry_changed + packaged_changed} مورد) و صفحهٔ بررسی باز شد؛ نیازی به ری‌استارت فوری نیست.",
+        "message": (f"همهٔ Startup Apps خاموش هستند؛ {registry_changed + packaged_changed} ورودی پردازش شد." if state['all_disabled'] is True
+                    else 'بعضی Startup Apps هنوز فعال یا غیرقابل‌بررسی هستند؛ صفحهٔ Startup را بررسی کنید.'),
     }
 
 
@@ -339,11 +343,15 @@ def disable_windows10_background_apps() -> Dict[str, Any]:
         ) as key:
             winreg.SetValueEx(key, "BackgroundAppGlobalToggle", 0, winreg.REG_DWORD, 0)
         opened = _open_settings("ms-settings:privacy-backgroundapps")
+        from windows.startup_status import get_background_status
+        state = get_background_status(True)
         return {
-            "success": True,
+            "success": state['all_disabled'] is True,
+            "background_apps": state,
             "settings_opened": opened,
             "windows": identity,
-            "message": "اجرای پس‌زمینهٔ برنامه‌های Store در Windows 10 خاموش شد و صفحهٔ Background Apps باز شد.",
+            "message": ('Background Apps خاموش است؛ تنظیم سراسری تأیید شد.' if state['all_disabled'] is True
+                        else 'خاموش‌شدن Background Apps تأیید نشد؛ ممکن است سیاست دستگاه مانع تغییر باشد.'),
         }
     except Exception as exc:
         return {"success": False, "windows": identity, "message": f"خاموش‌کردن Background Apps انجام نشد: {exc}"}
@@ -407,7 +415,7 @@ def has_battery() -> bool:
         status = SYSTEM_POWER_STATUS()
         if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)):
             return False
-        return status.BatteryFlag != 128
+        return status.BatteryFlag not in (128, 255)
     except Exception:
         return False
 
@@ -430,9 +438,13 @@ def set_sleep_never() -> Dict[str, Any]:
             )
             results.append(result)
     if all(item.returncode == 0 for item in results):
+        from windows.power_settings import get_timeout_status
+        state = get_timeout_status()
         return {
-            "success": True,
-            "message": "خاموش‌شدن نمایشگر، Sleep و Hibernate برای برق و باتری روی Never تنظیم شد؛ نیازی به ری‌استارت نیست.",
+            "success": state['all_never'] is True,
+            "timeouts": state,
+            "message": ('Screen، Sleep و Hibernate برای برق و باتری روی Never هستند؛ تأیید شد.' if state['all_never'] is True
+                        else 'همهٔ زمان‌ها پس از تغییر تأیید نشدند؛ وضعیت طرح برق را بررسی کنید.'),
             "monitor_ac_minutes": 0,
             "monitor_dc_minutes": 0,
             "sleep_ac_minutes": 0,
@@ -526,9 +538,15 @@ def pin_windows_security() -> Dict[str, Any]:
 
 
 def get_device_settings_status() -> Dict[str, Any]:
+    from windows.power_settings import get_timeout_status, get_power_mode_status
+    from windows.startup_status import get_startup_status, get_background_status
     identity = get_windows_identity()
     return {
         "success": True,
+        "timeouts": get_timeout_status(),
+        "power_modes": get_power_mode_status(),
+        "startup": get_startup_status(),
+        "background_apps": get_background_status(identity.get('generation') == 'Windows 10'),
         "has_battery": has_battery(),
         "windows": identity,
         "is_windows_10": identity.get("generation") == "Windows 10",

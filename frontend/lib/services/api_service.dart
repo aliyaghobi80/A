@@ -206,6 +206,10 @@ class ApiService {
     return _postJson('/api/device-settings/sleep-never', {});
   }
 
+  Future<Map<String, dynamic>> setLaptopPowerModes() async {
+    return _postJson('/api/device-settings/laptop-power-modes', {});
+  }
+
   Future<Map<String, dynamic>> disableAllStartupApps() async {
     return _postJson('/api/device-settings/disable-startup-apps', {});
   }

@@ -41,6 +41,20 @@ class DeviceSettingsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: controller.isLoading.value
+                    ? null
+                    : controller.refreshStatus,
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(
+                  controller.isLoading.value
+                      ? 'در حال بررسی وضعیت...'
+                      : 'بررسی مجدد وضعیت',
+                ),
+              ),
+            ),
             _ActionCard(
               icon: Icons.shield_rounded,
               iconColor: const Color(0xFF0284C7),
@@ -71,9 +85,8 @@ class DeviceSettingsPage extends StatelessWidget {
               icon: Icons.bedtime_rounded,
               iconColor: const Color(0xFF8B5CF6),
               title: 'Screen، Sleep و Hibernate',
-              description: controller.hasBattery.value
-                  ? 'هر سه زمان برای حالت اتصال لپ‌تاپ به برق و استفاده از باتری روی Never قرار می‌گیرند.'
-                  : 'هر سه زمان مصرف انرژی کامپیوتر روی Never قرار می‌گیرند؛ مقادیر حالت باتری نیز برای دستگاه‌های پشتیبانی‌شده ذخیره می‌شوند.',
+              description: controller.timeoutDescription.value,
+              completed: controller.sleepReady.value == true,
               isDark: isDark,
               trailing: OutlinedButton.icon(
                 onPressed: !controller.isSettingSleep.value
@@ -85,7 +98,11 @@ class DeviceSettingsPage extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.all_inclusive_rounded, size: 19),
-                label: const Text('همه روی Never'),
+                label: Text(
+                  controller.sleepReady.value == true
+                      ? 'الان همه روی Never هستند'
+                      : 'همه روی Never',
+                ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(150, 46),
                 ),
@@ -96,8 +113,8 @@ class DeviceSettingsPage extends StatelessWidget {
               icon: Icons.rocket_launch_rounded,
               iconColor: const Color(0xFFF59E0B),
               title: 'Startup Apps',
-              description:
-                  'همهٔ برنامه‌های بخش Startup خاموش می‌شوند تا ورود به ویندوز سریع‌تر شود؛ سپس صفحهٔ Startup برای بررسی نتیجه باز می‌شود.',
+              description: controller.startupDescription.value,
+              completed: controller.startupReady.value == true,
               isDark: isDark,
               trailing: FilledButton.icon(
                 onPressed: controller.isDisablingStartup.value
@@ -112,7 +129,9 @@ class DeviceSettingsPage extends StatelessWidget {
                 label: Text(
                   controller.isDisablingStartup.value
                       ? 'در حال خاموش‌کردن...'
-                      : 'خاموش‌کردن همه',
+                      : (controller.startupReady.value == true
+                            ? 'همهٔ Startup Apps خاموش هستند'
+                            : 'خاموش‌کردن همه'),
                 ),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFFD97706),
@@ -127,6 +146,7 @@ class DeviceSettingsPage extends StatelessWidget {
                   ? const Color(0xFF0EA5E9)
                   : const Color(0xFF64748B),
               title: 'Background Apps ویندوز ۱۰',
+              completed: controller.backgroundReady.value == true,
               description: controller.isWindows10.value
                   ? 'اجرای پس‌زمینهٔ برنامه‌های Microsoft Store خاموش می‌شود تا مصرف RAM، باتری و اینترنت کمتر شود؛ سپس صفحهٔ Background Apps باز می‌شود.'
                   : 'این قابلیت مخصوص Windows 10 و برای بالابردن سرعت دستگاه است؛ تنظیم سراسری Background Apps در Windows 11 وجود ندارد.',
@@ -152,7 +172,9 @@ class DeviceSettingsPage extends StatelessWidget {
                   controller.isDisablingBackgroundApps.value
                       ? 'در حال اعمال...'
                       : (controller.isWindows10.value
-                            ? 'خاموش‌کردن Background Apps'
+                            ? (controller.backgroundReady.value == true
+                                  ? 'Background Apps خاموش است'
+                                  : 'خاموش‌کردن Background Apps')
                             : 'فقط Windows 10'),
                 ),
                 style: OutlinedButton.styleFrom(
@@ -161,6 +183,34 @@ class DeviceSettingsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
+            if (controller.hasBattery.value) ...[
+              _ActionCard(
+                icon: Icons.battery_charging_full_rounded,
+                iconColor: accent,
+                title: 'Power mode لپ‌تاپ',
+                isDark: isDark,
+                completed: controller.powerReady.value == true,
+                description: controller.powerSupported.value
+                    ? controller.powerDescription.value
+                    : 'تنظیم جداگانهٔ Power mode در این نسخهٔ ویندوز پشتیبانی نمی‌شود؛ تنظیمات Power & battery ویندوز را بررسی کنید.',
+                trailing: FilledButton.icon(
+                  onPressed:
+                      controller.isSettingPower.value ||
+                          !controller.powerSupported.value
+                      ? null
+                      : () => controller.setPowerModes(context),
+                  icon: const Icon(Icons.bolt_rounded),
+                  label: Text(
+                    controller.isSettingPower.value
+                        ? 'در حال اعمال...'
+                        : controller.powerReady.value == true
+                        ? 'برق Performance / باتری Balanced'
+                        : 'تنظیم برق و باتری',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
@@ -198,6 +248,7 @@ class DeviceSettingsPage extends StatelessWidget {
 }
 
 class _ActionCard extends StatelessWidget {
+  final bool completed;
   final IconData icon;
   final Color iconColor;
   final String title;
@@ -206,6 +257,7 @@ class _ActionCard extends StatelessWidget {
   final Widget trailing;
 
   const _ActionCard({
+    this.completed = false,
     required this.icon,
     required this.iconColor,
     required this.title,
@@ -220,10 +272,26 @@ class _ActionCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
+        color: completed
+            ? const Color(0xFF10B981).withValues(alpha: isDark ? .12 : .08)
+            : isDark
+            ? AppTheme.darkCard
+            : AppTheme.lightCard,
+        boxShadow: completed
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF10B981).withValues(alpha: .12),
+                  blurRadius: 12,
+                ),
+              ]
+            : null,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          color: completed
+              ? const Color(0xFF10B981)
+              : isDark
+              ? AppTheme.darkBorder
+              : AppTheme.lightBorder,
         ),
       ),
       child: LayoutBuilder(
@@ -238,7 +306,11 @@ class _ActionCard extends StatelessWidget {
                   color: iconColor.withValues(alpha: isDark ? .18 : .1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: iconColor, size: 28),
+                child: Icon(
+                  completed ? Icons.check_circle_rounded : icon,
+                  color: completed ? const Color(0xFF059669) : iconColor,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(

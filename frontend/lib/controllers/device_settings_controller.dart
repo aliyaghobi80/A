@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
+import 'qc_controller.dart';
 
 class DeviceSettingsController extends GetxController {
-  final ApiService _api = ApiService();
+  final ApiService _api;
+  DeviceSettingsController({ApiService? api}) : _api = api ?? ApiService();
 
   final isLoading = false.obs;
   final isPinningSecurity = false.obs;
@@ -14,23 +17,93 @@ class DeviceSettingsController extends GetxController {
   final windowsLabel = 'Windows'.obs;
   final isWindows10 = false.obs;
   final pinNeedsConfirmation = false.obs;
+  final sleepReady = RxnBool();
+  final startupReady = RxnBool();
+  final backgroundReady = RxnBool();
+  final powerReady = RxnBool();
+  final powerSupported = false.obs;
+  final isSettingPower = false.obs;
+  final powerDescription = 'در حال بررسی...'.obs;
+  final startupDescription = 'در حال بررسی...'.obs;
+  final timeoutDescription = 'در حال بررسی...'.obs;
+  Timer? _statusTimer;
 
   @override
   void onInit() {
     super.onInit();
     refreshStatus();
+    _statusTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => refreshStatus(),
+    );
   }
 
-  Future<void> refreshStatus() async {
+  @override
+  void onClose() {
+    _statusTimer?.cancel();
+    super.onClose();
+  }
+
+  Future<void> refreshStatus({bool afterAction = false}) async {
+    if (afterAction) {
+      while (isLoading.value && !isClosed) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    }
+    if (isLoading.value || isClosed) return;
     isLoading.value = true;
-    final result = await _api.getDeviceSettingsStatus();
-    final windows = result['windows'] as Map<String, dynamic>?;
-    hasBattery.value = result['has_battery'] == true;
-    windowsLabel.value = windows?['label'] as String? ?? 'Windows';
-    isWindows10.value = result['background_apps_supported'] == true;
-    pinNeedsConfirmation.value =
-        result['taskbar_pin_requires_confirmation'] == true;
-    isLoading.value = false;
+    try {
+      final result = await _api.getDeviceSettingsStatus();
+      if (isClosed) return;
+      sleepReady.value = result['timeouts']?['all_never'] as bool?;
+      startupReady.value = result['startup']?['all_disabled'] as bool?;
+      backgroundReady.value =
+          result['background_apps']?['all_disabled'] as bool?;
+      powerReady.value = result['power_modes']?['configured'] as bool?;
+      powerSupported.value = result['power_modes']?['supported'] == true;
+      powerDescription.value =
+          'برق متصل: ${result['power_modes']?['ac'] ?? 'نامشخص'} • باتری: ${result['power_modes']?['dc'] ?? 'نامشخص'}';
+      startupDescription.value = startupReady.value == null
+          ? 'وضعیت Startup Apps قابل تأیید نیست.'
+          : '${result['startup']?['enabled_count'] ?? 0} برنامهٔ فعال از ${result['startup']?['total'] ?? 0} ورودی Startup';
+      final values =
+          result['timeouts']?['values'] as Map<String, dynamic>? ?? {};
+      timeoutDescription.value = values.isEmpty
+          ? 'وضعیت زمان‌ها قابل بررسی نیست.'
+          : values.entries
+                .map((entry) {
+                  final label = entry.key
+                      .replaceAll('_ac', ' برق')
+                      .replaceAll('_dc', ' باتری');
+                  final value = entry.value == null
+                      ? 'نامشخص'
+                      : entry.value == 0
+                      ? 'Never'
+                      : '${entry.value} ثانیه';
+                  return '$label: $value';
+                })
+                .join(' • ');
+      final windows = result['windows'] as Map<String, dynamic>?;
+      hasBattery.value = result['has_battery'] == true;
+      windowsLabel.value = windows?['label'] as String? ?? 'Windows';
+      isWindows10.value = result['background_apps_supported'] == true;
+      pinNeedsConfirmation.value =
+          result['taskbar_pin_requires_confirmation'] == true;
+    } finally {
+      if (!isClosed) isLoading.value = false;
+    }
+  }
+
+  Future<void> setPowerModes(BuildContext context) async {
+    if (isSettingPower.value) return;
+    isSettingPower.value = true;
+    try {
+      final result = await _api.setLaptopPowerModes();
+      await refreshStatus(afterAction: true);
+      if (context.mounted) _showResult(context, result);
+    } finally {
+      isSettingPower.value = false;
+    }
   }
 
   Future<void> pinSecurity(BuildContext context) async {
@@ -46,6 +119,7 @@ class DeviceSettingsController extends GetxController {
     if (isSettingSleep.value) return;
     isSettingSleep.value = true;
     final result = await _api.setLaptopSleepNever();
+    await refreshStatus(afterAction: true);
     isSettingSleep.value = false;
     if (!context.mounted) return;
     _showResult(context, result);
@@ -82,6 +156,7 @@ class DeviceSettingsController extends GetxController {
     if (confirmed != true || !context.mounted) return;
     isDisablingStartup.value = true;
     final result = await _api.disableAllStartupApps();
+    await refreshStatus(afterAction: true);
     isDisablingStartup.value = false;
     if (!context.mounted) return;
     _showResult(context, result);
@@ -91,12 +166,16 @@ class DeviceSettingsController extends GetxController {
     if (!isWindows10.value || isDisablingBackgroundApps.value) return;
     isDisablingBackgroundApps.value = true;
     final result = await _api.disableWindows10BackgroundApps();
+    await refreshStatus(afterAction: true);
     isDisablingBackgroundApps.value = false;
     if (!context.mounted) return;
     _showResult(context, result);
   }
 
   void _showResult(BuildContext context, Map<String, dynamic> result) {
+    if (Get.isRegistered<QcController>()) {
+      unawaited(Get.find<QcController>().fetchInitialQcStatus());
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(result['message'] as String? ?? 'عملیات انجام نشد.'),

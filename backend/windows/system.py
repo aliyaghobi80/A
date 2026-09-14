@@ -67,7 +67,7 @@ def get_windows_and_system_info() -> Dict[str, Any]:
     try:
         script = (
             "$os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture, CSName; "
-            "$sys = Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model, CSName; "
+            "$sys = Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model, CSName, SystemSKUNumber; "
             "$csp = Get-CimInstance Win32_ComputerSystemProduct | Select-Object IdentifyingNumber, UUID, SKUNumber, Name, Vendor, Version; "
             "$enc = Get-CimInstance Win32_SystemEnclosure | Select-Object SerialNumber, SMBIOSAssetTag, ChassisTypes; "
             "$bios = Get-CimInstance Win32_BIOS | Select-Object SerialNumber; "
@@ -115,7 +115,8 @@ def get_windows_and_system_info() -> Dict[str, Any]:
             )
             system_res["serial"] = clean_serial_number(raw_serial, default="Not available")
             system_res["uuid"] = clean_serial_number(csp_data.get("UUID"), default="Not available")
-            system_res["sku"] = clean_string(csp_data.get("SKUNumber"), default="Not available")
+            system_res["sku"] = (clean_string(sys_data.get("SystemSKUNumber"), default="")
+                                 or clean_string(csp_data.get("SKUNumber"), default="Not available"))
             system_res["asset_tag"] = clean_serial_number(
                 enclosure_data.get("SMBIOSAssetTag"),
                 default="Not available",
@@ -134,6 +135,20 @@ def get_windows_and_system_info() -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error querying Windows and System info: {e}")
+
+    # Same firmware identity backing System Information's System SKU.
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'HARDWARE\DESCRIPTION\System\BIOS') as key:
+            for field, name in [('sku', 'SystemSKU'), ('model', 'SystemProductName'), ('manufacturer', 'SystemManufacturer')]:
+                if system_res[field] == 'Not available':
+                    try:
+                        system_res[field] = clean_string(winreg.QueryValueEx(key, name)[0])
+                    except OSError:
+                        pass
+    except OSError:
+        pass
+    if system_res['model'] == 'Not available' and system_res['sku'] != 'Not available':
+        system_res['model'] = system_res['sku']
 
     # Fallback / Enrich Version & Build from Registry
     disp_ver = reg_info.get("DisplayVersion") or reg_info.get("ReleaseId")

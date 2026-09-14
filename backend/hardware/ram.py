@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 
 from utils.powershell import run_powershell_json
 from utils.formatters import clean_string, clean_serial_number, clean_part_number, format_bytes_to_gb
+from hardware.memory_slots import read_memory_slots
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +15,11 @@ SMBIOS_MEMORY_TYPES = {
     22: "DDR2 FB-DIMM",
     24: "DDR3",
     26: "DDR4",
-    30: "DDR5",
-    34: "LPDDR4",
+    27: "LPDDR",
+    28: "LPDDR2",
+    29: "LPDDR3",
+    30: "LPDDR4",
+    34: "DDR5",
     35: "LPDDR5",
 }
 
@@ -32,7 +36,7 @@ def normalize_ram_slot(device_locator: Any, bank_label: Any) -> Dict[str, str]:
     bank = clean_string(bank_label, default="")
     combined = f"{locator} {bank}".upper()
 
-    direct = re.search(r"(?:DIMM|SLOT)[\s_-]*([A-H])[\s_-]*([1-8])\b", combined)
+    direct = re.search(r"(?:\b(?:DIMM|SLOT)[\s_-]*|^)([A-H])[\s_-]*([1-8])\b", locator.upper())
     if direct:
         physical = f"{direct.group(1)}{direct.group(2)}"
         confidence = "high"
@@ -41,9 +45,9 @@ def normalize_ram_slot(device_locator: Any, bank_label: Any) -> Dict[str, str]:
             r"CHANNEL[\s_-]*([A-H]).*?DIMM[\s_-]*(\d+)", combined
         )
         if channel_dimm:
-            # SMBIOS DIMM indexes are commonly zero-based: DIMM0 -> A1.
-            physical = f"{channel_dimm.group(1)}{int(channel_dimm.group(2)) + 1}"
-            confidence = "normalized"
+            # Channel numbering does not establish the PCB's printed slot name.
+            physical = locator or bank
+            confidence = "firmware"
         else:
             physical = locator or bank or "نامشخص"
             confidence = "firmware" if (locator or bank) else "unknown"
@@ -114,14 +118,15 @@ def get_ram_info() -> Dict[str, Any]:
         "speed_mhz": "Not available",
         "speed_display": "Not available",
         "total_slots": None,
+        "slots": [],
         "modules": []
     }
 
     try:
         script = (
             "$modules = @(Get-CimInstance Win32_PhysicalMemory | "
-            "Select-Object Capacity, Speed, ConfiguredClockSpeed, Manufacturer, PartNumber, SerialNumber, DeviceLocator, BankLabel, SMBIOSMemoryType); "
-            "$slotCount = (Get-CimInstance Win32_PhysicalMemoryArray | Measure-Object -Property MemoryDevices -Sum).Sum; "
+            "Select-Object Capacity, Speed, ConfiguredClockSpeed, Manufacturer, PartNumber, SerialNumber, DeviceLocator, BankLabel, SMBIOSMemoryType, FormFactor); "
+            "$slotCount = (Get-CimInstance Win32_PhysicalMemoryArray | Where-Object { $_.Use -eq 3 } | Measure-Object -Property MemoryDevices -Sum).Sum; "
             "[PSCustomObject]@{ Modules = $modules; TotalSlots = $slotCount } | "
             "ConvertTo-Json -Depth 4"
         )
@@ -172,7 +177,10 @@ def get_ram_info() -> Dict[str, Any]:
                 speed_str = "Not available"
                 speed_int = None
 
-            smbios_type = mod.get("SMBIOSMemoryType")
+            try:
+                smbios_type = int(mod.get("SMBIOSMemoryType") or 0)
+            except (TypeError, ValueError):
+                smbios_type = 0
             type_str = SMBIOS_MEMORY_TYPES.get(smbios_type, "RAM")
 
             slot_info = normalize_ram_slot(
@@ -181,6 +189,8 @@ def get_ram_info() -> Dict[str, Any]:
             manufacturer = clean_string(mod.get("Manufacturer"), default="Not available")
             part_number = clean_part_number(mod.get("PartNumber"), default="-")
             serial_number = clean_serial_number(mod.get("SerialNumber"), default="-")
+            cl_match = re.search(r'(?<![A-Z0-9])CL[\s-]*(\d{1,3})(?!\d)', part_number.upper())
+            rated_cl = int(cl_match.group(1)) if cl_match else None
 
             modules_list.append({
                 **slot_info,
@@ -189,6 +199,10 @@ def get_ram_info() -> Dict[str, Any]:
                 "speed_mhz": speed_int,
                 "speed_display": speed_str,
                 "type": type_str,
+                "form_factor": {8: "DIMM", 12: "SO-DIMM"}.get(mod.get("FormFactor"), "Not available"),
+                "rated_cl": rated_cl,
+                "cl_source": "part_number" if rated_cl else "unknown",
+                "active_cl": None,
                 "manufacturer": manufacturer,
                 "part_number": part_number,
                 "serial": serial_number,
@@ -200,6 +214,29 @@ def get_ram_info() -> Dict[str, Any]:
             ram_result["total_display"] = f"{int(round(total_gb))} GB"
             ram_result["module_count"] = len(modules_list)
             ram_result["modules"] = modules_list
+            inventory = read_memory_slots()
+            slots = []
+            mapped = set()
+            for device in inventory:
+                slot = normalize_ram_slot(device['device_locator'], device['bank_label'])
+                matches = [i for i, module in enumerate(modules_list)
+                           if module['device_locator'].casefold() == slot['device_locator'].casefold()
+                           and module['bank_label'].casefold() == slot['bank_label'].casefold()
+                           and slot['device_locator'] != 'Not available']
+                index = matches[0] if len(matches) == 1 and matches[0] not in mapped and device['occupied'] is not False else None
+                if index is not None:
+                    mapped.add(index)
+                slots.append({**slot, 'occupied': device['occupied'], 'module_index': index})
+            if inventory and len(mapped) == len(modules_list):
+                ram_result['slots'] = slots
+                # Do not override a larger array count with a partial table.
+                ram_result['total_slots'] = max(len(slots), ram_result['total_slots'] or 0)
+            else:
+                ram_result['slots'] = [{**{key: module[key] for key in ('slot', 'device_locator', 'bank_label')},
+                                        'occupied': True, 'module_index': i}
+                                       for i, module in enumerate(modules_list)]
+            while len(ram_result['slots']) < (ram_result['total_slots'] or 0):
+                ram_result['slots'].append({'slot': 'محل گزارش نشده', 'occupied': None, 'module_index': None})
             
             # Module summary like '8 GB + 8 GB'
             if modules_list:

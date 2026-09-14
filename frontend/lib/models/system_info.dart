@@ -1003,6 +1003,7 @@ class MotherboardInfo {
 }
 
 class RamInfo {
+  final List<RamSlot> slots;
   final double totalGb;
   final String totalDisplay;
   final int moduleCount;
@@ -1013,6 +1014,7 @@ class RamInfo {
   final List<RamModule> modules;
 
   RamInfo({
+    this.slots = const [],
     required this.totalGb,
     required this.totalDisplay,
     required this.moduleCount,
@@ -1025,6 +1027,9 @@ class RamInfo {
 
   factory RamInfo.fromJson(Map<String, dynamic> json) {
     return RamInfo(
+      slots: (json['slots'] as List<dynamic>? ?? [])
+          .map((e) => RamSlot.fromJson(e as Map<String, dynamic>))
+          .toList(),
       totalGb: (json['total_gb'] as num?)?.toDouble() ?? 0.0,
       totalDisplay: json['total_display'] ?? 'Not available',
       moduleCount: json['module_count'] as int? ?? 0,
@@ -1039,7 +1044,23 @@ class RamInfo {
   }
 }
 
+class RamSlot {
+  final String label;
+  final bool? occupied;
+  final int? moduleIndex;
+  const RamSlot({required this.label, this.occupied, this.moduleIndex});
+  factory RamSlot.fromJson(Map<String, dynamic> json) => RamSlot(
+    label: json['slot'] ?? 'Unknown',
+    occupied: json['occupied'] as bool?,
+    moduleIndex: json['module_index'] as int?,
+  );
+}
+
 class RamModule {
+  final int? ratedCl;
+  final String formFactor;
+  String get clDisplay =>
+      ratedCl == null ? 'CL: نامشخص / Unknown' : 'CL$ratedCl (Part Number)';
   final String slot;
   final String deviceLocator;
   final String bankLabel;
@@ -1055,6 +1076,8 @@ class RamModule {
   final String serial;
 
   RamModule({
+    this.ratedCl,
+    this.formFactor = 'Not available',
     required this.slot,
     this.deviceLocator = 'Not available',
     this.bankLabel = 'Not available',
@@ -1072,6 +1095,8 @@ class RamModule {
 
   factory RamModule.fromJson(Map<String, dynamic> json) {
     return RamModule(
+      ratedCl: json['rated_cl'] as int?,
+      formFactor: json['form_factor'] ?? 'Not available',
       slot: json['slot'] ?? 'Slot',
       deviceLocator: json['device_locator'] ?? 'Not available',
       bankLabel: json['bank_label'] ?? 'Not available',

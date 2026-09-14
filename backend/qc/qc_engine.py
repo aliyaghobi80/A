@@ -31,7 +31,7 @@ STATUS_READY = "READY"
 STATUS_NEEDS_ATTENTION = "NEEDS_ATTENTION"
 
 
-def evaluate_system_qc(system_info: Dict[str, Any], packages_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def evaluate_system_qc(system_info: Dict[str, Any], packages_data: Optional[Dict[str, Any]] = None, device_settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Evaluates complete system info dictionary into structured QC results across all 8-9 domains.
     Guarantees a clean, non-crashing structured dictionary.
@@ -540,11 +540,43 @@ def evaluate_system_qc(system_info: Dict[str, Any], packages_data: Optional[Dict
     })
 
     # -------------------------------------------------------------------------
+    # Device preparation uses a fresh verified snapshot supplied by the API.
+    if device_settings is not None:
+        checks = [
+            ('timeouts', 'Screen / Sleep / Hibernate', device_settings.get('timeouts', {}).get('all_never'),
+             'یادتان نرفته Screen، Sleep و Hibernate را برای برق و باتری روی Never قرار دهید؟'),
+            ('startup', 'Startup Apps', device_settings.get('startup', {}).get('all_disabled'),
+             'برنامه‌های Startup هنوز خاموش نشده‌اند یا وضعیت آن‌ها قابل تأیید نیست.'),
+        ]
+        if device_settings.get('background_apps_supported'):
+            checks.append(('background', 'Background Apps', device_settings.get('background_apps', {}).get('all_disabled'),
+                           'Background Apps ویندوز ۱۰ را بررسی و خاموش کنید.'))
+        if device_settings.get('has_battery'):
+            checks.append(('power_modes', 'Laptop Power Mode', device_settings.get('power_modes', {}).get('configured'),
+                           'Power mode لپ‌تاپ را بررسی کنید: برق Best performance و باتری Balanced.'))
+        items = []
+        for key, name, ready, message in checks:
+            state = STATE_PASS if ready is True else STATE_WARNING if ready is False else STATE_UNKNOWN
+            items.append({'id': key, 'name': name, 'detail': 'تأیید شد' if ready is True else message,
+                          'state': state, 'is_required': True})
+            if ready is not True:
+                problems.append({'id': 'preparation_' + key, 'category': 'device_settings',
+                                 'category_name': 'تنظیمات مهم دستگاه', 'name': name,
+                                 'status': state, 'severity': STATE_WARNING, 'description': message,
+                                 'solution_title': 'بررسی تنظیمات مهم دستگاه',
+                                 'solution_steps': 'بخش تنظیمات مهم دستگاه را باز کنید؛ وضعیت باید پس از بررسی سبز شود.',
+                                 'action_type': '', 'action_label': '', 'action_target': '',
+                                 'can_auto_prepare': False, 'is_required': True})
+        passed = sum(item['state'] == STATE_PASS for item in items)
+        categories.append({'id': 'device_settings', 'name': 'Device preparation', 'displayName': 'تنظیمات مهم دستگاه',
+                           'state': STATE_PASS if passed == len(items) else STATE_WARNING,
+                           'items': items, 'passed_count': passed, 'total_count': len(items)})
+
     # 7. OVERALL SYSTEM EVALUATION (READY vs NEEDS_ATTENTION)
     # -------------------------------------------------------------------------
     # System is READY ONLY IF all required checks are satisfied (PASS or NOT_PRESENT).
     # Any required FAIL causes NEEDS_ATTENTION.
-    has_required_fail = any(p.get("is_required", True) and p.get("severity") == STATE_FAIL for p in problems)
+    has_required_fail = any(p.get("is_required", True) and p.get("severity") in (STATE_FAIL, STATE_WARNING) for p in problems)
     overall_status = STATUS_NEEDS_ATTENTION if has_required_fail else STATUS_READY
 
     passed_categories = sum(1 for c in categories if c["state"] in [STATE_PASS, STATE_NOT_PRESENT])

@@ -37,6 +37,7 @@ from files.checker import set_file_requirement_path, check_required_files
 from hardware.battery import get_battery_info
 from hardware.storage import get_connected_usb_drives, safe_eject_drive
 from qc.qc_engine import evaluate_system_qc
+from windows.power_settings import set_laptop_power_modes
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.21",
+                "version": "1.1.22",
                 "phase": 4,
                 "api_contract_version": 2,
             }
@@ -148,7 +149,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                     _cached_data = collect_all_system_info()
                 data = _cached_data
             pkgs = scan_packages()
-            qc_report = evaluate_system_qc(data, pkgs)
+            qc_report = evaluate_system_qc(data, pkgs, get_device_settings_status())
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -344,7 +345,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                 _save_cached_system_info(_cached_data)
                 data = _cached_data
             pkgs = scan_packages()
-            qc_report = evaluate_system_qc(data, pkgs)
+            qc_report = evaluate_system_qc(data, pkgs, get_device_settings_status())
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -511,6 +512,16 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/device-settings/laptop-power-modes":
+            from windows.device_settings import has_battery
+            result = set_laptop_power_modes() if has_battery() else {"success": False, "message": "این گزینه مخصوص دستگاه دارای باتری است."}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode("utf-8"))
             return
 
         elif path == "/api/device-settings/disable-startup-apps":

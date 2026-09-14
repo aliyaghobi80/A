@@ -9,6 +9,7 @@ import '../models/system_info.dart';
 import 'cards/battery_card.dart';
 import 'common/design_components.dart';
 import 'common/hardware_illustrations.dart';
+import 'common/ram_slot_summary.dart';
 import 'qc/qc_summary_banner.dart';
 
 class SimpleModeView extends StatelessWidget {
@@ -2153,8 +2154,6 @@ class SimpleModeView extends StatelessWidget {
                     textDirection: TextDirection.ltr,
                     child: Text(
                       title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
@@ -2164,6 +2163,12 @@ class SimpleModeView extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (valid(info.system.sku))
+                    SelectableText(
+                      'System SKU: ${info.system.sku}',
+                      textDirection: TextDirection.ltr,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                 ],
               ),
             ),
@@ -3051,6 +3056,8 @@ class SimpleModeView extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
+        RamSlotSummary(ram: ram),
+        const SizedBox(height: 12),
         // Visual RAM Sticks Rack (Side by side or vertical if narrow)
         LayoutBuilder(
           builder: (context, constraints) {
@@ -3203,6 +3210,12 @@ class SimpleModeView extends StatelessWidget {
                       ),
                     ),
 
+                    const SizedBox(height: 6),
+                    Text(
+                      mod.clDisplay,
+                      textDirection: TextDirection.ltr,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                     // Manufacturer & Part Number
                     if (mod.manufacturer != 'Not available' ||
                         hasPartNumber) ...[

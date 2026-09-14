@@ -112,6 +112,22 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
               // -------------------------------------------------------------
               // Layer 1: Hardware Summary Cards (Strict Order: 1.MB, 2.CPU, 3.RAM, 4.GPU, 5.Power)
               // -------------------------------------------------------------
+              if (info.system.sku != 'Not available' ||
+                  info.system.chassisType == 'Laptop') ...[
+                Text(
+                  l10n.isPersian ? 'مدل دقیق دستگاه' : 'Device model',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                SelectableText(
+                  '${info.system.manufacturer} ${info.system.model}',
+                  textDirection: TextDirection.ltr,
+                ),
+                SelectableText(
+                  'System SKU: ${info.system.sku}',
+                  textDirection: TextDirection.ltr,
+                ),
+                const SizedBox(height: 12),
+              ],
               _buildHardwareSummaryRow(info, isDark, accent, l10n),
 
               const SizedBox(height: 18),
@@ -1238,7 +1254,16 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
     SystemInfoController systemCtrl,
   ) {
     final modules = ram.modules;
-    final totalSlots = ram.totalSlots ?? modules.length;
+    final slots = ram.slots.isNotEmpty
+        ? ram.slots
+        : [
+            for (var i = 0; i < (ram.totalSlots ?? modules.length); i++)
+              RamSlot(
+                label: i < modules.length ? modules[i].slot : 'محل گزارش نشده',
+                moduleIndex: i < modules.length ? i : null,
+              ),
+          ];
+    final totalSlots = slots.length;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -1295,17 +1320,20 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
 
           Column(
             children: List.generate(totalSlots, (index) {
-              final isFilled = index < modules.length;
-              final mod = isFilled ? modules[index] : null;
-              final slotLabel =
-                  mod?.slot ?? 'اسلات خالی ${index - modules.length + 1}';
-              final isFocused = focusedRamIndex == index;
+              final moduleIndex = slots[index].moduleIndex;
+              final isFilled =
+                  moduleIndex != null &&
+                  moduleIndex >= 0 &&
+                  moduleIndex < modules.length;
+              final mod = isFilled ? modules[moduleIndex] : null;
+              final slotLabel = slots[index].label;
+              final isFocused = isFilled && focusedRamIndex == moduleIndex;
 
               return InkWell(
                 onTap: isFilled
                     ? () {
                         setState(() {
-                          focusedRamIndex = isFocused ? null : index;
+                          focusedRamIndex = isFocused ? null : moduleIndex;
                         });
                       }
                     : null,
@@ -1345,27 +1373,29 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                   ),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isFilled
-                              ? const Color(0xFFF59E0B).withValues(alpha: 0.2)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          slotLabel,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
                             color: isFilled
-                                ? const Color(0xFFF59E0B)
-                                : (isDark
-                                      ? AppTheme.darkTextMuted
-                                      : AppTheme.lightTextMuted),
+                                ? const Color(0xFFF59E0B).withValues(alpha: 0.2)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            slotLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: isFilled
+                                  ? const Color(0xFFF59E0B)
+                                  : (isDark
+                                        ? AppTheme.darkTextMuted
+                                        : AppTheme.lightTextMuted),
+                            ),
                           ),
                         ),
                       ),
@@ -1423,7 +1453,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       ] else ...[
                         Expanded(
                           child: Text(
-                            '[ اسلات خالی / Empty Slot ]',
+                            slots[index].occupied == false
+                                ? '[ اسلات خالی / Empty Slot ]'
+                                : '[ وضعیت/محل دقیق گزارش نشده ]',
                             style: TextStyle(
                               fontSize: 12.5,
                               fontStyle: FontStyle.italic,
@@ -1463,6 +1495,10 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            '${mod.clDisplay} • ${mod.formFactor}',
+            textDirection: TextDirection.ltr,
+          ),
           Text(
             'مشخصات فنی ماژول رم در اسلات ${mod.slot}:',
             style: const TextStyle(

@@ -62,7 +62,7 @@ class DeviceActionSafetyTests(unittest.TestCase):
 
     def test_power_never_sets_display_sleep_and_hibernate_for_ac_dc(self):
         completed = MagicMock(returncode=0, stdout="", stderr="")
-        with patch.object(device_settings, "_run", return_value=completed) as runner, patch.object(device_settings.os, "name", "nt"):
+        with patch.object(device_settings, "_run", return_value=completed) as runner, patch.object(device_settings.os, "name", "nt"), patch('windows.power_settings.get_timeout_status', return_value={'all_never': True}):
             result = device_settings.set_sleep_never()
         self.assertTrue(result["success"])
         commands = [call.args[0] for call in runner.call_args_list]
@@ -77,7 +77,7 @@ class DeviceActionSafetyTests(unittest.TestCase):
 
     def test_disable_startup_apps_uses_elevated_toggle_and_opens_settings(self):
         completed = MagicMock(returncode=0, stdout='{"success":true,"registry_changed":3,"packaged_changed":2}', stderr="")
-        with patch.object(device_settings.os, "name", "nt"), patch.object(device_settings, "_run_elevated_powershell", return_value=completed) as runner, patch.object(device_settings, "_open_settings", return_value=True) as opener:
+        with patch.object(device_settings.os, "name", "nt"), patch.object(device_settings, "_run_elevated_powershell", return_value=completed) as runner, patch.object(device_settings, "_open_settings", return_value=True) as opener, patch('windows.startup_status.get_startup_status', return_value={'all_disabled': True}):
             result = device_settings.disable_all_startup_apps()
         self.assertTrue(result["success"])
         script = runner.call_args.args[0]

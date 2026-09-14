@@ -70,6 +70,13 @@ class RamCard extends StatelessWidget {
             icon: Icons.speed_rounded,
             forceLtrValue: true,
           ),
+          InfoRow(
+            label: l10n.isPersian ? 'اسلات‌های گزارش‌شده' : 'Reported slots',
+            value: ram.totalSlots == null
+                ? l10n.notAvailable
+                : '${ram.moduleCount} / ${ram.totalSlots}',
+            forceLtrValue: true,
+          ),
           if (ram.modules.isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(
@@ -190,7 +197,7 @@ class RamCard extends StatelessWidget {
                           Directionality(
                             textDirection: TextDirection.ltr,
                             child: Text(
-                              '${mod.type} • ${mod.speedDisplay}${mod.manufacturer != "Not available" ? " • ${mod.manufacturer}" : ""}',
+                              '${mod.type} • ${mod.speedDisplay} • ${mod.clDisplay}${mod.manufacturer != "Not available" ? " • ${mod.manufacturer}" : ""}',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
