@@ -58,6 +58,56 @@ class DeviceSettingsPage extends StatelessWidget {
             _ActionCard(
               icon: Icons.shield_rounded,
               iconColor: const Color(0xFF0284C7),
+              title: 'آیکن‌های اصلی دسکتاپ',
+              description:
+                  'نمایش This PC، Control Panel و Recycle Bin؛ بدون تغییر سایر آیکن‌ها.',
+              completed: controller.desktopIconsReady.value,
+              isDark: isDark,
+              trailing: FilledButton.icon(
+                onPressed:
+                    !controller.windowsActivated.value ||
+                        controller.isSettingDesktopTime.value
+                    ? null
+                    : () =>
+                          controller.configureDesktopTime(context, icons: true),
+                icon: const Icon(Icons.desktop_windows_rounded, size: 18),
+                label: Text(
+                  !controller.windowsActivated.value
+                      ? 'ابتدا ویندوز را فعال کنید'
+                      : controller.desktopIconsReady.value
+                      ? 'سه آیکن فعال هستند'
+                      : 'نمایش سه آیکن',
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _ActionCard(
+              icon: Icons.schedule_rounded,
+              iconColor: const Color(0xFF0284C7),
+              title: 'منطقهٔ زمانی تهران (UTC+03:30)',
+              description:
+                  '${controller.timezoneDescription.value}\nابتدا تهران تنظیم می‌شود؛ تشخیص خودکار ممکن است بعداً منطقه را بر اساس موقعیت تغییر دهد. ساعت خودکار گزینه‌ای جداست.',
+              completed: controller.timezoneReady.value,
+              isDark: isDark,
+              trailing: FilledButton.icon(
+                onPressed: controller.isSettingDesktopTime.value
+                    ? null
+                    : () => controller.configureDesktopTime(
+                        context,
+                        icons: false,
+                      ),
+                icon: const Icon(Icons.public_rounded, size: 18),
+                label: Text(
+                  controller.isSettingDesktopTime.value
+                      ? 'در حال تنظیم...'
+                      : 'تهران + منطقهٔ زمانی خودکار',
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _ActionCard(
+              icon: Icons.shield_rounded,
+              iconColor: const Color(0xFF0284C7),
               title: 'Windows Security (Defender)',
               description: controller.pinNeedsConfirmation.value
                   ? 'میانبر ساخته می‌شود؛ ویندوز ۱۱ ممکن است تأیید نهایی Pin را از خود کاربر بخواهد.'

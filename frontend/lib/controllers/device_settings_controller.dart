@@ -18,6 +18,11 @@ class DeviceSettingsController extends GetxController {
   final isWindows10 = false.obs;
   final pinNeedsConfirmation = false.obs;
   final sleepReady = RxnBool();
+  final windowsActivated = false.obs;
+  final desktopIconsReady = false.obs;
+  final timezoneReady = false.obs;
+  final timezoneDescription = 'در حال بررسی...'.obs;
+  final isSettingDesktopTime = false.obs;
   final startupReady = RxnBool();
   final backgroundReady = RxnBool();
   final powerReady = RxnBool();
@@ -55,6 +60,16 @@ class DeviceSettingsController extends GetxController {
     try {
       final result = await _api.getDeviceSettingsStatus();
       if (isClosed) return;
+      final desktop = result['desktop_time'] as Map<String, dynamic>? ?? {};
+      windowsActivated.value = desktop['windows_activated'] == true;
+      desktopIconsReady.value = desktop['desktop_icons_ready'] == true;
+      timezoneReady.value =
+          '${desktop['timezone']}'.replaceAll('_dstoff', '') ==
+              'Iran Standard Time' &&
+          desktop['automatic_timezone'] == true &&
+          desktop['location_enabled'] == true;
+      timezoneDescription.value =
+          'منطقهٔ فعلی: ${desktop['timezone'] ?? 'نامشخص'} • تشخیص خودکار: ${desktop['automatic_timezone'] == true ? 'روشن' : 'خاموش یا نامشخص'}${desktop['location_enabled'] == true ? '' : ' • برای تشخیص خودکار Location را روشن کنید.'}';
       sleepReady.value = result['timeouts']?['all_never'] as bool?;
       startupReady.value = result['startup']?['all_disabled'] as bool?;
       backgroundReady.value =
@@ -103,6 +118,25 @@ class DeviceSettingsController extends GetxController {
       if (context.mounted) _showResult(context, result);
     } finally {
       isSettingPower.value = false;
+    }
+  }
+
+  Future<void> configureDesktopTime(
+    BuildContext context, {
+    required bool icons,
+  }) async {
+    if (isSettingDesktopTime.value || (icons && !windowsActivated.value)) {
+      return;
+    }
+    isSettingDesktopTime.value = true;
+    try {
+      final result = icons
+          ? await _api.showDesktopIcons()
+          : await _api.setTehranTimezone();
+      await refreshStatus(afterAction: true);
+      if (context.mounted) _showResult(context, result);
+    } finally {
+      isSettingDesktopTime.value = false;
     }
   }
 

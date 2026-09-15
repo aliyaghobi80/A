@@ -111,6 +111,15 @@ class ActivationController extends GetxController {
 
   Future<void> activateWindows(BuildContext context) async {
     if (isActivatingWindows.value) return;
+    if (Get.isRegistered<SystemInfoController>() &&
+        Get.find<SystemInfoController>()
+                .systemInfo
+                .value
+                ?.windows
+                .isHomeEdition ==
+            true) {
+      return;
+    }
 
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
@@ -198,13 +207,17 @@ class ActivationController extends GetxController {
           );
           _triggerAutoDetectPolling();
         } else {
-          final errorText = result.output.isNotEmpty
-              ? result.output
+          final errorText = result.message.length > 300
+              ? '${result.message.substring(0, 300)}…'
               : result.message;
           scaffoldMessenger.showSnackBar(
             SnackBar(
-              content: Text('✕ ${l10n.windowsActivationFailed}: $errorText'),
-              backgroundColor: const Color(0xFFEF4444),
+              content: Text(
+                errorText,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
+              backgroundColor: const Color(0xFFB45309),
               duration: const Duration(seconds: 5),
               behavior: SnackBarBehavior.floating,
               action: SnackBarAction(
@@ -233,6 +246,13 @@ class ActivationController extends GetxController {
 
   Future<void> activateOffice(BuildContext context) async {
     if (isActivatingOffice.value) return;
+    if (Get.isRegistered<SystemInfoController>()) {
+      final info = Get.find<SystemInfoController>().systemInfo.value;
+      if (info?.windows.isHomeEdition == true ||
+          info?.officeActivation.installed != true) {
+        return;
+      }
+    }
 
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
@@ -320,13 +340,17 @@ class ActivationController extends GetxController {
           );
           _triggerAutoDetectPolling();
         } else {
-          final errorText = result.output.isNotEmpty
-              ? result.output
+          final errorText = result.message.length > 300
+              ? '${result.message.substring(0, 300)}…'
               : result.message;
           scaffoldMessenger.showSnackBar(
             SnackBar(
-              content: Text('✕ ${l10n.officeActivationFailed}: $errorText'),
-              backgroundColor: const Color(0xFFEF4444),
+              content: Text(
+                errorText,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
+              backgroundColor: const Color(0xFFB45309),
               duration: const Duration(seconds: 5),
               behavior: SnackBarBehavior.floating,
               action: SnackBarAction(

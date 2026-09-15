@@ -538,12 +538,14 @@ def pin_windows_security() -> Dict[str, Any]:
 
 
 def get_device_settings_status() -> Dict[str, Any]:
+    from windows.desktop_time import get_desktop_time_status
     from windows.power_settings import get_timeout_status, get_power_mode_status
     from windows.startup_status import get_startup_status, get_background_status
     identity = get_windows_identity()
     return {
         "success": True,
         "timeouts": get_timeout_status(),
+        "desktop_time": get_desktop_time_status(),
         "power_modes": get_power_mode_status(),
         "startup": get_startup_status(),
         "background_apps": get_background_status(identity.get('generation') == 'Windows 10'),

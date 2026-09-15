@@ -27,7 +27,8 @@ class LicenseStatusPage extends StatelessWidget {
       final isWinActive = win.activated;
       final isOffActive = off.activated;
       final hasOffice = off.installed;
-      final showOriginalHome = info?.windows.isHomeEdition ?? false;
+      final isHome = info?.windows.isHomeEdition ?? false;
+      final showOriginalHome = isHome && isWinActive;
 
       final isOemOriginal =
           win.channel.toUpperCase().contains('OEM') ||
@@ -37,8 +38,7 @@ class LicenseStatusPage extends StatelessWidget {
           (win.statusText.toUpperCase().contains('LICENSED') &&
               !win.channel.toUpperCase().contains('VOLUME'));
 
-      final isAllReady =
-          (showOriginalHome || isWinActive) && (!hasOffice || isOffActive);
+      final isAllReady = isWinActive && (!hasOffice || isOffActive);
 
       return LayoutBuilder(
         builder: (context, constraints) {
@@ -261,7 +261,14 @@ class LicenseStatusPage extends StatelessWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                if (!showOriginalHome && !isWinActive)
+                                if (isHome)
+                                  const FilledButton(
+                                    onPressed: null,
+                                    child: Text(
+                                      'Windows Home — ابزار فعال‌سازی غیرفعال',
+                                    ),
+                                  )
+                                else if (!isWinActive)
                                   ElevatedButton.icon(
                                     onPressed: isActivatingWin
                                         ? null
@@ -490,7 +497,19 @@ class LicenseStatusPage extends StatelessWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                if (hasOffice && !isOffActive)
+                                if (isHome)
+                                  const FilledButton(
+                                    onPressed: null,
+                                    child: Text(
+                                      'Windows Home — ابزار فعال‌سازی غیرفعال',
+                                    ),
+                                  )
+                                else if (!hasOffice)
+                                  const FilledButton(
+                                    onPressed: null,
+                                    child: Text('ابتدا آفیس را نصب کنید'),
+                                  )
+                                else if (!isOffActive)
                                   ElevatedButton.icon(
                                     onPressed: isActivatingOff
                                         ? null

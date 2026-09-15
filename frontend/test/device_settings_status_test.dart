@@ -14,6 +14,15 @@ class StatusApi extends ApiService {
     'has_battery': true,
     'windows': {'label': 'Windows 11 Pro'},
     'background_apps_supported': false,
+    'desktop_time': {
+      'windows_activated': ready,
+      'desktop_icons_ready': ready,
+      'timezone': ready == true
+          ? 'Iran Standard Time'
+          : 'Pacific Standard Time',
+      'automatic_timezone': ready,
+      'location_enabled': ready,
+    },
     'timeouts': {
       'all_never': ready,
       'values': {'sleep_ac': ready == true ? 0 : 300},
@@ -55,12 +64,14 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('فقط Windows 10'), findsOneWidget);
         expect(find.text('الان همه روی Never هستند'), findsNothing);
+        expect(find.text('ابتدا ویندوز را فعال کنید'), findsOneWidget);
         api.ready = true;
         await controller.refreshStatus();
         await tester.pumpAndSettle();
         expect(find.text('الان همه روی Never هستند'), findsOneWidget);
         expect(find.text('همهٔ Startup Apps خاموش هستند'), findsOneWidget);
-        expect(find.byIcon(Icons.check_circle_rounded), findsNWidgets(3));
+        expect(find.byIcon(Icons.check_circle_rounded), findsNWidgets(5));
+        expect(find.text('سه آیکن فعال هستند'), findsOneWidget);
         api.ready = false;
         await controller.refreshStatus();
         await tester.pumpAndSettle();

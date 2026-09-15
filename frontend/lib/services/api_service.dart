@@ -202,6 +202,11 @@ class ApiService {
     return _postJson('/api/device-settings/pin-windows-security', {});
   }
 
+  Future<Map<String, dynamic>> showDesktopIcons() async =>
+      _postJson('/api/device-settings/desktop-icons', {});
+  Future<Map<String, dynamic>> setTehranTimezone() async =>
+      _postJson('/api/device-settings/tehran-timezone', {});
+
   Future<Map<String, dynamic>> setLaptopSleepNever() async {
     return _postJson('/api/device-settings/sleep-never', {});
   }

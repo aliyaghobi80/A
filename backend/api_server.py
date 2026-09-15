@@ -105,7 +105,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.23",
+                "version": "1.1.24",
                 "phase": 4,
                 "api_contract_version": 2,
             }
@@ -496,8 +496,14 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
             return
 
-        elif path == "/api/device-settings/pin-windows-security":
-            result = pin_windows_security()
+        elif path in ("/api/device-settings/pin-windows-security", "/api/device-settings/desktop-icons", "/api/device-settings/tehran-timezone"):
+            from windows.desktop_time import show_desktop_icons, set_tehran_automatic_timezone
+            if path.endswith('desktop-icons'):
+                result = show_desktop_icons()
+            elif path.endswith('tehran-timezone'):
+                result = set_tehran_automatic_timezone()
+            else:
+                result = pin_windows_security()
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
@@ -612,7 +618,12 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
 
         elif path == "/api/activation/windows":
             logger.info("Executing configured Windows activation tool...")
-            result = execute_activation_tool("windows")
+            from activation.verification import verify_activation_result
+            from windows.device_settings import get_windows_identity
+            if get_windows_identity().get('is_home'):
+                result = {'success': False, 'message': 'اجرای ابزار فعال‌سازی روی نسخهٔ Home غیرفعال است.'}
+            else:
+                result = verify_activation_result('windows', execute_activation_tool("windows"))
             
             # Invalidate cached system info so next fetch gets updated activation status
             with _cache_lock:
@@ -629,7 +640,14 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
 
         elif path == "/api/activation/office":
             logger.info("Executing configured Office activation tool...")
-            result = execute_activation_tool("office")
+            from activation.verification import verify_activation_result
+            from windows.device_settings import get_windows_identity
+            if get_windows_identity().get('is_home'):
+                result = {'success': False, 'message': 'اجرای ابزار فعال‌سازی روی نسخهٔ Home غیرفعال است.'}
+            elif not get_office_activation_info().get('installed'):
+                result = {'success': False, 'message': 'ابتدا آفیس را نصب کنید.'}
+            else:
+                result = verify_activation_result('office', execute_activation_tool("office"))
             
             # Invalidate cached system info so next fetch gets updated activation status
             with _cache_lock:

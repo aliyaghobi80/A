@@ -32,7 +32,7 @@ def _query_wmi_licensing() -> Dict[str, Any]:
     try:
         script = """
         $products = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL" -ErrorAction SilentlyContinue |
-                    Where-Object { $_.ApplicationId -eq '55c92734-d682-4d71-983e-d6ec3f16059f' -or $_.Name -like '*Windows*' }
+                    Where-Object { $_.ApplicationId -eq '55c92734-d682-4d71-983e-d6ec3f16059f' -and -not $_.LicenseIsAddon }
         
         # Prioritize finding a licensed product first
         $win = $products | Where-Object { $_.LicenseStatus -eq 1 } | Select-Object -First 1
@@ -176,13 +176,10 @@ def get_windows_activation_info() -> Dict[str, Any]:
     dli_data = _query_slmgr_dli()
     
     # 3. Query WMI SoftwareLicensingProduct only if slmgr /dli was inconclusive (saves ~2.5s)
-    if dli_data.get("status_text") or dli_data.get("name"):
-        wmi_data = {}
-    else:
-        wmi_data = _query_wmi_licensing()
+    wmi_data = _query_wmi_licensing()
 
     # Multi-source activation confirmation
-    activated = (
+    activated = wmi_data.get('activated') if 'activated' in wmi_data else (
         (xpr_activated is True) or
         dli_data.get("activated", False) or
         wmi_data.get("activated", False)
