@@ -223,6 +223,13 @@ def get_ram_info() -> Dict[str, Any]:
                            if module['device_locator'].casefold() == slot['device_locator'].casefold()
                            and module['bank_label'].casefold() == slot['bank_label'].casefold()
                            and slot['device_locator'] != 'Not available']
+                if not matches and slot['device_locator'] != 'Not available':
+                    # Some WMI providers omit BankLabel. A unique locator in
+                    # BOTH inventories is sufficient; never match by order.
+                    same_locator = [d for d in inventory if clean_string(d['device_locator'], default='').casefold() == slot['device_locator'].casefold()]
+                    if len(same_locator) == 1:
+                        matches = [i for i, module in enumerate(modules_list)
+                                   if module['device_locator'].casefold() == slot['device_locator'].casefold()]
                 index = matches[0] if len(matches) == 1 and matches[0] not in mapped and device['occupied'] is not False else None
                 if index is not None:
                     mapped.add(index)
@@ -235,8 +242,17 @@ def get_ram_info() -> Dict[str, Any]:
                 ram_result['slots'] = [{**{key: module[key] for key in ('slot', 'device_locator', 'bank_label')},
                                         'occupied': True, 'module_index': i}
                                        for i, module in enumerate(modules_list)]
+                # Keep independently confirmed empty positions even when the
+                # populated firmware records cannot be joined to WMI modules.
+                ram_result['slots'].extend(s for s in slots if s['occupied'] is False)
+                if inventory:
+                    ram_result['total_slots'] = max(len(ram_result['slots']), len(inventory), ram_result['total_slots'] or 0)
             while len(ram_result['slots']) < (ram_result['total_slots'] or 0):
-                ram_result['slots'].append({'slot': 'محل گزارش نشده', 'occupied': None, 'module_index': None})
+                # Array count includes unpopulated slots. With a complete WMI
+                # module list the remaining positions are empty, but their
+                # printed names are not known without Type 17 records.
+                complete_modules = len(modules_list) == len(raw_modules) and all(m['capacity_gb'] > 0 for m in modules_list)
+                ram_result['slots'].append({'slot': 'محل گزارش نشده', 'occupied': False if complete_modules and not inventory else None, 'module_index': None})
             
             # Module summary like '8 GB + 8 GB'
             if modules_list:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import '../common/hardware_illustrations.dart';
+import '../common/ram_slot_summary.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
 
@@ -78,6 +79,7 @@ class RamCard extends StatelessWidget {
             forceLtrValue: true,
           ),
           if (ram.modules.isNotEmpty) ...[
+            RamSlotSummary(ram: ram),
             const SizedBox(height: 10),
             Text(
               l10n.moduleDetails,

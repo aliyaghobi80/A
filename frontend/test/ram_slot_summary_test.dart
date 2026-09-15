@@ -17,18 +17,19 @@ void main() {
         addTearDown(tester.view.resetDevicePixelRatio);
         final ram = RamInfo.fromJson({
           'total_slots': 4,
-          'module_count': 1,
+          'module_count': 2,
           'modules': [
             {'slot': 'A2', 'capacity_display': '16 GB', 'rated_cl': 40},
+            {'slot': 'B2', 'capacity_display': '16 GB', 'rated_cl': 40},
           ],
           'slots': [
             {'slot': 'A1', 'occupied': false},
             {'slot': 'A2', 'occupied': true, 'module_index': 0},
             {'slot': 'B1', 'occupied': false},
-            {'slot': 'B2', 'occupied': false},
+            {'slot': 'B2', 'occupied': true, 'module_index': 1},
           ],
         });
-        expect(ram.modules.single.ratedCl, 40);
+        expect(ram.modules.first.ratedCl, 40);
         await tester.pumpWidget(
           MaterialApp(
             theme: dark ? ThemeData.dark() : ThemeData.light(),
@@ -51,7 +52,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('A1 — Empty'), findsOneWidget);
         expect(find.text('A2 — 16 GB'), findsOneWidget);
-        expect(find.text('B2 — Empty'), findsOneWidget);
+        expect(find.text('B1 — Empty'), findsOneWidget);
+        expect(find.text('B2 — 16 GB'), findsOneWidget);
+        expect(find.text('4 RAM slots • 2 occupied • 2 empty'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );

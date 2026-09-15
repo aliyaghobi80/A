@@ -10,6 +10,7 @@ class RamSlotSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final fa = AppLocalizations.of(context).isPersian;
     final colors = Theme.of(context).colorScheme;
+    final empty = ram.slots.where((slot) => slot.occupied == false).length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -19,8 +20,8 @@ class RamSlotSummary extends StatelessWidget {
                     ? 'تعداد کل اسلات‌ها گزارش نشده'
                     : 'Total slot count unavailable')
               : (fa
-                    ? '${ram.moduleCount} ماژول / ${ram.totalSlots} جایگاه حافظه'
-                    : '${ram.moduleCount} modules / ${ram.totalSlots} memory locations'),
+                    ? '${ram.totalSlots} اسلات رم • ${ram.moduleCount} پُر • $empty خالی'
+                    : '${ram.totalSlots} RAM slots • ${ram.moduleCount} occupied • $empty empty'),
         ),
         const SizedBox(height: 8),
         Wrap(

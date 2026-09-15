@@ -54,6 +54,33 @@ class RamSlotNormalizationTests(unittest.TestCase):
     def test_malformed_firmware_table_is_ignored(self):
         self.assertEqual(parse_memory_slots(b'\x11\xff\0\0'), [])
 
+    def test_four_slots_two_modules_keep_two_empty_without_bank_labels(self):
+        modules = [{'Capacity': 8 * 1024**3, 'DeviceLocator': label} for label in ('A2', 'B2')]
+        inventory = [{'device_locator': label, 'bank_label': 'BANK ' + str(i),
+                      'occupied': label in ('A2', 'B2')} for i, label in enumerate(('A1', 'A2', 'B1', 'B2'))]
+        with patch('hardware.ram.run_powershell_json', return_value={'Modules': modules, 'TotalSlots': 4}), patch('hardware.ram.read_memory_slots', return_value=inventory):
+            result = get_ram_info()
+        self.assertEqual(len(result['slots']), 4)
+        self.assertEqual([s['occupied'] for s in result['slots']], [False, True, False, True])
+        self.assertEqual([s['module_index'] for s in result['slots']], [None, 0, None, 1])
+
+    def test_array_count_shows_empty_slots_without_inventing_names(self):
+        modules = [{'Capacity': 8 * 1024**3, 'DeviceLocator': label} for label in ('A2', 'B2')]
+        with patch('hardware.ram.run_powershell_json', return_value={'Modules': modules, 'TotalSlots': 4}), patch('hardware.ram.read_memory_slots', return_value=[]):
+            result = get_ram_info()
+        self.assertEqual(len(result['slots']), 4)
+        self.assertEqual(sum(s['occupied'] is False for s in result['slots']), 2)
+        self.assertEqual(result['slots'][2]['slot'], 'محل گزارش نشده')
+
+    def test_unmatched_modules_do_not_discard_confirmed_empty_slots(self):
+        modules = [{'Capacity': 8 * 1024**3, 'DeviceLocator': label} for label in ('VendorSlot1', 'VendorSlot2')]
+        inventory = [{'device_locator': label, 'bank_label': '', 'occupied': label in ('A2', 'B2')}
+                     for label in ('A1', 'A2', 'B1', 'B2')]
+        with patch('hardware.ram.run_powershell_json', return_value={'Modules': modules, 'TotalSlots': 4}), patch('hardware.ram.read_memory_slots', return_value=inventory):
+            result = get_ram_info()
+        self.assertEqual(len(result['slots']), 4)
+        self.assertEqual([s['slot'] for s in result['slots'] if s['occupied'] is False], ['A1', 'B1'])
+
     def test_controller_locator_is_preserved_without_guessing_board_label(self):
         result = normalize_ram_slot("Controller1-ChannelA-DIMM0", "BANK 0")
         self.assertEqual(result["slot"], "Controller 1 / Channel A / DIMM 0")
