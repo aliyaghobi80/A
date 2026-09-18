@@ -183,6 +183,9 @@ Win32Window::MessageHandler(HWND hwnd,
       auto minMaxInfo = reinterpret_cast<MINMAXINFO*>(lparam);
       HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
       UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
+      if (dpi == 0) {
+        dpi = 96;
+      }
       double scale_factor = dpi / 96.0;
       minMaxInfo->ptMinTrackSize.x = Scale(1100, scale_factor);
       minMaxInfo->ptMinTrackSize.y = Scale(700, scale_factor);
@@ -202,11 +205,36 @@ Win32Window::MessageHandler(HWND hwnd,
       LONG newWidth = newRectSize->right - newRectSize->left;
       LONG newHeight = newRectSize->bottom - newRectSize->top;
 
+      // Ensure window size is clamped so transient display mode shifts
+      // during GPU driver installations do not shrink or distort the window.
+      UINT dpi = LOWORD(wparam);
+      if (dpi == 0) {
+        dpi = 96;
+      }
+      double scale_factor = dpi / 96.0;
+      LONG minWidth = Scale(1100, scale_factor);
+      LONG minHeight = Scale(700, scale_factor);
+      if (newWidth < minWidth) newWidth = minWidth;
+      if (newHeight < minHeight) newHeight = minHeight;
+
       SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
                    newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
 
       return 0;
     }
+
+    case WM_DISPLAYCHANGE: {
+      // Triggered when GPU driver restarts and display resolution is restored.
+      RECT rect = GetClientArea();
+      if (child_content_ != nullptr) {
+        MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
+                   rect.bottom - rect.top, TRUE);
+        InvalidateRect(child_content_, nullptr, TRUE);
+      }
+      InvalidateRect(hwnd, nullptr, TRUE);
+      return 0;
+    }
+
     case WM_SIZE: {
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {

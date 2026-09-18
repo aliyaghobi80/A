@@ -8,6 +8,116 @@ from hardware.storage_health import query_physical_drive_health
 
 logger = logging.getLogger(__name__)
 
+
+def check_physical_drive_is_removable_or_usb(drive_idx: int) -> bool:
+    """Uses Win32 IOCTL_STORAGE_QUERY_PROPERTY on PhysicalDriveX to detect USB / removable bus in <1ms."""
+    import ctypes
+    import struct
+    try:
+        h = ctypes.windll.kernel32.CreateFileW(
+            rf"\\.\PhysicalDrive{drive_idx}",
+            0,
+            1 | 2,  # FILE_SHARE_READ | FILE_SHARE_WRITE
+            None,
+            3,  # OPEN_EXISTING
+            0,
+            None
+        )
+        if h in (None, 0, -1, ctypes.c_void_p(-1).value):
+            return False
+        query = (ctypes.c_ulong * 3)(0, 0, 0)
+        out_buf = ctypes.create_string_buffer(1024)
+        bytes_returned = ctypes.c_ulong()
+        res = ctypes.windll.kernel32.DeviceIoControl(
+            h,
+            0x002D1400,  # IOCTL_STORAGE_QUERY_PROPERTY
+            query,
+            ctypes.sizeof(query),
+            out_buf,
+            len(out_buf),
+            ctypes.byref(bytes_returned),
+            None
+        )
+        ctypes.windll.kernel32.CloseHandle(h)
+        if res and bytes_returned.value >= 28:
+            data = out_buf.raw[:bytes_returned.value]
+            version, size, dev_type, dev_type_mod, removable, cmd_q, v_off, p_off, r_off, s_off, bus_type = struct.unpack_from('<LLBBBBLLLLL', data, 0)
+            # bus_type 7 = Usb, 4 = 1394, 12 = Sd, 13 = Mmc
+            if bus_type in (7, 4, 12, 13) or removable == 1:
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def is_removable_or_usb_physical_disk(disk: Dict[str, Any]) -> bool:
+    """Return True when a physical disk belongs in the removable-media view.
+
+    Win32_DiskDrive reports USB flash drives as ordinary ``DiskDrive`` objects
+    (and many of them even report ``Fixed hard disk media``).  Showing those
+    objects next to the customer's SSD/HDD is misleading, so use all identity
+    signals Windows exposes instead of trusting MediaType alone.
+    """
+    def value(name: str) -> str:
+        for k in (name, name.lower(), name.capitalize(), name.upper()):
+            if k in disk and disk[k]:
+                return str(disk[k]).strip().upper()
+        return ""
+
+    bus_type = value("BusType")
+    interface = value("InterfaceType")
+    if not interface:
+        interface = value("interface")
+    pnp_id = value("PNPDeviceID")
+    media_type = value("MediaType")
+    model = value("Model")
+    raw_model = value("raw_model")
+    friendly = value("FriendlyName")
+    combined_model = f"{model} {raw_model} {friendly} {pnp_id}".upper()
+
+    # Direct bus type / interface signals
+    if bus_type in {"USB", "SD", "MMC", "1394"}:
+        return True
+    if interface == "USB":
+        return True
+    if pnp_id.startswith("USB\\") or "USBSTOR\\" in pnp_id or "USB" in bus_type:
+        return True
+    if "REMOVABLE" in media_type:
+        return True
+
+    # Check for known flash drive and removable device keywords
+    flash_keywords = (
+        "USB", "FLASH", "PENDRIVE", "PEN DRIVE", "THUMBDRIVE", "THUMB DRIVE",
+        "UFD", "CRUZER", "DATATRAVELER", "JETFLASH", "ULTRA FIT", "CARD READER",
+        "SDHC", "SDXC", "MICROSD", "ADATA USB", "ADATA UFD"
+    )
+    if any(k in combined_model for k in flash_keywords):
+        return True
+
+    # Many ADATA flash drives report as "ADATA USB Flash Drive" or similar, but even if
+    # the word USB is obscured, ADATA flash media <= 65GB without SSD/NVMe keyword is a flash drive
+    if "ADATA" in combined_model and not any(k in combined_model for k in ("SSD", "NVME", "SU650", "SU800", "SX8200", "XPG")):
+        size_bytes = disk.get("Size") or disk.get("size")
+        try:
+            size_int = int(size_bytes) if size_bytes else 0
+            if 0 < size_int <= 70 * 1024 * 1024 * 1024:
+                return True
+        except (ValueError, TypeError):
+            pass
+
+    # Some legacy card readers only expose the WMI removable capability bit.
+    capabilities = disk.get("Capabilities")
+    if not isinstance(capabilities, list):
+        capabilities = [capabilities]
+    try:
+        # Win32_DiskDrive capability 7: Supports Removable Media.
+        if 7 in {int(item) for item in capabilities if item is not None}:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return False
+
+
 def get_storage_info() -> List[Dict[str, Any]]:
     """
     Detects all physical storage devices and calculates health via the Storage Health Engine.
@@ -17,8 +127,11 @@ def get_storage_info() -> List[Dict[str, Any]]:
     try:
         # Fast query: Win32_DiskDrive via Get-CimInstance (~0.4s vs ~2.3s for Get-PhysicalDisk)
         script_wmi = (
+            "$busByNumber = @{}; "
+            "try { Get-Disk | ForEach-Object { $busByNumber[[string]$_.Number] = [string]$_.BusType } } catch {}; "
             "Get-CimInstance Win32_DiskDrive | "
-            "Select-Object DeviceID, Index, Model, MediaType, Size, InterfaceType, SerialNumber, PartNumber | "
+            "Select-Object DeviceID, Index, Model, MediaType, Size, InterfaceType, PNPDeviceID, Capabilities, SerialNumber, PartNumber, "
+            "@{Name='BusType';Expression={ $busByNumber[[string]$_.Index] }} | "
             "ConvertTo-Json"
         )
         data_wmi = run_powershell_json(script_wmi, timeout=6)
@@ -31,11 +144,22 @@ def get_storage_info() -> List[Dict[str, Any]]:
 
         if raw_wmi:
             for i, disk in enumerate(raw_wmi):
+                # USB flash media is displayed only in the dedicated removable
+                # drives section.  Do this before a health probe so an Adata
+                # flash drive cannot be mistaken for an internal disk.
+                if is_removable_or_usb_physical_disk(disk):
+                    logger.debug("Excluded removable disk from storage list: %s", disk.get("Model"))
+                    continue
+
                 idx = disk.get("Index") if disk.get("Index") is not None else i
                 try:
                     idx_int = int(idx)
                 except (ValueError, TypeError):
                     idx_int = i
+
+                if check_physical_drive_is_removable_or_usb(idx_int):
+                    logger.debug("Excluded removable disk via IOCTL: %s (PhysicalDrive%d)", disk.get("Model"), idx_int)
+                    continue
 
                 friendly = clean_string(disk.get("Model"), default=f"Disk #{idx_int}")
                 size_bytes = disk.get("Size")
@@ -47,7 +171,10 @@ def get_storage_info() -> List[Dict[str, Any]]:
                 cap_gb = format_bytes_to_gb(size_int)
                 cap_display = format_bytes_display(size_int)
                 serial = clean_serial_number(disk.get("SerialNumber"), default="-")
-                bus_type = clean_string(disk.get("InterfaceType"), default="SATA")
+                bus_type = clean_string(
+                    disk.get("BusType") or disk.get("InterfaceType"),
+                    default="SATA",
+                )
                 media_type = clean_string(disk.get("MediaType"), default="Fixed hard disk media")
 
                 health_data = query_physical_drive_health(idx_int, bus_type, media_type, friendly)
@@ -113,12 +240,18 @@ def get_storage_info() -> List[Dict[str, Any]]:
         for disk in raw_msft:
             if not isinstance(disk, dict):
                 continue
+            if is_removable_or_usb_physical_disk(disk):
+                continue
 
             dev_id_raw = disk.get("DeviceId") or "0"
             try:
                 dev_idx = int(dev_id_raw)
             except (ValueError, TypeError):
                 dev_idx = 0
+
+            if check_physical_drive_is_removable_or_usb(dev_idx):
+                logger.debug("Excluded removable disk via IOCTL: %s (PhysicalDrive%d)", disk.get("FriendlyName"), dev_idx)
+                continue
 
             friendly_name = clean_string(disk.get("FriendlyName"))
             disk_model = clean_string(disk.get("Model"), default=friendly_name)

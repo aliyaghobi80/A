@@ -84,34 +84,58 @@ class DriverInstallController extends GetxController {
     isAdvancedMode.value = !isAdvancedMode.value;
   }
 
+  void _replaceSelection(Iterable<String> packageIds) {
+    selectedPackageIds.assignAll(packageIds);
+    selectedPackageIds.refresh();
+  }
+
   void togglePackageSelection(String packageId) {
     if (selectedPackageIds.contains(packageId)) {
       selectedPackageIds.remove(packageId);
     } else {
       selectedPackageIds.add(packageId);
     }
+    selectedPackageIds.refresh();
   }
 
-  Set<String> get installablePackageIds => scanResult.value.packages
-      .where((package) {
-        final match = package.match;
-        return match == null || match.recommendation != 'skip';
-      })
-      .map((package) => package.packageId)
-      .toSet();
+  /// All inspected packages are shown because the selected folder belongs to
+  /// the current device model.  Hardware matching stays visible as guidance,
+  /// but it must not silently remove OEM components from the user's queue.
+  Set<String> get installablePackageIds =>
+      scanResult.value.packages.map((package) => package.packageId).toSet();
 
   bool get areAllInstallableSelected {
     final ids = installablePackageIds;
     return ids.isNotEmpty && selectedPackageIds.containsAll(ids);
   }
 
-  void toggleSelectAllPackages() {
+  bool? get triStateSelectionValue {
     final ids = installablePackageIds;
-    selectedPackageIds.assignAll(toggledSelectAll(selectedPackageIds, ids));
+    if (ids.isEmpty || selectedPackageIds.isEmpty) return false;
+    final selectedCount = ids.where((id) => selectedPackageIds.contains(id)).length;
+    if (selectedCount == 0) return false;
+    if (selectedCount == ids.length) return true;
+    return null; // Indeterminate
+  }
+
+  void selectAllPackages() {
+    selectedPackageIds.assignAll(installablePackageIds);
+    selectedPackageIds.refresh();
   }
 
   void clearSelection() {
     selectedPackageIds.clear();
+    selectedPackageIds.refresh();
+  }
+
+  void toggleSelectAllPackages() {
+    final ids = installablePackageIds;
+    if (ids.isEmpty) return;
+    if (areAllInstallableSelected) {
+      clearSelection();
+    } else {
+      selectAllPackages();
+    }
   }
 
   Future<void> selectFolderAndScan(BuildContext context) async {
@@ -146,7 +170,7 @@ class DriverInstallController extends GetxController {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     isScanning.value = true;
-    selectedPackageIds.clear();
+    _replaceSelection(const <String>{});
 
     try {
       final result = await _apiService.intelligentScanDrivers(
@@ -178,14 +202,10 @@ class DriverInstallController extends GetxController {
           )
           .toList();
 
-      // Auto-select recommended packages
-      for (final p in result.packages) {
-        if (p.match != null &&
-            p.match!.isMatched &&
-            p.match!.recommendation == 'recommended') {
-          selectedPackageIds.add(p.packageId);
-        }
-      }
+      // A driver repository is selected for this exact device model.  Queue
+      // every inspected package by default; matching remains an informative
+      // badge, not a hidden exclusion that leaves a device half-installed.
+      _replaceSelection(result.packages.map((package) => package.packageId));
 
       if (!result.success || result.packages.isEmpty) {
         scaffoldMessenger.showSnackBar(
@@ -232,29 +252,27 @@ class DriverInstallController extends GetxController {
       return;
     }
 
-    final selectedCount = selectedPackageIds.length;
+    final selectedIds = Set<String>.from(selectedPackageIds).toList();
+    final selectedCount = selectedIds.length;
     final confirmed = await _showInstallConfirmationDialog(
       context,
       title: 'تأیید نصب درایورهای انتخاب‌شده',
       message:
           'تعداد $selectedCount بسته درایور در صف نصب خودکار قرار خواهند گرفت.',
-      packageIds: selectedPackageIds.toList(),
+      packageIds: selectedIds,
     );
 
     if (confirmed == true && context.mounted) {
       await _executeDriverQueue(
         context,
-        packageIds: selectedPackageIds.toList(),
+        packageIds: selectedIds,
       );
     }
   }
 
   Future<void> installAllDrivers(BuildContext context) async {
     final pkgs = scanResult.value.packages;
-    final targetList = pkgs.where((p) {
-      final m = p.match;
-      return m == null || m.recommendation != 'skip';
-    }).toList();
+    final targetList = pkgs;
 
     if (targetList.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

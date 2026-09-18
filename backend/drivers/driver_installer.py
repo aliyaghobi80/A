@@ -17,6 +17,7 @@ and priority installation of local driver packages:
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -150,8 +151,11 @@ def _has_direct_installer(dir_path: str) -> bool:
             fname = f.lower()
             if ext in (".inf", ".msi"):
                 return True
-            if ext == ".exe" and any(k in fname for k in ("setup", "install", "asus", "igxp", "dpinst", "rtk", "intel")):
-                return True
+            if ext == ".exe":
+                if any(k in fname for k in ("setup", "install", "asus", "igxp", "dpinst", "rtk", "intel", "amd", "nvidia", "radeon", "geforce")):
+                    return True
+                if re.match(r"^sp\d{4,7}\.exe$", fname) or re.match(r"^[a-z0-9]+us\d+\.exe$", fname) or "whql" in fname:
+                    return True
             if ext in (".cmd", ".bat") and any(k in fname for k in ("install", "setup", "silent")):
                 return True
     except Exception:
@@ -159,66 +163,116 @@ def _has_direct_installer(dir_path: str) -> bool:
     return False
 
 
+def _is_cohesive_driver_package(dir_path: str) -> bool:
+    """
+    Checks if dir_path represents a single cohesive driver package
+    (e.g., ASUS folder with AsusSetup.exe, or extracted INF tree with companion files),
+    rather than a top-level container or collection folder holding multiple components.
+    """
+    try:
+        items = os.listdir(dir_path)
+    except Exception:
+        return False
+
+    subdirs = [
+        d for d in items
+        if os.path.isdir(os.path.join(dir_path, d))
+        and not d.startswith(".")
+        and d.lower() not in _IGNORED_DRIVER_DIR_NAMES
+    ]
+    direct_files = [f for f in items if os.path.isfile(os.path.join(dir_path, f))]
+
+    # Check for subdirectories clearly representing distinct driver categories
+    category_keywords = (
+        "audio", "sound", "vga", "graphic", "display", "nvidia", "amd", "intel",
+        "lan", "ethernet", "wifi", "wireless", "wlan", "bluetooth", "bt",
+        "chipset", "touchpad", "camera", "cardreader", "storage", "rst", "mei"
+    )
+    for sd in subdirs:
+        sd_l = sd.lower()
+        if any(k in sd_l for k in category_keywords):
+            return False
+
+    # Check if there are multiple distinct standalone EXEs and no INFs/CAT/SYS
+    executables = [f for f in direct_files if os.path.splitext(f)[1].lower() in (".exe", ".msi")]
+    has_inf = any(os.path.splitext(f)[1].lower() in (".inf", ".cat", ".sys") for f in direct_files)
+    if len(executables) > 1 and not has_inf:
+        return False
+
+    # A package is cohesive if it has an ASUS setup, recognized vendor setup, or direct INF
+    if _has_direct_installer(dir_path):
+        return True
+
+    return False
+
+
 def _collect_driver_candidates(dir_path: str, current_depth: int = 0, max_depth: Optional[int] = None) -> List[str]:
-    """Recursively collects driver package candidates or extracts from motherboard folders."""
+    """
+    Recursively collects all driver package candidates from manufacturer/laptop/motherboard folders:
+    - Loose vendor setup EXEs (Lenovo SoftPaqs, HP SoftPaqs, NVIDIA/AMD/Intel packages)
+    - Subdirectories for each hardware component (Audio, VGA, Chipset, LAN, WiFi, BT, Touchpad)
+    - Extracted INF trees
+    """
     found = []
     if (max_depth is not None and current_depth > max_depth) or not os.path.isdir(dir_path):
         return found
+
     try:
-        package_name = os.path.basename(dir_path).lower()
         items = os.listdir(dir_path)
-        direct_files = [os.path.join(dir_path, name) for name in items
-                        if os.path.isfile(os.path.join(dir_path, name))]
-        # A collection of opaque OEM downloads is not one installer package.
-        # Preserve INF/setup wrapper trees; split loose EXE/MSI collections.
-        executables = [path for path in direct_files
-                       if os.path.splitext(path)[1].lower() in (".exe", ".msi")]
-        has_package_layout = any(os.path.splitext(path)[1].lower() in
-                                 (".inf", ".cab", ".ini") for path in direct_files)
-        has_wrapper = _has_direct_installer(dir_path)
-        if executables and not has_package_layout and not has_wrapper:
-            found.extend(executables)
-            for name in items:
-                child = os.path.join(dir_path, name)
-                if (os.path.isdir(child) and not os.path.islink(child)
-                        and not os.path.isjunction(child)
-                        and name.lower() not in _IGNORED_DRIVER_DIR_NAMES
-                        and not name.startswith('.')):
-                    found.extend(_collect_driver_candidates(child, current_depth + 1, max_depth))
-            return found
-        if current_depth == 0 and package_name.startswith(("drv_", "driver_")):
-            if any(name.lower().endswith((".inf", ".exe", ".msi", ".cmd", ".bat"))
-                   for _, _, names in os.walk(dir_path) for name in names):
-                return [dir_path]
-        subdirs = [
-            os.path.join(dir_path, d) for d in items
-            if os.path.isdir(os.path.join(dir_path, d))
-            and not os.path.islink(os.path.join(dir_path, d))
-            and not os.path.isjunction(os.path.join(dir_path, d))
-            and d.lower() not in _IGNORED_DRIVER_DIR_NAMES
-            and not d.startswith(".")
-        ]
-
-        # If this folder has direct installers, treat it as a driver package
-        if _has_direct_installer(dir_path):
-            found.append(dir_path)
-            return found
-
-        # If it has subdirectories (e.g. Motherboard folder with Audio, LAN, VGA...), explore them
-        if subdirs:
-            for sd in subdirs:
-                found.extend(_collect_driver_candidates(sd, current_depth + 1, max_depth))
-        else:
-            # Leaf directory without direct installer: check if it has any INF/EXE files inside
-            has_any_driver_file = False
-            for _, _, files in os.walk(dir_path):
-                if any(f.lower().endswith((".inf", ".exe", ".msi")) for f in files):
-                    has_any_driver_file = True
-                    break
-            if has_any_driver_file:
-                found.append(dir_path)
     except Exception as err:
         logger.warning(f"Error exploring {dir_path}: {err}")
+        return found
+
+    direct_files = [os.path.join(dir_path, name) for name in items if os.path.isfile(os.path.join(dir_path, name))]
+    subdirs = [
+        os.path.join(dir_path, d) for d in items
+        if os.path.isdir(os.path.join(dir_path, d))
+        and not os.path.islink(os.path.join(dir_path, d))
+        and not os.path.isjunction(os.path.join(dir_path, d))
+        and d.lower() not in _IGNORED_DRIVER_DIR_NAMES
+        and not d.startswith(".")
+    ]
+
+    executables = [
+        path for path in direct_files
+        if os.path.splitext(path)[1].lower() in (".exe", ".msi")
+    ]
+    scripts = [
+        path for path in direct_files
+        if os.path.splitext(path)[1].lower() in (".cmd", ".bat")
+        and any(k in os.path.basename(path).lower() for k in ("install", "setup", "silent"))
+    ]
+    has_inf = any(os.path.splitext(path)[1].lower() == ".inf" for path in direct_files)
+
+    # 1. Check if this folder itself is a single cohesive driver package
+    if _is_cohesive_driver_package(dir_path):
+        found.append(dir_path)
+        return found
+
+    # 2. Not a single cohesive package: collect any loose standalone installer EXEs
+    for exe in executables:
+        exe_name = os.path.basename(exe).lower()
+        if (
+            any(k in exe_name for k in ("setup", "install", "asus", "igxp", "dpinst", "rtk", "intel", "amd", "nvidia", "radeon", "geforce"))
+            or re.match(r"^sp\d{4,7}\.exe$", exe_name)
+            or re.match(r"^[a-z0-9]+us\d+\.exe$", exe_name)
+            or "whql" in exe_name
+            or len(executables) == 1
+        ):
+            found.append(exe)
+
+    # 3. Collect valid driver scripts
+    for scr in scripts:
+        found.append(scr)
+
+    # 4. If leaf folder with direct INF files (and no executables), treat folder as INF package
+    if has_inf and not executables and not subdirs:
+        found.append(dir_path)
+
+    # 5. Recursively explore all subdirectories (Audio, VGA, LAN, WiFi, Chipset, etc.)
+    for sd in subdirs:
+        found.extend(_collect_driver_candidates(sd, current_depth + 1, max_depth))
+
     return found
 
 
@@ -286,7 +340,7 @@ def intelligent_scan_drivers(custom_dir: Optional[str] = None) -> Dict[str, Any]
                 candidates.extend(_collect_driver_candidates(full))
             elif os.path.isfile(full):
                 ext = os.path.splitext(e)[1].lower()
-                if ext in (".exe", ".inf", ".msi"):
+                if ext in (".exe", ".inf", ".msi", ".cmd", ".bat"):
                     candidates.append(full)
 
         # Remove duplicate paths preserving order
@@ -366,7 +420,9 @@ def start_intelligent_driver_install(
 ) -> Dict[str, Any]:
     """
     Validates selected packages and starts the 9-tier priority queue.
-    If package_ids is omitted or empty, selects all installable recommended packages.
+    If package_ids is omitted or empty, queues every validated package in the
+    selected device repository.  Hardware matching remains visible in the UI,
+    but never silently leaves OEM driver components out of the queue.
     """
     global _cached_scan_result, _cached_packages_map
 
@@ -380,11 +436,7 @@ def start_intelligent_driver_install(
         id_set = set(package_ids)
         target_pkgs = [p for p in all_pkgs if p.get("package_id") in id_set]
     else:
-        target_pkgs = [
-            p for p in all_pkgs
-            if p.get("is_valid", True)
-            and p.get("match", {}).get("recommendation") != "skip"
-        ]
+        target_pkgs = [p for p in all_pkgs if p.get("is_valid", True)]
     if not target_pkgs:
         return {
             "success": False,

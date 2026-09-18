@@ -353,8 +353,10 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
         crossAxisAlignment: WrapCrossAlignment.center,
         alignment: WrapAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 'بسته‌های درایور شناسایی‌شده (${scanRes.totalPackages}):',
@@ -366,27 +368,84 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                       : AppTheme.lightTextPrimary,
                 ),
               ),
-              const SizedBox(width: 10),
-              TextButton(
-                onPressed: ctrl.installablePackageIds.isEmpty
-                    ? null
-                    : ctrl.toggleSelectAllPackages,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: selectedIds.isEmpty
+                      ? const Color(0xFF64748B).withValues(alpha: 0.12)
+                      : accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  ctrl.areAllInstallableSelected
-                      ? 'لغو انتخاب همه'
-                      : 'انتخاب همه',
-                  style: const TextStyle(fontSize: 12),
+                  '${selectedIds.length} از ${scanRes.totalPackages} انتخاب شده',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: selectedIds.isEmpty
+                        ? (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))
+                        : accent,
+                  ),
                 ),
               ),
-              TextButton(
-                onPressed: ctrl.clearSelection,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+              InkWell(
+                onTap: ctrl.installablePackageIds.isEmpty
+                    ? null
+                    : ctrl.toggleSelectAllPackages,
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Checkbox(
+                        value: ctrl.triStateSelectionValue,
+                        tristate: true,
+                        activeColor: accent,
+                        checkColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        onChanged: ctrl.installablePackageIds.isEmpty
+                            ? null
+                            : (_) => ctrl.toggleSelectAllPackages(),
+                      ),
+                      Text(
+                        ctrl.areAllInstallableSelected
+                            ? 'لغو انتخاب همه'
+                            : 'انتخاب همه',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: const Text('لغو انتخاب', style: TextStyle(fontSize: 12)),
+              ),
+              OutlinedButton.icon(
+                onPressed: ctrl.installablePackageIds.isEmpty
+                    ? null
+                    : ctrl.selectAllPackages,
+                icon: const Icon(Icons.select_all_rounded, size: 14),
+                label: const Text('انتخاب همه', style: TextStyle(fontSize: 11.5)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: const Size(0, 30),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: ctrl.selectedPackageIds.isEmpty
+                    ? null
+                    : ctrl.clearSelection,
+                icon: const Icon(Icons.deselect_rounded, size: 14),
+                label: const Text('لغو انتخاب', style: TextStyle(fontSize: 11.5)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: const Size(0, 30),
+                ),
               ),
             ],
           ),
@@ -525,6 +584,11 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
         statusColor = const Color(0xFFF59E0B);
         statusBadgeText = 'در حال نصب...';
         badgeStatus = BadgeStatus.warning;
+      } else if (queueItem.status == 'queued' ||
+          queueItem.status == 'pending') {
+        statusColor = const Color(0xFF0284C7);
+        statusBadgeText = 'در صف نصب';
+        badgeStatus = BadgeStatus.info;
       } else if (queueItem.status == 'completed') {
         statusColor = const Color(0xFF10B981);
         statusBadgeText = 'نصب شد';

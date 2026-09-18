@@ -164,12 +164,20 @@ class SimpleModeView extends StatelessWidget {
             );
 
             final gpuPrimary = info.gpu.isNotEmpty
-                ? info.gpu.first.name
+                ? (info.gpu.length > 1
+                    ? info.gpu.map((g) => g.name).join(' + ')
+                    : info.gpu.first.name)
                 : l10n.noGpuDetected;
-            final gpuSecondary =
-                info.gpu.isNotEmpty &&
-                    info.gpu.first.vramDisplay != 'Not available'
-                ? '${l10n.dedicatedVram}: ${info.gpu.first.vramDisplay}'
+            final gpuSecondary = info.gpu.isNotEmpty
+                ? (info.gpu.length > 1
+                    ? info.gpu
+                        .map((g) =>
+                            '${g.typeLabelFa}: ${g.name}${g.vramDisplay != "Not available" && g.vramDisplay != "Shared" ? " (${g.vramDisplay})" : ""}')
+                        .join(' • ')
+                    : (info.gpu.first.vramDisplay != 'Not available' &&
+                            info.gpu.first.vramDisplay != 'Shared'
+                        ? '${l10n.dedicatedVram}: ${info.gpu.first.vramDisplay} (${info.gpu.first.typeLabelFa})'
+                        : info.gpu.first.typeLabelFa))
                 : null;
 
             final cardGpu = _buildProminentSpecCard(
@@ -182,12 +190,16 @@ class SimpleModeView extends StatelessWidget {
               primaryValue: gpuPrimary,
               secondaryValue: gpuSecondary,
               specPills: [
-                if (info.gpu.isNotEmpty &&
-                    info.gpu.first.vramDisplay != 'Not available')
-                  info.gpu.first.vramDisplay,
-                if (info.gpu.isNotEmpty &&
-                    info.gpu.first.driverVersion != 'Not available')
-                  'Driver: ${info.gpu.first.driverVersion}',
+                for (final g in info.gpu) ...[
+                  if (g.isMicrosoftBasicDisplayAdapter)
+                    'نیاز به نصب درایور'
+                  else ...[
+                    g.typeLabelFa,
+                    if (g.vramDisplay != 'Not available' &&
+                        g.vramDisplay != 'Shared')
+                      g.vramDisplay,
+                  ],
+                ],
               ],
               copyValue: gpuPrimary,
               onCopy: (val) => systemCtrl.copyToClipboard(
@@ -1949,17 +1961,21 @@ class SimpleModeView extends StatelessWidget {
     }
 
     // 5) GPU (dedicated only if available, skip integrated for desktop summary)
+    // 5) GPU (include discrete + integrated GPUs)
     if (info.gpu.isNotEmpty) {
-      var gpuName = info.gpu.first.name;
-      gpuName = gpuName.replaceAll(
-        RegExp(r'\(R\)|\(TM\)', caseSensitive: false),
-        '',
-      );
-      gpuName = gpuName.replaceAll(RegExp(r'\s+'), ' ').trim();
-      final vram = info.gpu.first.vramDisplay != 'Not available'
-          ? ' ${info.gpu.first.vramDisplay}'
-          : '';
-      parts.add('$gpuName$vram');
+      final gpuParts = <String>[];
+      for (final g in info.gpu) {
+        var gName = g.name.replaceAll(
+          RegExp(r'\(R\)|\(TM\)', caseSensitive: false),
+          '',
+        );
+        gName = gName.replaceAll(RegExp(r'\s+'), ' ').trim();
+        final vram = g.vramDisplay != 'Not available' && g.vramDisplay != 'Shared'
+            ? ' ${g.vramDisplay}'
+            : '';
+        gpuParts.add('$gName$vram');
+      }
+      parts.add(gpuParts.join(' + '));
     }
 
     final summaryText = parts.join('  •  ');

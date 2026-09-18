@@ -384,7 +384,7 @@ class DriverPackage:
         display_name: str,
         category: str,
         category_fa: str,
-        package_type: str,  # 'zip', 'folder', 'self_extracting_exe', 'inf'
+        package_type: str,  # 'zip', 'folder', 'self_extracting_exe', 'inf', 'script'
         source_path: str,
         relative_path: str,
         installer_file: str,
@@ -427,6 +427,19 @@ class DriverPackage:
         self.supported_windows = supported_windows or []
 
     def to_dict(self) -> Dict[str, Any]:
+        # Determine effective installer path and method:
+        # If a vendor installer or script exists (AsusSetup.exe, Setup.exe, etc.), prioritize it!
+        # Use pnputil ONLY when no vendor installer/script exists (pure INF packages).
+        if self.installer_file and self.install_method not in ("pnputil", "none"):
+            eff_installer_path = self.installer_file
+            eff_install_method = self.install_method
+        elif self.inf_files:
+            eff_installer_path = self.inf_files[0]
+            eff_install_method = "pnputil"
+        else:
+            eff_installer_path = self.installer_file
+            eff_install_method = self.install_method or "setup_exe"
+
         return {
             "package_id": self.package_id,
             "display_name": self.display_name,
@@ -436,11 +449,11 @@ class DriverPackage:
             "package_type": self.package_type,
             "source_path": self.source_path,
             "relative_path": self.relative_path,
-            "installer_file": os.path.basename(self.installer_file) if self.installer_file else "",
-            "installer_path": self.inf_files[0] if self.inf_files else self.installer_file,
-            "install_method": "pnputil" if self.inf_files else self.install_method,
-            "manual_installer_path": self.installer_file,
-            "manual_install_method": self.install_method,
+            "installer_file": os.path.basename(self.installer_file) if self.installer_file else (os.path.basename(self.inf_files[0]) if self.inf_files else ""),
+            "installer_path": eff_installer_path,
+            "install_method": eff_install_method,
+            "manual_installer_path": self.installer_file or (self.inf_files[0] if self.inf_files else ""),
+            "manual_install_method": self.install_method if self.install_method != "none" else ("pnputil" if self.inf_files else "setup_exe"),
             "silent_args": self.silent_args,
             "size_bytes": self.size_bytes,
             "file_size_display": _format_size(self.size_bytes),
@@ -459,17 +472,25 @@ class DriverPackage:
 
 
 def get_driver_exe_silent_args(file_path: str) -> List[str]:
-    """Returns vendor-specific silent switches for driver executables (matching 1.1.3)."""
+    """Returns vendor-specific silent switches for driver executables (ASUS, Gigabyte, MSI, Lenovo, HP, Dell, NVIDIA, AMD, Intel, Realtek)."""
     name_l = os.path.basename(file_path).lower()
     if "dpinst" in name_l:
         return ["/q", "/se", "/sa", "/sw"]
-    elif "nvidia" in name_l:
+    elif any(t in name_l for t in ("nvidia", "geforce", "quadro")) or name_l.endswith("-international-dch-whql.exe") or "-whql" in name_l:
         return ["-s", "-noreboot"]
-    elif any(t in name_l for t in ("amd", "radeon", "ati")):
+    elif any(t in name_l for t in ("amd", "radeon", "ati", "adrenalin")):
         return ["-INSTALL", "-OUTPUT", "screen", "-NORESTART"]
-    elif any(t in name_l for t in ("intel", "rst", "asus", "asussetup")):
+    elif any(t in name_l for t in ("asussetup", "asus")):
         return ["-s", "-norestart"]
-    elif any(t in name_l for t in ("realtek", "lenovo", "audio", "lan", "wlan", "wifi", "bluetooth", "touchpad", "chipset")):
+    elif any(t in name_l for t in ("setuprst", "setupchipset", "igxpin", "gfx_win")):
+        return ["-s", "-norestart"]
+    elif re.match(r"^sp\d{4,7}\.exe$", name_l):  # HP SoftPaq
+        return ["/s", "-s"]
+    elif re.match(r"^[a-z0-9]+us\d+\.exe$", name_l) or "lenovo" in name_l:  # Lenovo SoftPaq
+        return ["/VERYSILENT", "/NORESTART", "/SUPPRESSMSGBOXES"]
+    elif "dell" in name_l or "win64" in name_l:  # Dell DUP
+        return ["/s"]
+    elif any(t in name_l for t in ("intel", "realtek", "audio", "lan", "wlan", "wifi", "bluetooth", "touchpad", "chipset")):
         return ["/s", "/norestart"]
     return ["/s", "/norestart"]
 
@@ -497,16 +518,17 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
             elif ext in (".cmd", ".bat"):
                 candidates_script.append(full)
 
-    # 1. ASUS Setup
+    # 1. ASUS Setup (AsusSetup.exe) - High priority for ASUS laptops and motherboards
     for exe in candidates_exe:
         if os.path.basename(exe).lower() == "asussetup.exe":
             alts = [c for c in candidates_exe if c != exe]
             return exe, "asus_setup", ["-s", "-norestart"], alts
 
-    # 2. Recognized standard vendor setups
+    # 2. Recognized standard vendor setups (Gigabyte, MSI, Intel, Realtek)
     known_setups = (
         "setup.exe", "installer.exe", "setuprst.exe", "setupchipset.exe",
-        "igxpin.exe", "dpinst.exe", "dpinst64.exe", "install.exe"
+        "igxpin.exe", "dpinst.exe", "dpinst64.exe", "install.exe",
+        "install_win10.exe", "install_win11.exe", "setup_win10.exe", "setup_win11.exe"
     )
     for exe in candidates_exe:
         if os.path.basename(exe).lower() in known_setups:
@@ -514,28 +536,45 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
             args = get_driver_exe_silent_args(exe)
             return exe, "setup_exe", args, alts
 
-    # 3. Trusted vendor scripts (SilentInstall.cmd, etc.)
-    trusted_scripts = ("silentinstall.cmd", "silentinstall.bat", "install.cmd", "install.bat", "setup.cmd", "setup.bat")
+    # 3. Trusted vendor scripts (SilentInstall.cmd, install.bat, etc.)
+    trusted_scripts = (
+        "silentinstall.cmd", "silentinstall.bat", "install.cmd", "install.bat",
+        "setup.cmd", "setup.bat", "installstep.bat", "silent.bat", "silent.cmd"
+    )
     for scr in candidates_script:
         if os.path.basename(scr).lower() in trusted_scripts:
             return scr, "script", [], [c for c in candidates_script if c != scr]
 
-    # INF payloads often contain service/helper EXEs. They are not installers.
-    if candidates_inf:
-        return candidates_inf[0], "pnputil", [], candidates_inf[1:] + candidates_exe
+    # 4. Standalone OEM vendor driver packages (NVIDIA, AMD, Intel, Lenovo, HP, Dell)
+    for exe in candidates_exe:
+        exe_low = os.path.basename(exe).lower()
+        if (
+            "-whql" in exe_low
+            or "geforce" in exe_low
+            or "adrenalin" in exe_low
+            or exe_low.startswith("amd-software")
+            or exe_low.startswith("gfx_win")
+            or re.match(r"^sp\d{4,7}\.exe$", exe_low)
+            or re.match(r"^[a-z0-9]+us\d+\.exe$", exe_low)
+        ):
+            alts = [c for c in candidates_exe if c != exe]
+            return exe, "setup_exe", get_driver_exe_silent_args(exe), alts
 
-    # 4. Any root or shallow EXE
+    # 5. Any root or shallow EXE
     if candidates_exe:
-        # Sort by depth
+        # Sort by directory depth so shallowest setup is chosen
         candidates_exe.sort(key=lambda p: len(os.path.relpath(p, root_dir).replace("\\", "/").split("/")))
         primary = candidates_exe[0]
-        return primary, "setup_exe", get_driver_exe_silent_args(primary), candidates_exe[1:]
+        # Only use if not deep in helper folder unless no other option
+        rel_parts = os.path.relpath(primary, root_dir).replace("\\", "/").split("/")
+        if len(rel_parts) <= 2 or not candidates_inf:
+            return primary, "setup_exe", get_driver_exe_silent_args(primary), candidates_exe[1:]
 
-    # 5. MSI
+    # 6. MSI packages
     if candidates_msi:
         return candidates_msi[0], "msiexec", ["/qn", "/norestart", "REBOOT=ReallySuppress"], candidates_msi[1:]
 
-    # 6. INF Tree
+    # 7. INF Tree (when no setup executable is provided)
     if candidates_inf:
         return candidates_inf[0], "pnputil", [], candidates_inf[1:]
 
@@ -581,6 +620,17 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
             package_type = "inf"
         elif ext == ".msi":
             package_type = "msi"
+        elif ext in (".cmd", ".bat"):
+            trusted_scripts = {
+                "silentinstall.cmd", "silentinstall.bat", "install.cmd",
+                "install.bat", "setup.cmd", "setup.bat",
+            }
+            # Do not treat arbitrary command files as a driver package.  OEM
+            # packages commonly use these named setup wrappers (including
+            # ASUS InstallStep/setup.bat), so support only those known forms.
+            if base_name.lower() not in trusted_scripts:
+                return None
+            package_type = "script"
         else:
             return None
     elif os.path.isdir(entry_path):
@@ -648,6 +698,11 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
     elif package_type == "inf":
         installer_file = entry_path
         install_method = "pnputil"
+        silent_args = []
+        alts = []
+    elif package_type == "script":
+        installer_file = entry_path
+        install_method = "script"
         silent_args = []
         alts = []
     else:  # msi

@@ -304,14 +304,37 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
         ? '$ramSpeed (${info.ram.modules.length} اسلات فعال)'
         : '${info.ram.modules.length} اسلات فعال';
 
-    // 4. GPU
-    final primaryGpu = info.gpu.isNotEmpty ? info.gpu.first : null;
-    final gpuName = primaryGpu != null
-        ? formatGpuTitle(primaryGpu.name, primaryGpu.vramDisplay)
-        : 'Display Adapter';
-    final gpuSub = primaryGpu != null && primaryGpu.vramDisplay.isNotEmpty
-        ? 'حافظه اختصاصی ${primaryGpu.vramDisplay}'
-        : 'گرافیک مجتمع';
+    // 4. GPU (Support dual GPUs: Discrete + Integrated)
+    String gpuName;
+    String gpuSub;
+    if (info.gpu.isEmpty) {
+      gpuName = 'پردازنده گرافیکی یافت نشد';
+      gpuSub = 'نیاز به بررسی درایور';
+    } else if (info.gpu.length == 1) {
+      final g = info.gpu.first;
+      gpuName = formatGpuTitle(g.name, g.vramDisplay);
+      gpuSub = g.isMicrosoftBasicDisplayAdapter
+          ? 'نیاز به نصب درایور'
+          : (g.vramDisplay != 'Not available' && g.vramDisplay != 'Shared'
+              ? 'حافظه اختصاصی ${g.vramDisplay} (${g.typeLabelFa})'
+              : g.typeLabelFa);
+    } else {
+      final discrete = info.gpu.firstWhere(
+        (g) => g.isDiscrete,
+        orElse: () => info.gpu.first,
+      );
+      final integrated = info.gpu.firstWhere(
+        (g) => g.isIntegrated && g != discrete,
+        orElse: () => info.gpu.last,
+      );
+      final dTitle = formatGpuTitle(discrete.name, discrete.vramDisplay);
+      final iTitle = integrated != discrete
+          ? formatGpuTitle(integrated.name, integrated.vramDisplay)
+          : '';
+      gpuName = iTitle.isNotEmpty ? '$dTitle + $iTitle' : dTitle;
+      final iSub = integrated != discrete ? ' و ${integrated.typeLabelFa}' : '';
+      gpuSub = 'گرافیک دوگانه: ${discrete.typeLabelFa}$iSub';
+    }
 
     // 5. Power / Battery
     String powerCategory;
@@ -1549,7 +1572,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
             vramDisplay: 'Shared',
             driverVersion: 'Standard',
           );
-    final gpuTitle = formatGpuTitle(primary.name, primary.vramDisplay);
+    final gpuTitle = gpus.length > 1
+        ? gpus.map((g) => formatGpuTitle(g.name, g.vramDisplay)).join(' + ')
+        : formatGpuTitle(primary.name, primary.vramDisplay);
     final imgSize = isCompact ? 100.0 : 135.0;
     final needsGraphicsDriver = gpus.any(
       (gpu) => gpu.isMicrosoftBasicDisplayAdapter,

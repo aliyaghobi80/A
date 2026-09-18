@@ -202,22 +202,30 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
     try:
         out = ""
         if method in ("pnputil", "inf_pnputil"):
-            # A driver package can contain base, extension and component INFs.
-            # Process every INF, retaining failures instead of hiding them behind
-            # the first successful file. Never pass PnPUtil's /reboot switch.
-            inf_paths = list(dict.fromkeys(pkg.get("inf_files") or [installer_path]))
-            results = []
-            for inf_path in inf_paths:
-                try:
-                    code, output = _install_inf_package(inf_path, timeout=timeout)
-                except Exception as exc:
-                    code, output = -1, str(exc)
-                results.append((code, f"{os.path.basename(inf_path)}: {output}"))
-            failed_codes = [code for code, _ in results if code not in (0, 3010)]
-            success = not failed_codes
-            reboot = any(code == 3010 for code, _ in results)
-            exit_code = failed_codes[0] if failed_codes else (3010 if reboot else 0)
-            out = "\n".join(output for _, output in results)
+            # Official Windows best practice: if source_path is a directory containing INFs,
+            # run PnPUtil once on the whole tree with /subdirs /install. This installs base,
+            # extension, and companion component INFs atomically with correct dependency resolution.
+            source_dir = pkg.get("source_path")
+            if source_dir and os.path.isdir(source_dir) and pkg.get("inf_files"):
+                code, output = _install_inf_package(source_dir, timeout=timeout)
+                success = code in (0, 3010)
+                reboot = (code == 3010)
+                exit_code = code
+                out = output
+            else:
+                inf_paths = list(dict.fromkeys(pkg.get("inf_files") or [installer_path]))
+                results = []
+                for inf_path in inf_paths:
+                    try:
+                        code, output = _install_inf_package(inf_path, timeout=timeout)
+                    except Exception as exc:
+                        code, output = -1, str(exc)
+                    results.append((code, f"{os.path.basename(inf_path)}: {output}"))
+                failed_codes = [code for code, _ in results if code not in (0, 3010)]
+                success = not failed_codes
+                reboot = any(code == 3010 for code, _ in results)
+                exit_code = failed_codes[0] if failed_codes else (3010 if reboot else 0)
+                out = "\n".join(output for _, output in results)
             msg = "نصب INF با PnPUtil با موفقیت انجام شد." if success else _format_driver_failure_reason(exit_code, method, out, pkg.get("match", {}))
             if reboot:
                 msg += " (نیازمند راه‌اندازی مجدد)"

@@ -1122,6 +1122,13 @@ class GpuInfo {
   final double? vramGb;
   final String vramDisplay;
   final String driverVersion;
+  final String pnpDeviceId;
+  final bool driverMissing;
+  final String driverState;
+  final String gpuType;
+  final bool isDiscrete;
+  final bool isIntegrated;
+  final bool needsDriver;
 
   GpuInfo({
     required this.name,
@@ -1131,25 +1138,70 @@ class GpuInfo {
     this.vramGb,
     required this.vramDisplay,
     required this.driverVersion,
+    this.pnpDeviceId = '',
+    this.driverMissing = false,
+    this.driverState = 'installed',
+    this.gpuType = 'unknown',
+    this.isDiscrete = false,
+    this.isIntegrated = false,
+    this.needsDriver = false,
   });
 
   factory GpuInfo.fromJson(Map<String, dynamic> json) {
+    final manufacturer = json['manufacturer'] ?? 'Not available';
+    final name = json['name'] ?? 'Not available';
+    final rawName = json['raw_name'] ?? json['name'] ?? '';
+    final isDisc = json['is_discrete'] == true ||
+        (json['gpu_type'] == 'discrete') ||
+        manufacturer.toString().toUpperCase().contains('NVIDIA') ||
+        name.toString().toUpperCase().contains('GEFORCE') ||
+        name.toString().toUpperCase().contains('RTX ') ||
+        name.toString().toUpperCase().contains('GTX ');
+    final isInteg = json['is_integrated'] == true ||
+        (json['gpu_type'] == 'integrated') ||
+        (!isDisc &&
+            (manufacturer.toString().toUpperCase().contains('INTEL') ||
+                name.toString().toUpperCase().contains('UHD') ||
+                name.toString().toUpperCase().contains('IRIS') ||
+                name.toString().toUpperCase().contains('RADEON(TM) GRAPHICS')));
+
+    final missing = json['driver_missing'] == true ||
+        json['needs_driver'] == true ||
+        name.toString().toLowerCase().contains('microsoft basic display adapter') ||
+        name.toString().toLowerCase().contains('driver not installed') ||
+        name.toString().toLowerCase().contains('کارت گرافیک پایه مایکروسافت') ||
+        name.toString().toLowerCase().contains('نیاز به نصب درایور');
+
     return GpuInfo(
-      name: json['name'] ?? 'Not available',
-      rawName: json['raw_name'] ?? json['name'] ?? '',
-      manufacturer: json['manufacturer'] ?? 'Not available',
+      name: name,
+      rawName: rawName,
+      manufacturer: manufacturer,
       vramBytes: json['vram_bytes'] as int?,
       vramGb: (json['vram_gb'] as num?)?.toDouble(),
       vramDisplay: json['vram_display'] ?? 'Not available',
       driverVersion: json['driver_version'] ?? 'Not available',
+      pnpDeviceId: json['pnp_device_id'] ?? '',
+      driverMissing: missing,
+      driverState: json['driver_state'] ?? (missing ? 'basic_display_driver' : 'installed'),
+      gpuType: json['gpu_type'] ?? (isDisc ? 'discrete' : (isInteg ? 'integrated' : 'unknown')),
+      isDiscrete: isDisc,
+      isIntegrated: isInteg,
+      needsDriver: missing,
     );
   }
 
   bool get isMicrosoftBasicDisplayAdapter {
     final value = '$name $rawName'.toLowerCase();
-    return value.contains('microsoft basic display adapter') ||
-        value.contains('کارت گرافیک پایه مایکروسافت');
+    return driverMissing ||
+        needsDriver ||
+        value.contains('microsoft basic display adapter') ||
+        value.contains('کارت گرافیک پایه مایکروسافت') ||
+        value.contains('driver not installed') ||
+        value.contains('نیاز به نصب درایور');
   }
+
+  String get typeLabelFa =>
+      isDiscrete ? 'کارت گرافیک مجزا' : (isIntegrated ? 'گرافیک پردازنده' : 'کارت گرافیک');
 }
 
 class StorageInfo {

@@ -74,16 +74,28 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     return 0;
   }
   // Give Flutter, including plugins, an opportunity to handle window messages.
+  // Wrap with exception handling to safely survive DirectX 11 / DXGI device resets
+  // that occur during GPU graphics driver installations.
   if (flutter_controller_) {
-    std::optional<LRESULT> result =
-        flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
-                                                      lparam);
-    if (result) {
-      return *result;
+    try {
+      std::optional<LRESULT> result =
+          flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
+                                                        lparam);
+      if (result) {
+        return *result;
+      }
+    } catch (...) {
+      LogStartup("Exception safely caught in HandleTopLevelWindowProc (GPU display/device reset)");
     }
   }
 
   switch (message) {
+    case WM_DISPLAYCHANGE:
+      if (flutter_controller_) {
+        flutter_controller_->ForceRedraw();
+      }
+      break;
+
     case WM_FONTCHANGE:
       if (flutter_controller_ && flutter_controller_->engine()) {
         flutter_controller_->engine()->ReloadSystemFonts();
