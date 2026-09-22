@@ -118,23 +118,44 @@ def _query_problematic_devices() -> List[str]:
 
 
 def _install_inf_package(inf_path: str, timeout: int = 180) -> Tuple[int, str]:
-    """Installs INF package using Windows PnPUtil."""
+    """Installs INF package using Windows PnPUtil with automatic elevation fallback."""
     is_dir = os.path.isdir(inf_path)
     if is_dir:
         pattern = os.path.join(inf_path, "*.inf")
-        cmd = ["pnputil", "/add-driver", pattern, "/subdirs", "/install"]
+        cmd = ["pnputil.exe", "/add-driver", pattern, "/subdirs", "/install"]
     else:
-        cmd = ["pnputil", "/add-driver", inf_path, "/install"]
+        cmd = ["pnputil.exe", "/add-driver", inf_path, "/install"]
 
-    res = subprocess.run(
-        cmd,
-        timeout=timeout,
-        capture_output=True,
-        text=True,
-        **get_hidden_subprocess_kwargs(),
-    )
-    out = (res.stdout or res.stderr or "").strip()
-    return res.returncode, out
+    code = -1
+    out = ""
+    try:
+        res = subprocess.run(
+            cmd,
+            timeout=timeout,
+            capture_output=True,
+            text=True,
+            **get_hidden_subprocess_kwargs(),
+        )
+        out = (res.stdout or res.stderr or "").strip()
+        code = res.returncode
+        if code in (0, 3010) or "successfully added" in out.lower():
+            return (3010 if code == 3010 else 0), out
+    except Exception as e:
+        code = -1
+        out = str(e)
+
+    # If non-elevated call failed (e.g. Access Denied code 1 or 5), try elevated PowerShell
+    try:
+        from utils.powershell import run_elevated_powershell
+        arg_str = f'/add-driver "{pattern}" /subdirs /install' if is_dir else f'/add-driver "{inf_path}" /install'
+        ps_script = f"& pnputil.exe {arg_str}"
+        ps_res = run_elevated_powershell(ps_script, timeout=timeout)
+        ps_out = (ps_res.stdout or ps_res.stderr or "").strip()
+        return ps_res.returncode, ps_out
+    except Exception:
+        pass
+
+    return code, out
 
 
 def _format_driver_failure_reason(exit_code: int, method: str, out: str, match: Dict[str, Any]) -> str:
@@ -320,6 +341,10 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
             if _queue_state["cancelled"]:
                 _log_driver_event("Installation queue was cancelled by user.")
                 break
+            # Skip if resuming and this item is already completed successfully
+            if idx < len(_queue_state["items"]) and _queue_state["items"][idx].get("status") == "completed":
+                continue
+            
             _queue_state["current_index"] = idx
             _queue_state["current_package"] = pkg.get("display_name")
             _queue_state["progress_percent"] = round((idx / total) * 100.0, 1)
@@ -333,6 +358,10 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
 
         with _queue_lock:
             if idx < len(_queue_state["items"]):
+                # If we had failed before, subtract from failed count since we retried
+                if _queue_state["items"][idx].get("status") == "failed":
+                    _queue_state["failed"] = max(0, _queue_state["failed"] - 1)
+
                 if res.get("success"):
                     _queue_state["items"][idx]["status"] = "completed"
                     _queue_state["items"][idx]["message"] = res.get("message", "نصب شد.")
@@ -347,13 +376,7 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
             _queue_state["progress_percent"] = round(((idx + 1) / total) * 100.0, 1)
 
         if res.get("exit_code") == -2:
-            with _queue_lock:
-                _queue_state["cancelled"] = True
-                for pending in _queue_state["items"][idx + 1:]:
-                    pending["status"] = "skipped"
-                    pending["message"] = "نصاب قبلی ممکن است فعال باشد؛ نیاز به بررسی دستی."
-                    _queue_state["skipped"] += 1
-            break
+            _log_driver_event(f"Driver package {pkg.get('display_name')} timed out (-2); continuing with remaining queue items.")
         time.sleep(1.0)
 
     # Re-evaluate problem devices after installation (Verification)
@@ -385,50 +408,61 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
     _log_driver_event(f"Queue finished: {_queue_state['summary_message']}")
 
 
-def start_driver_queue(packages: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Starts the sequential installation queue for selected packages."""
-    global _queue_thread, _queue_state
+_last_packages = []
+
+def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False) -> Dict[str, Any]:
+    """Starts the sequential installation queue for selected packages, with resume support."""
+    global _queue_thread, _queue_state, _last_packages
 
     with _queue_lock:
         if _queue_state["is_running"]:
             return {"success": False, "message": "صف نصب درایورها هم‌اکنون در حال اجراست."}
 
-    if not packages:
+    if not packages and not resume:
         return {"success": False, "message": "هیچ بسته درایوری برای نصب انتخاب نشده است."}
 
-    sorted_pkgs = sort_driver_queue(packages)
-
-    with _queue_lock:
-        if _queue_state["is_running"]:
-            return {"success": False, "message": "صف نصب درایورها هم‌اکنون در حال اجراست."}
-        _queue_state = {
-            "is_running": True,
-            "cancelled": False,
-            "total": len(sorted_pkgs),
-            "completed": 0,
-            "failed": 0,
-            "skipped": 0,
-            "current_index": 0,
-            "current_package": None,
-            "progress_percent": 0.0,
-            "start_time": time.time(),
-            "end_time": None,
-            "reboot_required": False,
-            "summary_message": "در حال آغاز صف نصب درایورها...",
-            "resolved_devices_count": 0,
-            "items": [
-                {
-                    "package_id": p.get("package_id"),
-                    "display_name": p.get("display_name"),
-                    "category": p.get("category"),
-                    "category_fa": p.get("category_fa"),
-                    "installer_file": p.get("installer_file"),
-                    "status": "pending",
-                    "message": "",
-                }
-                for p in sorted_pkgs
-            ],
-        }
+    if resume:
+        if not _queue_state["items"]:
+            return {"success": False, "message": "هیچ صفی برای ادامه دادن یافت نشد."}
+        sorted_pkgs = _last_packages
+        with _queue_lock:
+            _queue_state["is_running"] = True
+            _queue_state["cancelled"] = False
+            _queue_state["summary_message"] = "در حال از سرگیری صف نصب درایورها..."
+            # Keep completed/failed counts, we will just skip them in the loop
+            _queue_state["end_time"] = None
+    else:
+        sorted_pkgs = sort_driver_queue(packages)
+        _last_packages = sorted_pkgs
+        with _queue_lock:
+            _queue_state = {
+                "is_running": True,
+                "cancelled": False,
+                "total": len(sorted_pkgs),
+                "completed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "current_index": 0,
+                "current_package": None,
+                "progress_percent": 0.0,
+                "start_time": time.time(),
+                "end_time": None,
+                "reboot_required": False,
+                "summary_message": "در حال آغاز صف نصب درایورها...",
+                "resolved_devices_count": 0,
+                "items": [
+                    {
+                        "package_id": p.get("package_id"),
+                        "display_name": p.get("display_name"),
+                        "category": p.get("category"),
+                        "category_fa": p.get("category_fa"),
+                        "installer_file": p.get("installer_file"),
+                        "status": "pending",
+                        "message": "",
+                    }
+                    for p in sorted_pkgs
+                ],
+            }
 
     _queue_thread = threading.Thread(
         target=_run_queue_thread,
@@ -444,9 +478,10 @@ def start_driver_queue(packages: List[Dict[str, Any]]) -> Dict[str, Any]:
         logger.exception("Unable to start driver queue")
         return {"success": False, "message": "شروع صف نصب ناموفق بود؛ دوباره تلاش کنید."}
 
+    msg = "ادامه نصب درایورها آغاز شد." if resume else f"صف نصب {len(sorted_pkgs)} بسته درایور با اولویت‌بندی صحیح آغاز شد."
     return {
         "success": True,
-        "message": f"صف نصب {len(sorted_pkgs)} بسته درایور با اولویت‌بندی صحیح آغاز شد.",
+        "message": msg,
         "total": len(sorted_pkgs),
     }
 

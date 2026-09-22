@@ -1064,72 +1064,306 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
     bool isDark,
     Color accent,
   ) {
+    final isRunning = status.isRunning;
+    final total = status.total;
+    final completed = status.completed;
+    final failed = status.failed;
+    final done = completed + failed;
+    final percent = total > 0 ? (done / total * 100).clamp(0.0, 100.0) : 0.0;
+    final currentItem = status.currentFile;
+
+    final Color statusColor = isRunning
+        ? accent
+        : (failed == 0 ? const Color(0xFF10B981) : const Color(0xFFF59E0B));
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: isDark ? 0.18 : 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accent.withValues(alpha: 0.35)),
+        color: isDark ? const Color(0xFF0F172A) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: statusColor.withValues(alpha: isDark ? 0.45 : 0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: statusColor.withValues(alpha: isDark ? 0.18 : 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header Row
           Row(
             children: [
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: isRunning
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: statusColor,
+                        ),
+                      )
+                    : Icon(
+                        failed == 0
+                            ? Icons.check_circle_rounded
+                            : Icons.info_outline_rounded,
+                        color: statusColor,
+                        size: 22,
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  status.summaryMessage.isNotEmpty
-                      ? status.summaryMessage
-                      : 'در حال اجرای صف نصب درایورها...',
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          isRunning
+                              ? 'صف نصب خودکار درایورها'
+                              : (failed == 0
+                                  ? 'نصب درایورها با موفقیت پایان یافت'
+                                  : 'عملیات پایان یافت (نیازمند بررسی)'),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: isDark
+                                ? const Color(0xFFF1F5F9)
+                                : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${percent.toStringAsFixed(0)}٪',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      isRunning
+                          ? (currentItem != null && currentItem.isNotEmpty
+                              ? 'در حال نصب: $currentItem ($done از $total)'
+                              : 'در حال آماده‌سازی...')
+                          : (status.summaryMessage.isNotEmpty
+                              ? status.summaryMessage
+                              : '$completed درایور نصب شد'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              if (isRunning) ...[
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () => ctrl.cancelDriverAutoInstall(context),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 15,
+                    color: Color(0xFFEF4444),
+                  ),
+                  label: const Text(
+                    'لغو',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFFEF4444),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(
+                      color: Color(0xFFEF4444),
+                      width: 1.1,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    minimumSize: const Size(0, 34),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
-              ),
-              Text(
-                '${status.completed + status.failed}/${status.total}',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 10),
-              OutlinedButton(
-                onPressed: () => ctrl.cancelDriverAutoInstall(context),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFEF4444),
-                  side: const BorderSide(color: Color(0xFFEF4444)),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+              ] else if (status.cancelled || status.items.any((i) => i.status == 'failed' || i.status == 'pending')) ...[
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () => ctrl.resumeDriverAutoInstall(context),
+                  icon: const Icon(
+                    Icons.play_arrow_rounded,
+                    size: 15,
+                    color: Color(0xFF0D9488),
                   ),
-                  minimumSize: const Size(0, 30),
+                  label: const Text(
+                    'شروع مجدد',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF0D9488),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(
+                      color: Color(0xFF0D9488),
+                      width: 1.1,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    minimumSize: const Size(0, 34),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
                 ),
-                child: const Text(
-                  'لغو عملیات',
-                  style: TextStyle(fontSize: 11.5),
-                ),
-              ),
+              ],
             ],
           ),
-          const SizedBox(height: 10),
-          LinearProgressIndicator(
-            value: status.total > 0
-                ? (status.completed + status.failed) / status.total
-                : 0.0,
-            backgroundColor: isDark
-                ? const Color(0xFF1E293B)
-                : const Color(0xFFE2E8F0),
-            color: accent,
-            borderRadius: BorderRadius.circular(4),
+          const SizedBox(height: 12),
+
+          // Progress Bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: total > 0 ? (percent / 100.0).clamp(0.0, 1.0) : null,
+              minHeight: 8,
+              backgroundColor: isDark
+                  ? const Color(0xFF1E293B)
+                  : const Color(0xFFE2E8F0),
+              valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+            ),
           ),
+          const SizedBox(height: 8),
+
+          // Counts Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '$done از $total درایور پردازش شد',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: isDark
+                      ? const Color(0xFFCBD5E1)
+                      : const Color(0xFF334155),
+                ),
+              ),
+              if (failed > 0)
+                Text(
+                  '$failed درایور ناموفق',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFEF4444),
+                  ),
+                ),
+            ],
+          ),
+
+          // Mini Item Chips
+          if (status.items.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: status.items.map((item) {
+                Color chipColor;
+                IconData chipIcon;
+                if (item.status == 'completed') {
+                  chipColor = const Color(0xFF10B981);
+                  chipIcon = Icons.check_circle_rounded;
+                } else if (item.status == 'installing') {
+                  chipColor = const Color(0xFF3B82F6);
+                  chipIcon = Icons.autorenew_rounded;
+                } else if (item.status == 'failed') {
+                  chipColor = const Color(0xFFEF4444);
+                  chipIcon = Icons.cancel_rounded;
+                } else if (item.status == 'skipped') {
+                  chipColor = const Color(0xFF64748B);
+                  chipIcon = Icons.skip_next_rounded;
+                } else {
+                  chipColor = const Color(0xFF94A3B8);
+                  chipIcon = Icons.schedule_rounded;
+                }
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0A1224) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: chipColor.withValues(alpha: 0.4),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      item.status == 'installing'
+                          ? SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                color: chipColor,
+                              ),
+                            )
+                          : Icon(chipIcon, size: 13, color: chipColor),
+                      const SizedBox(width: 5),
+                      Text(
+                        item.displayName ?? item.filename,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? const Color(0xFFCBD5E1)
+                              : const Color(0xFF334155),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ],
       ),
     );

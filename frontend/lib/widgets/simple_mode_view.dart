@@ -8,6 +8,7 @@ import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
 import 'cards/battery_card.dart';
 import 'common/design_components.dart';
+import 'common/deployment_flow_panel.dart';
 import 'common/hardware_illustrations.dart';
 import 'common/ram_slot_summary.dart';
 import 'qc/qc_summary_banner.dart';
@@ -1308,12 +1309,11 @@ class SimpleModeView extends StatelessWidget {
 
                 // Software Batch Install Progress Card
                 if (batch.isRunning || (isBatch && batch.items.isNotEmpty)) ...[
-                  _buildSoftwareBatchProgressCard(
-                    context,
-                    batch,
-                    isDark,
-                    l10n,
-                    softwareCtrl,
+                  DeploymentFlowPanel(
+                    batchStatus: batch,
+                    softwareCtrl: softwareCtrl,
+                    isDark: isDark,
+                    accentColor: Theme.of(context).colorScheme.primary,
                   ),
                   const SizedBox(height: 14),
                 ],
@@ -3473,6 +3473,7 @@ class SimpleModeView extends StatelessWidget {
     final isInstalled = pkg.isInstalled;
     final installAllowed = pkg.installAllowed;
     final isCurrentInstalling = softwareCtrl.isCurrentInstalling(pkg);
+    final isCurrentQueued = softwareCtrl.isCurrentQueued(pkg);
 
     final statusColor = !pkg.isValid
         ? const Color(0xFFEF4444)
@@ -3792,6 +3793,83 @@ class SimpleModeView extends StatelessWidget {
                 ),
               ),
             )
+          else if (isCurrentInstalling)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.4),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.isPersian ? 'در حال نصب...' : 'Installing...',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (isCurrentQueued)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: (isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFF1F5F9)),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: (isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFCBD5E1)),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.hourglass_empty_rounded,
+                    size: 14,
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.isPersian ? 'در صف نصب' : 'In Queue',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            )
           else if (pkg.isPortable)
             ElevatedButton.icon(
               onPressed: () => softwareCtrl.openInstalledApp(context, pkg),
@@ -3816,86 +3894,6 @@ class SimpleModeView extends StatelessWidget {
                 elevation: 1.5,
               ),
             )
-          else if (installAllowed)
-            Obx(() {
-              final isBatch = softwareCtrl.isBatchInstalling.value;
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 1. Auto Silent Install Button
-                  if (pkg.autoInstallSupported) ...[
-                    ElevatedButton.icon(
-                      onPressed: (isCurrentInstalling || isBatch)
-                          ? null
-                          : () =>
-                                softwareCtrl.installPackageSilent(context, pkg),
-                      icon: const Icon(Icons.auto_fix_high_rounded, size: 14),
-                      label: Text(
-                        l10n.isPersian ? 'نصب خودکار' : 'Auto Install',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 9,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        elevation: 1.5,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  // 2. Manual Interactive Install Button
-                  OutlinedButton.icon(
-                    onPressed: (isCurrentInstalling || isBatch)
-                        ? null
-                        : () => softwareCtrl.installPackageInteractive(
-                            context,
-                            pkg,
-                          ),
-                    icon: isCurrentInstalling
-                        ? const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Color(0xFF2563EB),
-                            ),
-                          )
-                        : const Icon(Icons.open_in_new_rounded, size: 13),
-                    label: Text(
-                      isCurrentInstalling
-                          ? (l10n.isPersian ? 'در حال اجرا...' : 'Running...')
-                          : (l10n.isPersian ? 'نصب دستی' : 'Manual Install'),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF2563EB),
-                      side: BorderSide(
-                        color: const Color(0xFF2563EB).withValues(alpha: 0.6),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 9,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            })
           else if (isInstalled)
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -4023,6 +4021,86 @@ class SimpleModeView extends StatelessWidget {
                 }),
               ],
             )
+          else if (installAllowed)
+            Obx(() {
+              final isBatch = softwareCtrl.isBatchInstalling.value;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 1. Auto Silent Install Button
+                  if (pkg.autoInstallSupported) ...[
+                    ElevatedButton.icon(
+                      onPressed: (isCurrentInstalling || isBatch)
+                          ? null
+                          : () =>
+                                softwareCtrl.installPackageSilent(context, pkg),
+                      icon: const Icon(Icons.auto_fix_high_rounded, size: 14),
+                      label: Text(
+                        l10n.isPersian ? 'نصب خودکار' : 'Auto Install',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 1.5,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  // 2. Manual Interactive Install Button
+                  OutlinedButton.icon(
+                    onPressed: (isCurrentInstalling || isBatch)
+                        ? null
+                        : () => softwareCtrl.installPackageInteractive(
+                            context,
+                            pkg,
+                          ),
+                    icon: isCurrentInstalling
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF2563EB),
+                            ),
+                          )
+                        : const Icon(Icons.open_in_new_rounded, size: 13),
+                    label: Text(
+                      isCurrentInstalling
+                          ? (l10n.isPersian ? 'در حال اجرا...' : 'Running...')
+                          : (l10n.isPersian ? 'نصب دستی' : 'Manual Install'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF2563EB),
+                      side: BorderSide(
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.6),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 9,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            })
           else
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -4748,237 +4826,7 @@ class SimpleModeView extends StatelessWidget {
   // Software Batch Install Progress Card
   // -------------------------------------------------------------
 
-  Widget _buildSoftwareBatchProgressCard(
-    BuildContext context,
-    BatchInstallStatus batch,
-    bool isDark,
-    AppLocalizations l10n,
-    SoftwareController softwareCtrl,
-  ) {
-    final isRunning = batch.isRunning;
-    final total = batch.total;
-    final completed = batch.completed;
-    final failed = batch.failed;
-    final percent = batch.progressPercent;
-    final currentItem = batch.currentItemName;
-
-    Color headerColor = isRunning
-        ? const Color(0xFF10B981)
-        : (failed == 0 ? const Color(0xFF10B981) : const Color(0xFFF59E0B));
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F1E2E) : const Color(0xFFF0FDF4),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: headerColor.withValues(alpha: isDark ? 0.6 : 0.4),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: headerColor.withValues(alpha: isDark ? 0.2 : 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: headerColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: isRunning
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Color(0xFF10B981),
-                        ),
-                      )
-                    : Icon(
-                        failed == 0
-                            ? Icons.check_circle_rounded
-                            : Icons.warning_amber_rounded,
-                        color: headerColor,
-                        size: 20,
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isRunning
-                          ? (l10n.isPersian
-                                ? 'صف نصب خودکار نرم‌افزارها'
-                                : 'Auto Software Installation Queue')
-                          : (l10n.isPersian
-                                ? 'عملیات نصب خودکار پایان یافت'
-                                : 'Auto Installation Complete'),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: isDark
-                            ? const Color(0xFFF1F5F9)
-                            : const Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isRunning
-                          ? (currentItem != null
-                                ? 'در حال نصب: $currentItem (${batch.currentItemIndex + 1} از $total | $completed نصب شده)'
-                                : 'در حال آماده‌سازی...')
-                          : batch.summaryMessage,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: isDark
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Progress Badge & Cancel Button
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: headerColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${percent.toStringAsFixed(0)}%',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: headerColor,
-                  ),
-                ),
-              ),
-              if (isRunning) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () =>
-                      softwareCtrl.cancelBatchInstallInteractive(context),
-                  tooltip: 'لغو نصب خودکار',
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    size: 18,
-                    color: Color(0xFFEF4444),
-                  ),
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(
-                      0xFFEF4444,
-                    ).withValues(alpha: 0.1),
-                    padding: const EdgeInsets.all(6),
-                    minimumSize: Size.zero,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Linear Progress Bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: total > 0 ? (percent / 100.0).clamp(0.0, 1.0) : null,
-              minHeight: 7,
-              backgroundColor: isDark
-                  ? const Color(0xFF1E293B)
-                  : const Color(0xFFE2E8F0),
-              valueColor: AlwaysStoppedAnimation<Color>(headerColor),
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Mini Items Chips Row
-          if (batch.items.isNotEmpty)
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: batch.items.map((item) {
-                Color chipColor;
-                IconData chipIcon;
-                if (item.status == 'completed') {
-                  chipColor = const Color(0xFF10B981);
-                  chipIcon = Icons.check_circle_rounded;
-                } else if (item.status == 'installing') {
-                  chipColor = const Color(0xFF3B82F6);
-                  chipIcon = Icons.autorenew_rounded;
-                } else if (item.status == 'failed') {
-                  chipColor = const Color(0xFFEF4444);
-                  chipIcon = Icons.cancel_rounded;
-                } else if (item.status == 'skipped') {
-                  chipColor = const Color(0xFF64748B);
-                  chipIcon = Icons.skip_next_rounded;
-                } else {
-                  chipColor = const Color(0xFF94A3B8);
-                  chipIcon = Icons.schedule_rounded;
-                }
-
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0A1224) : Colors.white,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: chipColor.withValues(alpha: 0.4),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      item.status == 'installing'
-                          ? const SizedBox(
-                              width: 12,
-                              height: 12,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 1.5,
-                                color: Color(0xFF3B82F6),
-                              ),
-                            )
-                          : Icon(chipIcon, size: 13, color: chipColor),
-                      const SizedBox(width: 5),
-                      Text(
-                        item.name,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? const Color(0xFFCBD5E1)
-                              : const Color(0xFF334155),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-        ],
-      ),
-    );
-  }
+  // _buildSoftwareBatchProgressCard removed – replaced by DeploymentFlowPanel widget
 
   // -------------------------------------------------------------
   // Driver Batch Install Progress Card

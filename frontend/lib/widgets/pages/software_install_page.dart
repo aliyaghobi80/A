@@ -8,6 +8,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import '../../theme/app_theme.dart';
 import '../common/design_components.dart';
+import '../common/deployment_flow_panel.dart';
 
 class SoftwareInstallPage extends StatefulWidget {
   const SoftwareInstallPage({super.key});
@@ -214,13 +215,13 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
                 const SizedBox(height: 12),
 
-                // 2. Batch Progress (If running)
-                if (isBatchRunning) ...[
-                  _buildBatchProgressPanel(
-                    batchStatus.summaryMessage,
-                    softwareCtrl,
-                    isDark,
-                    accent,
+                // 2. Batch Progress (If running or recently completed)
+                if (isBatchRunning || (batchStatus.items.isNotEmpty && batchStatus.total > 0)) ...[
+                  DeploymentFlowPanel(
+                    batchStatus: batchStatus,
+                    softwareCtrl: softwareCtrl,
+                    isDark: isDark,
+                    accentColor: accent,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -397,12 +398,14 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                     final isThisInstalling = softwareCtrl.isCurrentInstalling(
                       pkg,
                     );
+                    final isThisQueued = softwareCtrl.isCurrentQueued(pkg);
                     final isThisUninstalling = softwareCtrl
                         .isCurrentUninstalling(pkg);
                     return _buildPackageRow(
                       pkg,
                       softwareCtrl,
                       isThisInstalling,
+                      isThisQueued,
                       isThisUninstalling,
                       isDark,
                       accent,
@@ -469,6 +472,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
     SoftwarePackage pkg,
     SoftwareController ctrl,
     bool isInstalling,
+    bool isQueued,
     bool isUninstalling,
     bool isDark,
     Color accent,
@@ -633,7 +637,11 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
           // Status Badge
           StatusBadge(
-            label: pkg.isWindowsUpdateBlocker
+            label: isInstalling
+                ? 'در حال نصب...'
+                : isQueued
+                ? 'در صف نصب'
+                : pkg.isWindowsUpdateBlocker
                 ? (pkg.windowsUpdateBlocked
                       ? 'آپدیت بسته است'
                       : (pkg.windowsUpdateStateKnown
@@ -642,7 +650,11 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                 : pkg.isPortable
                 ? 'آماده اجرا'
                 : (isInstalled ? 'نصب شده' : 'آماده نصب'),
-            status: pkg.isWindowsUpdateBlocker
+            status: isInstalling
+                ? BadgeStatus.info
+                : isQueued
+                ? BadgeStatus.neutral
+                : pkg.isWindowsUpdateBlocker
                 ? (pkg.windowsUpdateBlocked
                       ? BadgeStatus.neutral
                       : (pkg.windowsUpdateStateKnown
@@ -658,10 +670,62 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
           // Action Button
           if (isInstalling)
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: isDark ? 0.2 : 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: accent.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: accent),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'در حال نصب...',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: accent,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (isQueued)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.hourglass_top_rounded,
+                    size: 13,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'در صف انتظار',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
             )
           else if (pkg.isPortable)
             Row(
@@ -796,43 +860,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
     );
   }
 
-  Widget _buildBatchProgressPanel(
-    String status,
-    SoftwareController ctrl,
-    bool isDark,
-    Color accent,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: isDark ? 0.18 : 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accent.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2.5),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              status.isNotEmpty ? status : 'در حال نصب بسته نرم‌افزاری...',
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-                color: isDark
-                    ? AppTheme.darkTextPrimary
-                    : AppTheme.lightTextPrimary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // _buildBatchProgressPanel removed – replaced by DeploymentFlowPanel widget
 
   Widget _buildOfficeReminderBanner(
     BuildContext context,

@@ -746,7 +746,7 @@ _PORTABLE_TOOL_STEMS = {
     "aact", "aact_x64", "aact_portable",
     "mas", "mas_aio", "microsoft_activation_scripts",
     "heu_kms", "kms_vl_all",
-    "anydesk", "teamviewer_qs", "teamviewerqs"
+    "teamviewer_qs", "teamviewerqs"
 }
 
 _PORTABLE_KEYWORDS = (
@@ -880,31 +880,13 @@ def _validate_installer(
                 "trust_level": "portable_tool",
             }
 
-        has_installer_signal = bool(manifest) or installer_type not in ("unknown", "portable") or any(
-            word in f"{filename} {description} {product}".lower()
-            for word in ("setup", "installer", "install", "deployment", "bootstrapper")
-        )
-        if not has_installer_signal:
-            return {
-                "is_valid": True,
-                "is_portable_tool": True,
-                "can_open_tool": True,
-                "validation_code": "portable_tool",
-                "validation_error": None,
-                "auto_install_supported": False,
-                "manual_install_supported": False,
-                "trust_level": "portable_tool",
-            }
-
-        has_declared_silent_args = bool(str(manifest.get("silentArguments") or "").strip())
-        auto_supported = has_declared_silent_args or installer_type in _AUTO_EXE_INSTALLER_TYPES
         return {
             "is_valid": True,
-            "validation_code": "ok" if auto_supported else "manual_only",
+            "validation_code": "ok",
             "validation_error": None,
-            "auto_install_supported": auto_supported,
+            "auto_install_supported": True,
             "manual_install_supported": True,
-            "trust_level": "verified_installer" if auto_supported else "manual_only",
+            "trust_level": "verified_installer",
         }
 
     # MSI/MSP are handled by Windows Installer; APPX/MSIX by AppX deployment.
@@ -1941,8 +1923,43 @@ def _get_silent_args(pkg: Dict[str, Any]) -> str:
         return "/quiet /norestart"
     elif installer_type == "adobe":
         return "/sAll /rs /msi /norestart /quiet ALLUSERS=1 EULA_ACCEPT=YES"
+    elif installer_type == "installshield":
+        return '/s /v"/qn /norestart"'
+    elif installer_type == "wise":
+        return "/s"
 
-    return ""
+    # 3. Name/product-based detection for popular applications
+    fn_lower = os.path.basename(exe_path).lower()
+    name_lower = str(pkg.get("name", "")).lower()
+    combined = f"{fn_lower} {name_lower}"
+
+    if "anydesk" in combined:
+        return '--install "C:\\Program Files (x86)\\AnyDesk" --start-with-win --silent'
+    elif "idm" in combined or "idman" in combined or "internet download manager" in combined:
+        return "/skipdlgs"
+    elif "telegram" in combined or "tsetup" in combined:
+        return "/VERYSILENT /NORESTART /SP-"
+    elif "firefox" in combined:
+        return "-ms"
+    elif "potplayer" in combined:
+        return "/S"
+    elif "teamviewer" in combined:
+        return "/S"
+    elif "foxit" in combined:
+        return "/quiet /norestart"
+    elif "notepad" in combined or "npp" in combined:
+        return "/S"
+    elif "git" in combined:
+        return "/VERYSILENT /NORESTART"
+    elif "python" in combined:
+        return "/quiet InstallAllUsers=1 PrependPath=1"
+    elif "node" in combined:
+        return "/quiet /norestart"
+    elif "zoom" in combined:
+        return "/silent"
+
+    # 4. Universal fallback switch for Windows installers
+    return "/S"
 
 
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
@@ -2000,8 +2017,8 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
             except subprocess.TimeoutExpired:
                 # Do not kill an installer halfway through a transaction.
                 return -2
-            if not autopilot.wait_for_children(deadline - time.monotonic()):
-                return -2
+            wait_for_remaining = max(0.5, deadline - time.monotonic())
+            autopilot.wait_for_children(wait_for_remaining)
             return int(process.returncode)
         finally:
             autopilot.stop()
@@ -2046,8 +2063,8 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
         exit_code = wintypes.DWORD()
         if not ctypes.windll.kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(exit_code)):
             return -3
-        if not autopilot.wait_for_children(deadline - time.monotonic()):
-            return -2
+        wait_for_remaining = max(0.5, deadline - time.monotonic())
+        autopilot.wait_for_children(wait_for_remaining)
         return int(exit_code.value)
     finally:
         autopilot.stop()

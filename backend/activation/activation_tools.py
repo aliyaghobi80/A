@@ -60,6 +60,15 @@ def is_safe_tool_path(tool_path: str) -> bool:
     if custom_dir and os.path.isdir(custom_dir):
         allowed_roots.append(os.path.realpath(os.path.abspath(custom_dir)))
 
+    # Also allow activation scripts discovered in active Packages / PROGRAM folder
+    try:
+        from packages.manager import get_packages_directory
+        pkg_dir = get_packages_directory()
+        if pkg_dir and os.path.isdir(pkg_dir):
+            allowed_roots.append(os.path.realpath(os.path.abspath(pkg_dir)))
+    except Exception:
+        pass
+
     candidate = os.path.normcase(abs_p)
     for root in allowed_roots:
         try:

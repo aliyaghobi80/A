@@ -738,67 +738,6 @@ class PackagesCard extends StatelessWidget {
                 ),
               ),
             )
-          else if (installAllowed)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (onInstallSilent != null && pkg.autoInstallSupported) ...[
-                  ElevatedButton.icon(
-                    onPressed: isBatchInstalling
-                        ? null
-                        : () => onInstallSilent!(pkg),
-                    icon: const Icon(Icons.auto_fix_high_rounded, size: 13),
-                    label: Text(l10n.isPersian ? 'نصب خودکار' : 'Auto Install'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      textStyle: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                ],
-                if (onInstall != null)
-                  OutlinedButton.icon(
-                    onPressed: isBatchInstalling
-                        ? null
-                        : () => onInstall!(
-                            pkg.relativePath.isNotEmpty
-                                ? pkg.relativePath
-                                : pkg.id,
-                            pkg.name,
-                          ),
-                    icon: const Icon(Icons.open_in_new_rounded, size: 12),
-                    label: Text(l10n.isPersian ? 'نصب دستی' : 'Manual Install'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF2563EB),
-                      side: BorderSide(
-                        color: const Color(0xFF2563EB).withValues(alpha: 0.6),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      textStyle: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                  ),
-              ],
-            )
           else if (isInstalled)
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -884,6 +823,67 @@ class PackagesCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ],
+            )
+          else if (installAllowed)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onInstallSilent != null && pkg.autoInstallSupported) ...[
+                  ElevatedButton.icon(
+                    onPressed: isBatchInstalling
+                        ? null
+                        : () => onInstallSilent!(pkg),
+                    icon: const Icon(Icons.auto_fix_high_rounded, size: 13),
+                    label: Text(l10n.isPersian ? 'نصب خودکار' : 'Auto Install'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                if (onInstall != null)
+                  OutlinedButton.icon(
+                    onPressed: isBatchInstalling
+                        ? null
+                        : () => onInstall!(
+                            pkg.relativePath.isNotEmpty
+                                ? pkg.relativePath
+                                : pkg.id,
+                            pkg.name,
+                          ),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 12),
+                    label: Text(l10n.isPersian ? 'نصب دستی' : 'Manual Install'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF2563EB),
+                      side: BorderSide(
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.6),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
               ],
             )
           else

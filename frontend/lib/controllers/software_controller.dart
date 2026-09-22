@@ -8,6 +8,8 @@ import '../services/api_service.dart';
 import '../services/cache_service.dart';
 import '../services/folder_picker_service.dart';
 import 'system_info_controller.dart';
+import 'device_settings_controller.dart';
+import 'qc_controller.dart';
 
 class SoftwareController extends GetxController {
   final ApiService _apiService = ApiService();
@@ -234,7 +236,34 @@ class SoftwareController extends GetxController {
 
   bool isCurrentInstalling(SoftwarePackage pkg) {
     final targetId = pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id;
-    return installingPackageId.value == targetId;
+    if (installingPackageId.value == targetId) return true;
+    if (isBatchInstalling.value && batchStatus.value.isRunning) {
+      final currentItem = batchStatus.value.items.firstWhereOrNull(
+        (it) =>
+            it.id == pkg.id ||
+            (pkg.relativePath.isNotEmpty && it.relativePath == pkg.relativePath) ||
+            it.name.toLowerCase() == pkg.name.toLowerCase(),
+      );
+      if (currentItem != null && currentItem.status == 'installing') return true;
+      final currentName = batchStatus.value.currentItemName?.toLowerCase() ?? '';
+      if (currentName.isNotEmpty &&
+          (currentName == pkg.name.toLowerCase() ||
+              currentName == pkg.id.toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool isCurrentQueued(SoftwarePackage pkg) {
+    if (!isBatchInstalling.value || !batchStatus.value.isRunning) return false;
+    final currentItem = batchStatus.value.items.firstWhereOrNull(
+      (it) =>
+          it.id == pkg.id ||
+          (pkg.relativePath.isNotEmpty && it.relativePath == pkg.relativePath) ||
+          it.name.toLowerCase() == pkg.name.toLowerCase(),
+    );
+    return currentItem != null && currentItem.status == 'queued';
   }
 
   bool isCurrentUninstalling(SoftwarePackage pkg) {
@@ -439,7 +468,10 @@ class SoftwareController extends GetxController {
 
     isBatchInstalling.value = true;
     try {
-      final res = await _apiService.startBatchInstall(packageIds: [targetId]);
+      final res = await _apiService.startBatchInstall(
+        packageIds: [targetId],
+        customDir: packagesDirectory.isNotEmpty ? packagesDirectory : null,
+      );
       if (res['success'] == true) {
         scaffoldMessenger.showSnackBar(
           SnackBar(
@@ -481,9 +513,9 @@ class SoftwareController extends GetxController {
   ) {
     _pollTimer?.cancel();
     int attempts = 0;
-    const maxAttempts = 20; // 20 * 3s = 60 seconds
+    const maxAttempts = 80; // 80 * 2.5s = 200 seconds (~3.3 minutes)
 
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 2500), (timer) async {
       attempts++;
       await fetchPackages();
 
@@ -1098,8 +1130,6 @@ class SoftwareController extends GetxController {
       availablePackages = packages
           .where(
             (p) =>
-                p.installAllowed &&
-                p.autoInstallSupported &&
                 p.isValid &&
                 !p.isInstalled &&
                 !p.isDuplicate,
@@ -1241,7 +1271,7 @@ class SoftwareController extends GetxController {
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        'نصب‌ها به صورت کاملاً بی‌صدا (Silent) و خودکار بدون نیاز به تداخل انجام می‌شوند.',
+                        'ابتدا پیش‌نیازها (اکسترکت آفیس، فعال‌سازی ویندوز، آیکون‌های دسکتاپ) انجام شده و پس از نصب نرم‌افزارها، تنظیمات مهم سیستم (Sleep، باتری، ساعت و...) به صورت خودکار اعمال می‌شوند.',
                         style: TextStyle(
                           fontSize: 12,
                           color: Color(0xFF3B82F6),
@@ -1280,6 +1310,8 @@ class SoftwareController extends GetxController {
       try {
         final res = await _apiService.startBatchInstall(
           packageIds: availablePackages.map((p) => p.id).toList(),
+          customDir: packagesDirectory.isNotEmpty ? packagesDirectory : null,
+          includeSystemSetup: true,
         );
         if (res['success'] == true) {
           scaffoldMessenger.showSnackBar(
@@ -1321,6 +1353,8 @@ class SoftwareController extends GetxController {
 
   void _startBatchStatusPolling(ScaffoldMessengerState? scaffoldMessenger) {
     _batchPollTimer?.cancel();
+    int lastCompletedCount = -1;
+
     _batchPollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
       timer,
     ) async {
@@ -1331,10 +1365,70 @@ class SoftwareController extends GetxController {
         if (isClosed || timer != _batchPollTimer) return;
         batchStatus.value = status;
 
+        // REAL-TIME IN-MEMORY UPDATE:
+        // Update package cards immediately as each package finishes in the batch queue
+        final currentPkgs = packagesResponse.value.packages;
+        bool anyChanged = false;
+        final updatedList = <SoftwarePackage>[];
+
+        for (final pkg in currentPkgs) {
+          final matchingItem = status.items.firstWhereOrNull(
+            (it) =>
+                it.id == pkg.id ||
+                (pkg.relativePath.isNotEmpty && it.relativePath == pkg.relativePath) ||
+                it.name.toLowerCase() == pkg.name.toLowerCase(),
+          );
+
+          if (matchingItem != null && matchingItem.status == 'completed' && !pkg.isInstalled) {
+            anyChanged = true;
+            updatedList.add(pkg.copyWith(
+              isInstalled: true,
+              installedVersion: matchingItem.installedVersion.isNotEmpty
+                  ? matchingItem.installedVersion
+                  : (pkg.version.isNotEmpty ? pkg.version : 'نصب شده'),
+              status: 'Installed',
+            ));
+          } else {
+            updatedList.add(pkg);
+          }
+        }
+
+        if (anyChanged) {
+          packagesResponse.value = packagesResponse.value.copyWith(
+            packages: updatedList,
+          );
+          packagesResponse.refresh();
+        }
+
+        // Trigger background rescan whenever an item completes
+        if (status.completed > lastCompletedCount) {
+          lastCompletedCount = status.completed;
+          fetchPackages();
+          if (Get.isRegistered<DeviceSettingsController>()) {
+            Get.find<DeviceSettingsController>().refreshStatus();
+          }
+          if (Get.isRegistered<SystemInfoController>()) {
+            Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
+          }
+          if (Get.isRegistered<QcController>()) {
+            Get.find<QcController>().fetchInitialQcStatus();
+          }
+        }
+
         if (!status.isRunning) {
           timer.cancel();
           isBatchInstalling.value = false;
-          await fetchPackages();
+          await scanPackages(silent: true, force: true);
+
+          if (Get.isRegistered<DeviceSettingsController>()) {
+            Get.find<DeviceSettingsController>().refreshStatus();
+          }
+          if (Get.isRegistered<SystemInfoController>()) {
+            Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
+          }
+          if (Get.isRegistered<QcController>()) {
+            Get.find<QcController>().fetchInitialQcStatus();
+          }
 
           if (status.completed > 0 &&
               Get.isRegistered<SystemInfoController>()) {

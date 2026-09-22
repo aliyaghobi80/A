@@ -117,6 +117,58 @@ class SystemInfo {
       ),
     );
   }
+
+  SystemInfo copyWith({
+    String? status,
+    String? timestamp,
+    double? scanDurationMs,
+    CpuInfo? cpu,
+    MotherboardInfo? motherboard,
+    RamInfo? ram,
+    List<GpuInfo>? gpu,
+    List<StorageInfo>? storage,
+    WindowsInfo? windows,
+    SystemMetaInfo? system,
+    BiosInfo? bios,
+    List<NetworkInfo>? network,
+    List<DriverItem>? drivers,
+    DriverSummary? driverSummary,
+    List<SoftwareItem>? software,
+    SoftwareSummary? softwareSummary,
+    List<RequiredFileItem>? requiredFiles,
+    FilesSummary? filesSummary,
+    WindowsActivationInfo? windowsActivation,
+    OfficeActivationInfo? officeActivation,
+    BatteryInfo? battery,
+    ProxyInfo? proxy,
+    RebootInfo? reboot,
+  }) {
+    return SystemInfo(
+      status: status ?? this.status,
+      timestamp: timestamp ?? this.timestamp,
+      scanDurationMs: scanDurationMs ?? this.scanDurationMs,
+      cpu: cpu ?? this.cpu,
+      motherboard: motherboard ?? this.motherboard,
+      ram: ram ?? this.ram,
+      gpu: gpu ?? this.gpu,
+      storage: storage ?? this.storage,
+      windows: windows ?? this.windows,
+      system: system ?? this.system,
+      bios: bios ?? this.bios,
+      network: network ?? this.network,
+      drivers: drivers ?? this.drivers,
+      driverSummary: driverSummary ?? this.driverSummary,
+      software: software ?? this.software,
+      softwareSummary: softwareSummary ?? this.softwareSummary,
+      requiredFiles: requiredFiles ?? this.requiredFiles,
+      filesSummary: filesSummary ?? this.filesSummary,
+      windowsActivation: windowsActivation ?? this.windowsActivation,
+      officeActivation: officeActivation ?? this.officeActivation,
+      battery: battery ?? this.battery,
+      proxy: proxy ?? this.proxy,
+      reboot: reboot ?? this.reboot,
+    );
+  }
 }
 
 class DriverItem {
@@ -514,6 +566,86 @@ class SoftwarePackage {
           json['windows_update_state_known'] as bool? ?? false,
     );
   }
+
+  SoftwarePackage copyWith({
+    String? id,
+    String? name,
+    String? filename,
+    String? relativePath,
+    String? fullPath,
+    String? version,
+    String? publisher,
+    String? packageFormat,
+    String? installerType,
+    String? detectionId,
+    String? silentArguments,
+    String? fileSizeDisplay,
+    bool? isValid,
+    String? validationError,
+    String? validationCode,
+    String? trustLevel,
+    String? status,
+    bool? isInstalled,
+    String? installedVersion,
+    bool? installAllowed,
+    bool? autoInstallSupported,
+    bool? manualInstallSupported,
+    String? detectionSource,
+    bool? hasIcon,
+    String? iconBase64,
+    String? iconUrl,
+    String? installedExePath,
+    String? installLocation,
+    bool? isDuplicate,
+    String? duplicateOf,
+    int? duplicateCount,
+    String? folderName,
+    bool? isPortableTool,
+    bool? canOpenTool,
+    bool? windowsUpdateBlocked,
+    bool? windowsUpdateStateKnown,
+  }) {
+    return SoftwarePackage(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      filename: filename ?? this.filename,
+      relativePath: relativePath ?? this.relativePath,
+      fullPath: fullPath ?? this.fullPath,
+      version: version ?? this.version,
+      publisher: publisher ?? this.publisher,
+      packageFormat: packageFormat ?? this.packageFormat,
+      installerType: installerType ?? this.installerType,
+      detectionId: detectionId ?? this.detectionId,
+      silentArguments: silentArguments ?? this.silentArguments,
+      fileSizeDisplay: fileSizeDisplay ?? this.fileSizeDisplay,
+      isValid: isValid ?? this.isValid,
+      validationError: validationError ?? this.validationError,
+      validationCode: validationCode ?? this.validationCode,
+      trustLevel: trustLevel ?? this.trustLevel,
+      status: status ?? this.status,
+      isInstalled: isInstalled ?? this.isInstalled,
+      installedVersion: installedVersion ?? this.installedVersion,
+      installAllowed: installAllowed ?? this.installAllowed,
+      autoInstallSupported: autoInstallSupported ?? this.autoInstallSupported,
+      manualInstallSupported:
+          manualInstallSupported ?? this.manualInstallSupported,
+      detectionSource: detectionSource ?? this.detectionSource,
+      hasIcon: hasIcon ?? this.hasIcon,
+      iconBase64: iconBase64 ?? this.iconBase64,
+      iconUrl: iconUrl ?? this.iconUrl,
+      installedExePath: installedExePath ?? this.installedExePath,
+      installLocation: installLocation ?? this.installLocation,
+      isDuplicate: isDuplicate ?? this.isDuplicate,
+      duplicateOf: duplicateOf ?? this.duplicateOf,
+      duplicateCount: duplicateCount ?? this.duplicateCount,
+      folderName: folderName ?? this.folderName,
+      isPortableTool: isPortableTool ?? this.isPortableTool,
+      canOpenTool: canOpenTool ?? this.canOpenTool,
+      windowsUpdateBlocked: windowsUpdateBlocked ?? this.windowsUpdateBlocked,
+      windowsUpdateStateKnown:
+          windowsUpdateStateKnown ?? this.windowsUpdateStateKnown,
+    );
+  }
 }
 
 class PackageSummary {
@@ -592,6 +724,20 @@ class PackagesResponse {
       summary: PackageSummary.fromJson(
         json['summary'] as Map<String, dynamic>? ?? {},
       ),
+    );
+  }
+
+  PackagesResponse copyWith({
+    bool? directoryExists,
+    String? packagesDirectory,
+    List<SoftwarePackage>? packages,
+    PackageSummary? summary,
+  }) {
+    return PackagesResponse(
+      directoryExists: directoryExists ?? this.directoryExists,
+      packagesDirectory: packagesDirectory ?? this.packagesDirectory,
+      packages: packages ?? this.packages,
+      summary: summary ?? this.summary,
     );
   }
 }
@@ -1905,6 +2051,8 @@ class BatchInstallItem {
   final String message;
   final String installedVersion;
   final int? exitCode;
+  final String? orchestratorAction;
+  final String? installerType;
 
   BatchInstallItem({
     required this.id,
@@ -1915,6 +2063,8 @@ class BatchInstallItem {
     this.message = '',
     this.installedVersion = '',
     this.exitCode,
+    this.orchestratorAction,
+    this.installerType,
   });
 
   factory BatchInstallItem.fromJson(Map<String, dynamic> json) {
@@ -1927,7 +2077,65 @@ class BatchInstallItem {
       message: json['message'] ?? '',
       installedVersion: json['installed_version'] ?? '',
       exitCode: json['exit_code'] as int?,
+      orchestratorAction: json['orchestrator_action'] as String?,
+      installerType: json['installer_type'] as String?,
     );
+  }
+
+  bool get isOrchestrator =>
+      orchestratorAction != null && orchestratorAction!.isNotEmpty;
+
+  /// Returns stage index: 1 = Prerequisites & Activation, 2 = Software, 3 = Device Settings
+  int get stage {
+    if (orchestratorAction == 'office_extract' ||
+        orchestratorAction == 'kms_activate' ||
+        orchestratorAction == 'desktop_icons') {
+      return 1;
+    }
+    if (orchestratorAction == 'sleep_never' ||
+        orchestratorAction == 'power_modes' ||
+        orchestratorAction == 'tehran_timezone' ||
+        orchestratorAction == 'startup_apps' ||
+        orchestratorAction == 'background_apps') {
+      return 3;
+    }
+    return 2;
+  }
+
+  String get stageNameFa {
+    switch (stage) {
+      case 1:
+        return 'پیش‌نیازها و فعال‌سازی';
+      case 2:
+        return 'نصب نرم‌افزارها';
+      case 3:
+        return 'تنظیمات و بهینه‌سازی';
+      default:
+        return 'عملیات سیستم';
+    }
+  }
+
+  String get friendlyDescription {
+    switch (orchestratorAction) {
+      case 'office_extract':
+        return 'بررسی و استخراج آفیس';
+      case 'kms_activate':
+        return 'استخراج KMS و فعال‌سازی ویندوز';
+      case 'desktop_icons':
+        return 'تنظیم ۳ آیکن دسکتاپ (This PC، سطل آشغال، کنترل پنل)';
+      case 'sleep_never':
+        return 'تنظیم Sleep و خاموشی صفحه روی Never';
+      case 'power_modes':
+        return 'طرح توان باتری و برق لپ‌تاپ';
+      case 'tehran_timezone':
+        return 'منطقه زمانی تهران و ساعت خودکار';
+      case 'startup_apps':
+        return 'بهینه‌سازی برنامه‌های استارتاپ';
+      case 'background_apps':
+        return 'غیرفعال‌سازی برنامه‌های پس‌زمینه';
+      default:
+        return name;
+    }
   }
 }
 
@@ -1979,6 +2187,35 @@ class BatchInstallStatus {
           .toList(),
       summaryMessage: json['summary_message'] ?? '',
     );
+  }
+
+  List<BatchInstallItem> get stage1Items =>
+      items.where((it) => it.stage == 1).toList();
+  List<BatchInstallItem> get stage2Items =>
+      items.where((it) => it.stage == 2).toList();
+  List<BatchInstallItem> get stage3Items =>
+      items.where((it) => it.stage == 3).toList();
+
+  bool isStageRunning(int stageNum) {
+    final stageItems = items.where((it) => it.stage == stageNum);
+    return stageItems.any((it) => it.status == 'installing');
+  }
+
+  bool isStageCompleted(int stageNum) {
+    final stageItems = items.where((it) => it.stage == stageNum);
+    if (stageItems.isEmpty) return false;
+    return stageItems.every((it) =>
+        it.status == 'completed' || it.status == 'failed' || it.status == 'skipped');
+  }
+
+  int get currentStage {
+    if (isStageRunning(1)) return 1;
+    if (isStageRunning(2)) return 2;
+    if (isStageRunning(3)) return 3;
+    if (stage3Items.isNotEmpty && isStageCompleted(3)) return 3;
+    if (stage2Items.isNotEmpty && isStageCompleted(2)) return 2;
+    if (stage1Items.isNotEmpty && isStageCompleted(1)) return 1;
+    return 1;
   }
 }
 
@@ -2113,7 +2350,7 @@ class DriverBatchStatus {
       completed: json['completed'] as int? ?? 0,
       failed: json['failed'] as int? ?? 0,
       skipped: json['skipped'] as int? ?? 0,
-      currentFile: json['current_file'] as String?,
+      currentFile: (json['current_file'] ?? json['current_package']) as String?,
       currentIndex: json['current_index'] as int? ?? 0,
       progressPercent: (json['progress_percent'] as num?)?.toDouble() ?? 0.0,
       folderPath: json['folder_path'] ?? '',

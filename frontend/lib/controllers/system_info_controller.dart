@@ -77,7 +77,7 @@ class SystemInfoController extends GetxController {
         isLoading.value = false;
       }
     } catch (_) {}
-    fetchSystemInfo();
+    fetchSystemInfo(forceRefresh: true);
   }
 
   Future<void> changeFileRequirementPath(
@@ -580,6 +580,17 @@ class SystemInfoController extends GetxController {
       usbDrives.assignAll(list);
     } catch (e) {
       debugPrint('[SystemInfoController] fetchUsbDrives error: $e');
+    }
+  }
+
+  Future<void> fetchStorageInfo() async {
+    try {
+      final list = await _apiService.fetchStorageInfo();
+      if (list.isNotEmpty && systemInfo.value != null) {
+        systemInfo.value = systemInfo.value!.copyWith(storage: list);
+      }
+    } catch (e) {
+      debugPrint('[SystemInfoController] fetchStorageInfo error: $e');
     }
   }
 

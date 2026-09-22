@@ -417,15 +417,18 @@ def intelligent_scan_drivers(custom_dir: Optional[str] = None) -> Dict[str, Any]
 def start_intelligent_driver_install(
     package_ids: Optional[List[str]] = None,
     custom_dir: Optional[str] = None,
+    resume: bool = False,
 ) -> Dict[str, Any]:
     """
-    Validates selected packages and starts the 9-tier priority queue.
-    If package_ids is omitted or empty, queues every validated package in the
-    selected device repository.  Hardware matching remains visible in the UI,
-    but never silently leaves OEM driver components out of the queue.
+    Kicks off the intelligent driver installation sequence.
+    Optionally accepts a list of specific package IDs to install.
+    If resume=True, resumes the previous queue.
     """
-    global _cached_scan_result, _cached_packages_map
-
+    global _cached_packages_map
+    
+    if resume:
+        return start_driver_queue([], resume=True)
+        
     scan = intelligent_scan_drivers(custom_dir)
     if not scan.get("success") or not scan.get("packages"):
         return {"success": False, "message": scan.get("message", "هیچ درایور معتبری برای نصب یافت نشد.")}

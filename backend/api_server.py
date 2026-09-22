@@ -7,6 +7,15 @@ import threading
 from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
+# Ensure UTF-8 output encoding on all Windows machines
+try:
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
+
 # Ensure backend directory is in sys.path
 _backend_dir = os.path.dirname(os.path.abspath(__file__))
 if _backend_dir not in sys.path:
@@ -78,6 +87,22 @@ _cache_lock = threading.Lock()
 _cached_data: Optional[dict] = _load_cached_system_info()
 
 
+def _trigger_background_scan():
+    """Refreshes hardware and system info in background on startup to replace stale disk cache."""
+    global _cached_data
+    try:
+        fresh = collect_all_system_info()
+        with _cache_lock:
+            _cached_data = fresh
+            _save_cached_system_info(_cached_data)
+        logger.info("Background system scan completed; hardware cache is now fresh.")
+    except Exception as e:
+        logger.error(f"Error in background system scan: {e}")
+
+
+threading.Thread(target=_trigger_background_scan, daemon=True).start()
+
+
 class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
     
     def _send_cors_headers(self):
@@ -105,7 +130,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.24",
+                "version": "1.1.27",
                 "phase": 4,
                 "api_contract_version": 2,
             }
@@ -273,6 +298,20 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps({"status": "success", "usb_drives": drives}, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/system/storage":
+            from hardware.storage import get_storage_info
+            logger.debug("Scanning physical storage drives...")
+            storage_data = get_storage_info()
+            with _cache_lock:
+                if _cached_data and isinstance(_cached_data.get("storage"), list):
+                    _cached_data["storage"] = storage_data
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "success", "storage": storage_data}, indent=2).encode("utf-8"))
             return
 
         elif path == "/api/packages/batch-status":
@@ -548,6 +587,32 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, indent=2).encode("utf-8"))
             return
 
+        elif path == "/api/device-settings/apply-all":
+            try:
+                from packages.orchestrator import apply_desktop_icons, apply_essential_device_settings
+                logger.info("Applying all essential device settings and desktop icons...")
+                icons_res = apply_desktop_icons()
+                settings_res = apply_essential_device_settings()
+                any_ok = icons_res.get("success", False) or settings_res.get("success", False)
+                all_ok = icons_res.get("success", False) and settings_res.get("all_success", False)
+                msg = "تمام تنظیمات مهم دستگاه و آیکن‌های دسکتاپ با موفقیت اعمال شدند." if all_ok else "تنظیمات مهم دستگاه (خاموشی صفحه، Sleep و...) با موفقیت اعمال شدند."
+                resp = {
+                    "success": any_ok,
+                    "all_ok": all_ok,
+                    "desktop_icons": icons_res,
+                    "settings": settings_res,
+                    "message": msg,
+                }
+            except Exception as e:
+                logger.error(f"Error applying all settings: {e}", exc_info=True)
+                resp = {"success": False, "message": f"خطا در اعمال تنظیمات: {e}"}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
+            return
+
         elif path == "/api/packages/office-shortcuts":
             result = ensure_office_desktop_shortcuts()
             self.send_response(200 if result.get("created") else 400)
@@ -733,7 +798,12 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                 payload = {}
             package_ids = payload.get("package_ids", None)
             custom_dir = payload.get("custom_dir", None)
-            result = start_batch_install(package_ids=package_ids, custom_dir=custom_dir)
+            include_system_setup = payload.get("include_system_setup", None)
+            result = start_batch_install(
+                package_ids=package_ids,
+                custom_dir=custom_dir,
+                include_system_setup=include_system_setup,
+            )
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
@@ -775,7 +845,8 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                 payload = {}
             folder_path = (payload.get("folder_path") or payload.get("directory") or "").strip()
             package_ids = payload.get("package_ids", None)
-            result = start_intelligent_driver_install(package_ids=package_ids, custom_dir=folder_path if folder_path else None)
+            resume = payload.get("resume", False)
+            result = start_intelligent_driver_install(package_ids=package_ids, custom_dir=folder_path if folder_path else None, resume=resume)
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()

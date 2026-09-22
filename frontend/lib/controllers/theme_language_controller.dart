@@ -51,7 +51,7 @@ class ThemeLanguageController extends GetxController {
   }
 
   void setNavIndex(int index) {
-    if (index >= 0 && index <= 6) {
+    if (index >= 0 && index <= 7) {
       activeNavIndex.value = index;
     }
   }

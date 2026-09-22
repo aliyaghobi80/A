@@ -223,6 +223,10 @@ class ApiService {
     return _postJson('/api/device-settings/disable-background-apps', {});
   }
 
+  Future<Map<String, dynamic>> applyAllDeviceSettings() async {
+    return _postJson('/api/device-settings/apply-all', {});
+  }
+
   Future<Map<String, dynamic>> createOfficeDesktopShortcuts() async {
     return _postJson('/api/packages/office-shortcuts', {});
   }
@@ -632,6 +636,7 @@ class ApiService {
   Future<Map<String, dynamic>> startBatchInstall({
     List<String>? packageIds,
     String? customDir,
+    bool? includeSystemSetup,
   }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
@@ -646,6 +651,9 @@ class ApiService {
       }
       if (customDir != null && customDir.isNotEmpty) {
         body['custom_dir'] = customDir;
+      }
+      if (includeSystemSetup != null) {
+        body['include_system_setup'] = includeSystemSetup;
       }
 
       final response = await _client
@@ -929,6 +937,7 @@ class ApiService {
   Future<Map<String, dynamic>> startDriverQueueInstall({
     List<String>? packageIds,
     String? folderPath,
+    bool resume = false,
   }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
@@ -940,6 +949,7 @@ class ApiService {
       final Map<String, dynamic> bodyMap = {};
       if (packageIds != null) bodyMap['package_ids'] = packageIds;
       if (folderPath != null) bodyMap['folder_path'] = folderPath;
+      bodyMap['resume'] = resume;
 
       final response = await _client
           .post(
@@ -1094,6 +1104,31 @@ class ApiService {
     } catch (e) {
       debugPrint('[ApiService] safeEjectDrive error: $e');
       return {'success': false, 'message': 'خطا در خروج ایمن درایو: $e'};
+    }
+  }
+
+  Future<List<StorageInfo>> fetchStorageInfo() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return [];
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/system/storage');
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
+        final List<dynamic> list = data['storage'] ?? [];
+        return list
+            .map((item) => StorageInfo.fromJson(item as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('[ApiService] fetchStorageInfo error: $e');
+      return [];
     }
   }
 }

@@ -489,6 +489,7 @@ class DriverInstallController extends GetxController {
   Future<void> _executeDriverQueue(
     BuildContext context, {
     List<String>? packageIds,
+    bool resume = false,
   }) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     isBatchInstalling.value = true;
@@ -497,6 +498,7 @@ class DriverInstallController extends GetxController {
       final res = await _apiService.startDriverQueueInstall(
         packageIds: packageIds,
         folderPath: driverFolder.value,
+        resume: resume,
       );
 
       if (res['success'] == true) {
@@ -538,6 +540,7 @@ class DriverInstallController extends GetxController {
 
   void _startDriverBatchPolling(ScaffoldMessengerState? scaffoldMessenger) {
     _pollTimer?.cancel();
+    int lastCompletedCount = -1;
     _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
       timer,
     ) async {
@@ -547,6 +550,21 @@ class DriverInstallController extends GetxController {
         final status = await _apiService.getDriverQueueStatus();
         if (isClosed || timer != _pollTimer) return;
         batchStatus.value = status;
+
+        // Real-time intermediate system update as each driver finishes
+        if (status.completed > lastCompletedCount) {
+          lastCompletedCount = status.completed;
+          try {
+            if (Get.isRegistered<SystemInfoController>()) {
+              Get.find<SystemInfoController>().recordDriverInstall(
+                status.completed,
+              );
+              Get.find<SystemInfoController>().fetchSystemInfo(
+                forceRefresh: true,
+              );
+            }
+          } catch (_) {}
+        }
 
         if (!status.isRunning) {
           timer.cancel();
@@ -663,6 +681,10 @@ class DriverInstallController extends GetxController {
         ],
       ),
     );
+  }
+
+  Future<void> resumeDriverAutoInstall(BuildContext context) async {
+    await _executeDriverQueue(context, resume: true);
   }
 
   Future<void> cancelDriverAutoInstall(BuildContext context) async {

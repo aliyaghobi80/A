@@ -17,8 +17,12 @@ import zipfile
 import subprocess
 import urllib.request
 
-APP_VERSION = "1.1.24"
+APP_VERSION = "1.1.27"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
 STAGE_DIR = os.path.join(DIST_DIR, f"MarkaziSystemChecker-{APP_VERSION}")
 FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")

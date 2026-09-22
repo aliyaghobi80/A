@@ -29,10 +29,14 @@ def get_desktop_time_status():
         pass
     return result
 
-def show_desktop_icons():
-    if _query_wmi_licensing().get('activated') is not True:
+def show_desktop_icons(force: bool = False):
+    if not force and _query_wmi_licensing().get('activated') is not True:
         return {'success': False, 'message': 'ابتدا ویندوز را فعال کنید؛ وضعیت فعال‌سازی باید تأیید شود.'}
     try:
+        # Ensure desktop icons are not globally hidden
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 0, winreg.KEY_SET_VALUE) as adv_key:
+            winreg.SetValueEx(adv_key, 'HideIcons', 0, winreg.REG_DWORD, 0)
+
         for panel in ('NewStartPanel', 'ClassicStartMenu'):
             with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, ICON_ROOT + '\\' + panel, 0, winreg.KEY_SET_VALUE) as key:
                 for icon in ICONS:
@@ -44,7 +48,21 @@ def show_desktop_icons():
         return {'success': False, 'message': f'تنظیم آیکن‌ها انجام نشد: {error}'}
 
 def set_tehran_automatic_timezone():
-    # Do not silently change Location permission or organizational policies.
+    # 1. Direct timezone configuration via tzutil (fast, no UAC needed)
+    try:
+        _run(['tzutil.exe', '/s', 'Iran Standard Time_dstoff'])
+    except Exception:
+        pass
+
+    state = get_desktop_time_status()
+    if state.get('automatic_timezone') is True:
+        ready = state['timezone'].replace('_dstoff', '') == 'Iran Standard Time'
+        message = 'تهران (UTC+03:30) و تشخیص خودکار منطقهٔ زمانی تنظیم شدند.' if ready else 'منطقه زمانی تنظیم شد؛ وضعیت را بررسی کنید.'
+        if state['location_enabled'] is not True:
+            message += ' برای تشخیص خودکار، Location را در تنظیمات ویندوز روشن کنید.'
+        return {'success': ready, 'message': message, 'desktop_time': state}
+
+    # 2. If tzautoupdate service is not enabled, invoke elevated script
     script = """
     $ErrorActionPreference='Stop'
     & tzutil.exe /s 'Iran Standard Time_dstoff'
@@ -52,7 +70,7 @@ def set_tehran_automatic_timezone():
     Set-Service -Name tzautoupdate -StartupType Manual
     """
     try:
-        execution = _run_elevated_powershell(script)
+        execution = _run_elevated_powershell(script, timeout=20)
         state = get_desktop_time_status()
         ready = execution.returncode == 0 and state['timezone'].replace('_dstoff', '') == 'Iran Standard Time' and state['automatic_timezone'] is True
         message = ('تهران (UTC+03:30) و تشخیص خودکار منطقهٔ زمانی تنظیم شدند.' if ready else 'همهٔ تنظیمات زمان تأیید نشد؛ وضعیت فعلی را بررسی کنید.')

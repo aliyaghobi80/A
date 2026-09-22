@@ -20,6 +20,7 @@ import 'widgets/common/global_app_header.dart';
 import 'widgets/dialogs/exit_dialog.dart';
 import 'widgets/error_view.dart';
 import 'widgets/loading_view.dart';
+import 'widgets/pages/calculations_page.dart';
 import 'widgets/pages/driver_install_page.dart';
 import 'widgets/pages/device_settings_page.dart';
 import 'widgets/pages/license_status_page.dart';
@@ -204,6 +205,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 const DeviceSettingsPage(),
                                 // Page 6: تنظیمات برنامه
                                 const SettingsPage(),
+                                // Page 7: محاسبات
+                                const CalculationsPage(),
                               ],
                             ),
                           ),

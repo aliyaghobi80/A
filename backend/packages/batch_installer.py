@@ -1,17 +1,19 @@
 # backend/packages/batch_installer.py
 """
-Batch Auto-Install Queue Manager for Software Packages.
-Manages a sequential queue of silent package installations running in a background thread.
-Each package is installed silently, verified via registry, and progress is tracked in real-time.
+Batch Auto-Install Queue Manager for Software Packages & System Setup Orchestration.
+Manages a sequential queue of silent package installations and essential Windows optimizations
+running in a background thread.
+Each item is executed, verified, and progress is tracked in real-time.
 """
 
 import logging
 import copy
+import os
 import threading
 import time
 from typing import Dict, Any, List, Optional
 
-from packages.manager import scan_packages, silent_install_package, _is_windows_update_blocker
+from packages.manager import scan_packages, silent_install_package, _is_windows_update_blocker, get_packages_directory
 
 logger = logging.getLogger(__name__)
 
@@ -57,16 +59,18 @@ def _reset_state():
     }
 
 
-def _run_batch_install(package_ids: List[str], custom_dir: Optional[str] = None):
-    """Background thread worker: installs packages one by one silently."""
+def _run_batch_install(items_to_run: List[Dict[str, Any]], custom_dir: Optional[str] = None):
+    """Background thread worker: installs packages and executes orchestrator steps one by one."""
     global _batch_state
 
-    logger.info(f"[BatchInstall] Starting batch install of {len(package_ids)} packages")
+    logger.info(f"[BatchInstall] Starting batch execution of {len(items_to_run)} items")
 
     with _batch_lock:
         _batch_state["start_time"] = time.time()
 
-    for idx, pkg_id in enumerate(package_ids):
+    resolved_pkg_dir = custom_dir or get_packages_directory()
+
+    for idx, item_info in enumerate(items_to_run):
         # Check if cancelled
         with _batch_lock:
             if _batch_state["cancelled"]:
@@ -78,22 +82,101 @@ def _run_batch_install(package_ids: List[str], custom_dir: Optional[str] = None)
                 break
 
             _batch_state["current_item_index"] = idx
-            _batch_state["current_item_name"] = _batch_state["items"][idx].get("name", pkg_id)
+            _batch_state["current_item_name"] = _batch_state["items"][idx].get("name", item_info.get("id"))
             _batch_state["items"][idx]["status"] = "installing"
             _batch_state["progress_percent"] = round((idx / _batch_state["total"]) * 100, 1)
 
-        logger.info(f"[BatchInstall] Installing {idx + 1}/{len(package_ids)}: {pkg_id}")
+        action = item_info.get("orchestrator_action")
+        pkg_id = item_info.get("id", "")
 
-        is_office = (
-            pkg_id.lower().startswith("office")
-            or "office" in pkg_id.lower()
-            or _batch_state["items"][idx].get("installer_type") == "office_cmd"
-        )
-        timeout = 900 if is_office else 300
+        logger.info(f"[BatchInstall] Processing {idx + 1}/{len(items_to_run)}: {item_info.get('name')} (action={action})")
+
+        result: Dict[str, Any] = {}
 
         try:
-            result = silent_install_package(pkg_id, custom_dir=custom_dir, timeout_seconds=timeout)
+            if action == "office_extract":
+                from packages.orchestrator import ensure_office_extracted
+                res = ensure_office_extracted(resolved_pkg_dir)
+                result = {
+                    "success": res.get("success", True),
+                    "message": res.get("message", "بررسی استخراج آفیس پایان یافت."),
+                    "exit_code": 0 if res.get("success") else 1,
+                }
+            elif action == "kms_activate":
+                from packages.orchestrator import extract_kms_archive, run_windows_cmd_activation
+                # 1. Extract KMS archive if present
+                extract_kms_archive(resolved_pkg_dir)
+                # 2. Run WINDOWS.cmd and wait for activation
+                res = run_windows_cmd_activation(resolved_pkg_dir, timeout_seconds=90)
+                result = {
+                    "success": res.get("success", False),
+                    "message": res.get("message", "فعال‌سازی ویندوز انجام شد."),
+                    "exit_code": 0 if res.get("success") else 1,
+                }
+            elif action == "desktop_icons":
+                from packages.orchestrator import apply_desktop_icons
+                res = apply_desktop_icons()
+                result = {
+                    "success": res.get("success", False),
+                    "message": res.get("message", "آیکن‌های دسکتاپ تنظیم شدند."),
+                    "exit_code": 0 if res.get("success") else 1,
+                }
+            elif action == "sleep_never":
+                from windows.device_settings import set_sleep_never
+                res = set_sleep_never()
+                result = {
+                    "success": res.get("success", False),
+                    "message": res.get("message", "زمان‌های Sleep و خاموشی صفحه روی Never تنظیم شدند."),
+                    "exit_code": 0 if res.get("success") else 1,
+                }
+            elif action == "power_modes":
+                from windows.power_settings import set_laptop_power_modes
+                res = set_laptop_power_modes()
+                result = {
+                    "success": res.get("success", False),
+                    "message": res.get("message", "طرح توان باتری و برق تنظیم شد."),
+                    "exit_code": 0 if res.get("success") else 1,
+                }
+            elif action == "tehran_timezone":
+                from windows.desktop_time import set_tehran_automatic_timezone
+                res = set_tehran_automatic_timezone()
+                result = {
+                    "success": res.get("success", False),
+                    "message": res.get("message", "منطقه زمانی تهران تنظیم شد."),
+                    "exit_code": 0 if res.get("success") else 1,
+                }
+            elif action == "startup_apps":
+                from windows.device_settings import disable_all_startup_apps
+                res = disable_all_startup_apps(elevate=False, open_page=False)
+                result = {
+                    "success": res.get("success", False) or res.get("cancelled", False),
+                    "message": res.get("message", "برنامه‌های استارتاپ بهینه‌سازی شدند."),
+                    "exit_code": 0,
+                }
+            elif action == "background_apps":
+                from windows.device_settings import disable_windows10_background_apps
+                res = disable_windows10_background_apps(open_page=False)
+                result = {
+                    "success": res.get("success", False) or res.get("unsupported", False),
+                    "message": res.get("message", "برنامه‌های پس‌زمینه بهینه‌سازی شدند."),
+                    "exit_code": 0,
+                }
+            else:
+                # Regular Software Package Installer
+                is_office = (
+                    pkg_id.lower().startswith("office")
+                    or "office" in pkg_id.lower()
+                    or item_info.get("installer_type") == "office_cmd"
+                )
+                timeout = 900 if is_office else 300
+                result = silent_install_package(
+                    item_info.get("relative_path") or pkg_id or item_info.get("filename"),
+                    custom_dir=custom_dir,
+                    timeout_seconds=timeout,
+                )
+
         except Exception as e:
+            logger.error(f"[BatchInstall] Error processing {pkg_id}: {e}")
             result = {
                 "success": False,
                 "message": f"خطای غیرمنتظره: {str(e)}",
@@ -107,7 +190,8 @@ def _run_batch_install(package_ids: List[str], custom_dir: Optional[str] = None)
             item["installed_version"] = result.get("installed_version", "")
             item["exit_code"] = result.get("exit_code", -1)
             _batch_state["reboot_required"] = (
-                _batch_state["reboot_required"] or bool(result.get("reboot_required")))
+                _batch_state["reboot_required"] or bool(result.get("reboot_required"))
+            )
 
             if result.get("skipped"):
                 item["status"] = "skipped"
@@ -122,13 +206,7 @@ def _run_batch_install(package_ids: List[str], custom_dir: Optional[str] = None)
             _batch_state["progress_percent"] = round(((idx + 1) / _batch_state["total"]) * 100, 1)
 
         if result.get("exit_code") == -2:
-            with _batch_lock:
-                _batch_state["cancelled"] = True
-                for pending in _batch_state["items"][idx + 1:]:
-                    pending["status"] = "skipped"
-                    pending["message"] = "نصاب قبلی هنوز ممکن است فعال باشد؛ صف برای بررسی دستی متوقف شد."
-                    _batch_state["skipped"] += 1
-            break
+            logger.warning(f"[BatchInstall] Item {pkg_id} timed out; continuing with remaining queue items.")
         time.sleep(0.5)
 
     # Finalize
@@ -145,22 +223,27 @@ def _run_batch_install(package_ids: List[str], custom_dir: Optional[str] = None)
         total = _batch_state["total"]
 
         if _batch_state["cancelled"]:
-            _batch_state["summary_message"] = f"نصب خودکار لغو شد. {completed} از {total} نرم‌افزار نصب شد."
+            _batch_state["summary_message"] = f"نصب خودکار لغو شد. {completed} از {total} عملیات انجام شد."
         elif failed == 0:
-            _batch_state["summary_message"] = f"✓ تمام {completed} نرم‌افزار با موفقیت نصب شد! (در {elapsed} ثانیه)"
+            _batch_state["summary_message"] = f"✓ تمام {completed} مرحله با موفقیت انجام شد! (در {elapsed} ثانیه)"
         else:
-            _batch_state["summary_message"] = f"نصب خودکار تکمیل شد: {completed} موفق، {failed} ناموفق، {skipped} رد شده (در {elapsed} ثانیه)"
+            _batch_state["summary_message"] = f"عملیات پایان یافت: {completed} موفق، {failed} ناموفق، {skipped} رد شده (در {elapsed} ثانیه)"
         if completed > 0 or _batch_state["reboot_required"]:
-            _batch_state["summary_message"] += " — یادتان نرود پس از پایان همهٔ کارها، سیستم را دستی ری‌استارت کنید."
+            _batch_state["summary_message"] += " — یادتان نرود پس از پایان کارها، سیستم را دستی ری‌استارت کنید."
 
     logger.info(f"[BatchInstall] Batch complete: {_batch_state['summary_message']}")
 
 
-def start_batch_install(package_ids: Optional[List[str]] = None, custom_dir: Optional[str] = None) -> Dict[str, Any]:
+def start_batch_install(
+    package_ids: Optional[List[str]] = None,
+    custom_dir: Optional[str] = None,
+    include_system_setup: Optional[bool] = None,
+) -> Dict[str, Any]:
     """
-    Starts a batch silent installation of software packages.
-    If package_ids is None/empty, installs every validated package with a known
-    silent strategy. Unknown/manual-only files are never guessed or auto-clicked.
+    Starts a batch silent installation of software packages and automated system setup.
+    If include_system_setup is None:
+      - Automatically True when package_ids is None or len(package_ids) > 1 (full automated deployment).
+      - False when package_ids contains exactly 1 package (isolated single package install).
     """
     global _batch_thread, _batch_state
 
@@ -172,63 +255,189 @@ def start_batch_install(package_ids: Optional[List[str]] = None, custom_dir: Opt
             }
 
     pkg_data = scan_packages(custom_dir)
-    if not pkg_data.get("directory_exists"):
-        return {"success": False, "message": "فولدر نرم‌افزارها یافت نشد."}
+    pkg_dir = custom_dir or (pkg_data.get("packages_directory") if isinstance(pkg_data, dict) else None)
 
-    all_packages = pkg_data.get("packages", [])
+    all_packages = pkg_data.get("packages", []) if isinstance(pkg_data, dict) else []
 
+    target_packages = []
     if package_ids:
-        target_packages = []
         for pid in package_ids:
             pid_clean = pid.strip().replace("\\", "/").lower()
             for pkg in all_packages:
                 if pid_clean in [pkg["id"].lower(), pkg.get("relative_path", "").lower(), pkg.get("filename", "").lower()]:
-                    if pkg.get("is_valid") and (
-                        pkg.get("auto_install_supported")
-                        or pkg.get("installer_type") == "office_cmd"
-                        or _is_windows_update_blocker(pkg)
-                    ):
+                    if pkg.get("is_valid", True):
                         target_packages.append(pkg)
                     break
     else:
         target_packages = [
             p for p in all_packages
-            if (p.get("install_allowed") or _is_windows_update_blocker(p))
-            and (p.get("auto_install_supported") or _is_windows_update_blocker(p))
-            and p.get("is_valid")
+            if p.get("is_valid", True)
             and (not p.get("is_installed") or _is_windows_update_blocker(p))
+            and not p.get("is_portable_tool", False)
         ]
 
-    # WUB is a deployment finishing action, not a conventional installer. If
-    # it exists in the source, include it exactly once at the end of every
-    # automatic deployment. The package manager enforces the Windows Home guard.
-    if target_packages and not any(_is_windows_update_blocker(p) for p in target_packages):
-        blocker = next(
-            (p for p in all_packages if p.get("is_valid") and _is_windows_update_blocker(p)),
-            None,
-        )
-        if blocker is not None:
-            target_packages.append(blocker)
+    # Decide whether to include pre-install & post-install system setup steps
+    if include_system_setup is None:
+        include_system_setup = (package_ids is None or len(package_ids) > 1)
 
-    if not target_packages:
-        return {
-            "success": False,
-            "message": "هیچ نصاب معتبرِ قابل نصب خودکاری یافت نشد؛ موارد ناشناخته را با نصب دستی بررسی کنید.",
-        }
-
-    # Queue reordering: regular applications, Office, then the WUB deployment action.
+    # Reorder software packages: regular apps, Office, then WUB
     normal_pkgs = [p for p in target_packages if p.get("installer_type") != "office_cmd" and "office" not in p.get("id", "").lower() and not _is_windows_update_blocker(p)]
     office_pkgs = [p for p in target_packages if p.get("installer_type") == "office_cmd" or "office" in p.get("id", "").lower()]
     update_blockers = [p for p in target_packages if _is_windows_update_blocker(p)]
     if update_blockers:
-        # The official archive contains x86 and x64 executables. Run exactly
-        # one, preferring x64 on the supported 64-bit Windows target.
-        update_blockers.sort(
-            key=lambda p: "x64" in str(p.get("filename", "")).lower(),
-            reverse=True,
-        )
+        update_blockers.sort(key=lambda p: "x64" in str(p.get("filename", "")).lower(), reverse=True)
         update_blockers = update_blockers[:1]
-    target_packages = normal_pkgs + office_pkgs + update_blockers
+
+    ordered_software = normal_pkgs + office_pkgs + update_blockers
+
+    # Construct complete queue items list
+    queue_items: List[Dict[str, Any]] = []
+
+    if include_system_setup:
+        # 1. Office extraction check
+        from packages.orchestrator import is_office_already_extracted
+        has_office_archive = False
+        if pkg_dir and os.path.isdir(pkg_dir):
+            try:
+                for entry in os.listdir(pkg_dir):
+                    if "office" in entry.lower() and entry.lower().endswith((".rar", ".zip", ".7z")):
+                        has_office_archive = True
+                        break
+            except Exception:
+                pass
+
+        if has_office_archive and not is_office_already_extracted(pkg_dir):
+            queue_items.append({
+                "id": "step_office_extract",
+                "name": "بررسی و استخراج آفیس",
+                "filename": "Office Archive",
+                "relative_path": "",
+                "installer_type": "orchestrator",
+                "orchestrator_action": "office_extract",
+                "status": "queued",
+                "message": "",
+                "installed_version": "",
+                "exit_code": None,
+            })
+
+        # 2. KMS Extraction & Windows Activation
+        queue_items.append({
+            "id": "step_kms_activate",
+            "name": "استخراج KMS و فعال‌سازی ویندوز",
+            "filename": "WINDOWS.cmd",
+            "relative_path": "",
+            "installer_type": "orchestrator",
+            "orchestrator_action": "kms_activate",
+            "status": "queued",
+            "message": "",
+            "installed_version": "",
+            "exit_code": None,
+        })
+
+        # 3. Desktop Icons
+        queue_items.append({
+            "id": "step_desktop_icons",
+            "name": "تنظیم ۳ آیکن اصلی دسکتاپ (This PC، کنترل پنل، سطل آشغال)",
+            "filename": "Desktop Icons",
+            "relative_path": "",
+            "installer_type": "orchestrator",
+            "orchestrator_action": "desktop_icons",
+            "status": "queued",
+            "message": "",
+            "installed_version": "",
+            "exit_code": None,
+        })
+
+    # 4. Software packages
+    for pkg in ordered_software:
+        queue_items.append({
+            "id": pkg.get("id", ""),
+            "name": pkg.get("name", pkg.get("filename", "")),
+            "filename": pkg.get("filename", ""),
+            "relative_path": pkg.get("relative_path", ""),
+            "installer_type": pkg.get("installer_type", ""),
+            "orchestrator_action": None,
+            "status": "queued",
+            "message": "",
+            "installed_version": "",
+            "exit_code": None,
+        })
+
+    if include_system_setup:
+        # 5. Device Settings
+        queue_items.append({
+            "id": "step_sleep_never",
+            "name": "تنظیم Sleep و خاموشی صفحه روی Never",
+            "filename": "powercfg",
+            "relative_path": "",
+            "installer_type": "orchestrator",
+            "orchestrator_action": "sleep_never",
+            "status": "queued",
+            "message": "",
+            "installed_version": "",
+            "exit_code": None,
+        })
+
+        from windows.device_settings import has_battery, get_windows_identity
+        if has_battery():
+            queue_items.append({
+                "id": "step_power_modes",
+                "name": "طرح توان لپ‌تاپ (برق Best Performance / باتری Balanced)",
+                "filename": "Power Modes",
+                "relative_path": "",
+                "installer_type": "orchestrator",
+                "orchestrator_action": "power_modes",
+                "status": "queued",
+                "message": "",
+                "installed_version": "",
+                "exit_code": None,
+            })
+
+        queue_items.append({
+            "id": "step_tehran_timezone",
+            "name": "تنظیم منطقه زمانی تهران و ساعت خودکار",
+            "filename": "tzutil",
+            "relative_path": "",
+            "installer_type": "orchestrator",
+            "orchestrator_action": "tehran_timezone",
+            "status": "queued",
+            "message": "",
+            "installed_version": "",
+            "exit_code": None,
+        })
+
+        queue_items.append({
+            "id": "step_startup_apps",
+            "name": "بهینه‌سازی برنامه‌های استارتاپ",
+            "filename": "Startup Apps",
+            "relative_path": "",
+            "installer_type": "orchestrator",
+            "orchestrator_action": "startup_apps",
+            "status": "queued",
+            "message": "",
+            "installed_version": "",
+            "exit_code": None,
+        })
+
+        if get_windows_identity().get("generation") == "Windows 10":
+            queue_items.append({
+                "id": "step_background_apps",
+                "name": "غیرفعال‌سازی Background Apps ویندوز 10",
+                "filename": "Background Apps",
+                "relative_path": "",
+                "installer_type": "orchestrator",
+                "orchestrator_action": "background_apps",
+                "status": "queued",
+                "message": "",
+                "installed_version": "",
+                "exit_code": None,
+            })
+
+    if not queue_items:
+        return {
+            "success": False,
+            "message": "هیچ موردی برای نصب یا اجرا یافت نشد.",
+        }
 
     with _batch_lock:
         if _batch_state["is_running"]:
@@ -236,35 +445,20 @@ def start_batch_install(package_ids: Optional[List[str]] = None, custom_dir: Opt
         _reset_state()
         _batch_state["is_running"] = True
         _batch_state["cancelled"] = False
-        _batch_state["total"] = len(target_packages)
-        _batch_state["items"] = [
-            {
-                "id": pkg.get("id", ""),
-                "name": pkg.get("name", pkg.get("filename", "")),
-                "filename": pkg.get("filename", ""),
-                "relative_path": pkg.get("relative_path", ""),
-                "installer_type": pkg.get("installer_type", ""),
-                "status": "queued",
-                "message": "",
-                "installed_version": "",
-                "exit_code": None,
-            }
-            for pkg in target_packages
-        ]
-
-    ids_to_install = [pkg.get("relative_path") or pkg.get("id") or pkg.get("filename") for pkg in target_packages]
+        _batch_state["total"] = len(queue_items)
+        _batch_state["items"] = copy.deepcopy(queue_items)
 
     _batch_thread = threading.Thread(
         target=_run_batch_install,
-        args=(ids_to_install, custom_dir),
+        args=(queue_items, custom_dir),
         daemon=True,
     )
     _batch_thread.start()
 
     return {
         "success": True,
-        "message": f"نصب خودکار {len(target_packages)} نرم‌افزار شروع شد...",
-        "total": len(target_packages),
+        "message": f"فرآیند نصب خودکار و تنظیمات سیستم ({len(queue_items)} مرحله) آغاز شد...",
+        "total": len(queue_items),
         "items": list(_batch_state["items"]),
     }
 

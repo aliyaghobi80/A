@@ -248,13 +248,18 @@ function Disable-StartupFolder($hive, [string]$folderPath) {
 }
 
 $cu = [Microsoft.Win32.Registry]::CurrentUser
-$lm = [Microsoft.Win32.Registry]::LocalMachine
 Disable-ApprovedEntries $cu 'Run' $runRoot
 Disable-ApprovedEntries $cu 'Run32' $run32Root
-Disable-ApprovedEntries $lm 'Run' $runRoot
-Disable-ApprovedEntries $lm 'Run32' $run32Root
 Disable-StartupFolder $cu ([Environment]::GetFolderPath('Startup'))
-Disable-StartupFolder $lm ([Environment]::GetFolderPath('CommonStartup'))
+
+try {
+    $lm = [Microsoft.Win32.Registry]::LocalMachine
+    Disable-ApprovedEntries $lm 'Run' $runRoot
+    Disable-ApprovedEntries $lm 'Run32' $run32Root
+    Disable-StartupFolder $lm ([Environment]::GetFolderPath('CommonStartup'))
+} catch {
+    # LocalMachine access may fail without elevation
+}
 
 # Packaged applications (MSIX/UWP/Desktop Bridge) keep StartupTask state in
 # SystemAppData rather than Explorer\StartupApproved. State 2 means Enabled;
@@ -275,11 +280,31 @@ if (Test-Path -LiteralPath $appModelRoot) {
 """
 
 
-def disable_all_startup_apps() -> Dict[str, Any]:
-    """Disable entries surfaced by Windows Startup Apps, then open that page."""
+def disable_all_startup_apps(elevate: bool = True, open_page: bool = True) -> Dict[str, Any]:
+    """Disable entries surfaced by Windows Startup Apps, then optionally open that page."""
     if os.name != "nt":
         return {"success": False, "message": "این قابلیت فقط در ویندوز در دسترس است."}
-    result = _run_elevated_powershell(_startup_disable_script())
+    
+    if elevate:
+        result = _run_elevated_powershell(_startup_disable_script(), timeout=20)
+    else:
+        fd, result_path = tempfile.mkstemp(prefix="msc-startup-", suffix=".json")
+        os.close(fd)
+        try:
+            wrapped = _wrap_elevated_payload(_startup_disable_script(), result_path)
+            res = _powershell_encoded(wrapped, timeout=10)
+            if os.path.isfile(result_path):
+                content = Path(result_path).read_text(encoding="utf-8-sig")
+                result = subprocess.CompletedProcess([], res.returncode, content, res.stderr)
+            else:
+                result = res
+        finally:
+            if os.path.exists(result_path):
+                try:
+                    os.unlink(result_path)
+                except OSError:
+                    pass
+
     if result.returncode == 1223:
         return {"success": False, "cancelled": True, "message": "درخواست دسترسی مدیر لغو شد؛ تغییری اعمال نشد."}
     if result.returncode != 0:
@@ -298,7 +323,7 @@ def disable_all_startup_apps() -> Dict[str, Any]:
         packaged_changed = int(parsed.get("packaged_changed") or 0)
     except Exception:
         pass
-    opened = _open_settings("ms-settings:startupapps")
+    opened = _open_settings("ms-settings:startupapps") if open_page else False
     from windows.startup_status import get_startup_status
     state = get_startup_status()
     return {
@@ -313,7 +338,7 @@ def disable_all_startup_apps() -> Dict[str, Any]:
     }
 
 
-def disable_windows10_background_apps() -> Dict[str, Any]:
+def disable_windows10_background_apps(open_page: bool = True) -> Dict[str, Any]:
     """Disable the Windows 10 global Store/UWP background-app toggle."""
     identity = get_windows_identity()
     if identity.get("generation") != "Windows 10":
@@ -342,7 +367,7 @@ def disable_windows10_background_apps() -> Dict[str, Any]:
             winreg.KEY_SET_VALUE,
         ) as key:
             winreg.SetValueEx(key, "BackgroundAppGlobalToggle", 0, winreg.REG_DWORD, 0)
-        opened = _open_settings("ms-settings:privacy-backgroundapps")
+        opened = _open_settings("ms-settings:privacy-backgroundapps") if open_page else False
         from windows.startup_status import get_background_status
         state = get_background_status(True)
         return {

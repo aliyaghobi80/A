@@ -11,6 +11,7 @@ class DeviceSettingsController extends GetxController {
   final isLoading = false.obs;
   final isPinningSecurity = false.obs;
   final isSettingSleep = false.obs;
+  final isApplyingAll = false.obs;
   final isDisablingStartup = false.obs;
   final isDisablingBackgroundApps = false.obs;
   final hasBattery = false.obs;
@@ -204,6 +205,18 @@ class DeviceSettingsController extends GetxController {
     isDisablingBackgroundApps.value = false;
     if (!context.mounted) return;
     _showResult(context, result);
+  }
+
+  Future<void> applyAllSettings(BuildContext context) async {
+    if (isApplyingAll.value) return;
+    isApplyingAll.value = true;
+    try {
+      final result = await _api.applyAllDeviceSettings();
+      await refreshStatus(afterAction: true);
+      if (context.mounted) _showResult(context, result);
+    } finally {
+      isApplyingAll.value = false;
+    }
   }
 
   void _showResult(BuildContext context, Map<String, dynamic> result) {
