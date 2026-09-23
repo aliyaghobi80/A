@@ -718,49 +718,51 @@ Widget _buildInputField({
         ),
       ),
       const SizedBox(height: 8),
-      TextField(
-        controller: controller,
-        autofocus: autoFocus,
+      Directionality(
         textDirection: ui.TextDirection.ltr,
-        textAlign: TextAlign.center,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-          ThousandsSeparatorInputFormatter(),
-        ],
-        onChanged: onChanged,
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.2,
-          color: isDark ? Colors.white : Colors.black87,
-        ),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(
-            color: isDark ? Colors.grey[600] : Colors.grey[400],
-            letterSpacing: 0,
+        child: TextField(
+          controller: controller,
+          autofocus: autoFocus,
+          textAlign: TextAlign.center,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+            ThousandsSeparatorInputFormatter(),
+          ],
+          onChanged: onChanged,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
+            color: isDark ? Colors.white : Colors.black87,
           ),
-          filled: true,
-          fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(
-              color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              color: isDark ? Colors.grey[600] : Colors.grey[400],
+              letterSpacing: 0,
             ),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(
-              color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+            filled: true,
+            fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(
+                color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+              ),
             ),
-          ),
-          focusedBorder: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
-            borderSide: BorderSide(
-              color: Color(0xFF0D9488),
-              width: 2,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(
+                color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+              ),
+            ),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+              borderSide: BorderSide(
+                color: Color(0xFF0D9488),
+                width: 2,
+              ),
             ),
           ),
         ),
