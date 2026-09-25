@@ -1297,13 +1297,15 @@ class GpuInfo {
     final manufacturer = json['manufacturer'] ?? 'Not available';
     final name = json['name'] ?? 'Not available';
     final rawName = json['raw_name'] ?? json['name'] ?? '';
-    final isDisc = json['is_discrete'] == true ||
+    final isDisc =
+        json['is_discrete'] == true ||
         (json['gpu_type'] == 'discrete') ||
         manufacturer.toString().toUpperCase().contains('NVIDIA') ||
         name.toString().toUpperCase().contains('GEFORCE') ||
         name.toString().toUpperCase().contains('RTX ') ||
         name.toString().toUpperCase().contains('GTX ');
-    final isInteg = json['is_integrated'] == true ||
+    final isInteg =
+        json['is_integrated'] == true ||
         (json['gpu_type'] == 'integrated') ||
         (!isDisc &&
             (manufacturer.toString().toUpperCase().contains('INTEL') ||
@@ -1311,9 +1313,12 @@ class GpuInfo {
                 name.toString().toUpperCase().contains('IRIS') ||
                 name.toString().toUpperCase().contains('RADEON(TM) GRAPHICS')));
 
-    final missing = json['driver_missing'] == true ||
+    final missing =
+        json['driver_missing'] == true ||
         json['needs_driver'] == true ||
-        name.toString().toLowerCase().contains('microsoft basic display adapter') ||
+        name.toString().toLowerCase().contains(
+          'microsoft basic display adapter',
+        ) ||
         name.toString().toLowerCase().contains('driver not installed') ||
         name.toString().toLowerCase().contains('کارت گرافیک پایه مایکروسافت') ||
         name.toString().toLowerCase().contains('نیاز به نصب درایور');
@@ -1328,8 +1333,12 @@ class GpuInfo {
       driverVersion: json['driver_version'] ?? 'Not available',
       pnpDeviceId: json['pnp_device_id'] ?? '',
       driverMissing: missing,
-      driverState: json['driver_state'] ?? (missing ? 'basic_display_driver' : 'installed'),
-      gpuType: json['gpu_type'] ?? (isDisc ? 'discrete' : (isInteg ? 'integrated' : 'unknown')),
+      driverState:
+          json['driver_state'] ??
+          (missing ? 'basic_display_driver' : 'installed'),
+      gpuType:
+          json['gpu_type'] ??
+          (isDisc ? 'discrete' : (isInteg ? 'integrated' : 'unknown')),
       isDiscrete: isDisc,
       isIntegrated: isInteg,
       needsDriver: missing,
@@ -1346,8 +1355,9 @@ class GpuInfo {
         value.contains('نیاز به نصب درایور');
   }
 
-  String get typeLabelFa =>
-      isDiscrete ? 'کارت گرافیک مجزا' : (isIntegrated ? 'گرافیک پردازنده' : 'کارت گرافیک');
+  String get typeLabelFa => isDiscrete
+      ? 'کارت گرافیک مجزا'
+      : (isIntegrated ? 'گرافیک پردازنده' : 'کارت گرافیک');
 }
 
 class StorageInfo {
@@ -1360,6 +1370,11 @@ class StorageInfo {
   final int? capacityBytes;
   final double? capacityGb;
   final String capacityDisplay;
+  final int mountedCapacityBytes;
+  final int freeBytes;
+  final int usedBytes;
+  final double percentUsed;
+  final List<String> volumes;
   final String serial;
   final String healthStatus;
   final int? healthPercent;
@@ -1392,6 +1407,11 @@ class StorageInfo {
     this.capacityBytes,
     this.capacityGb,
     required this.capacityDisplay,
+    this.mountedCapacityBytes = 0,
+    this.freeBytes = 0,
+    this.usedBytes = 0,
+    this.percentUsed = 0,
+    this.volumes = const [],
     required this.serial,
     required this.healthStatus,
     this.healthPercent,
@@ -1425,6 +1445,14 @@ class StorageInfo {
       capacityBytes: json['capacity_bytes'] as int?,
       capacityGb: (json['capacity_gb'] as num?)?.toDouble(),
       capacityDisplay: json['capacity_display'] ?? 'Not available',
+      mountedCapacityBytes:
+          (json['mounted_capacity_bytes'] as num?)?.toInt() ?? 0,
+      freeBytes: (json['free_bytes'] as num?)?.toInt() ?? 0,
+      usedBytes: (json['used_bytes'] as num?)?.toInt() ?? 0,
+      percentUsed: (json['percent_used'] as num?)?.toDouble() ?? 0,
+      volumes: (json['volumes'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .toList(),
       serial: json['serial'] ?? '-',
       healthStatus: json['health_status'] ?? 'Healthy',
       healthPercent: json['health_percent'] as int?,
@@ -2204,8 +2232,12 @@ class BatchInstallStatus {
   bool isStageCompleted(int stageNum) {
     final stageItems = items.where((it) => it.stage == stageNum);
     if (stageItems.isEmpty) return false;
-    return stageItems.every((it) =>
-        it.status == 'completed' || it.status == 'failed' || it.status == 'skipped');
+    return stageItems.every(
+      (it) =>
+          it.status == 'completed' ||
+          it.status == 'failed' ||
+          it.status == 'skipped',
+    );
   }
 
   int get currentStage {

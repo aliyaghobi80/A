@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:markazi_system_checker/controllers/driver_install_controller.dart';
+import 'package:markazi_system_checker/controllers/software_controller.dart';
 import 'package:markazi_system_checker/controllers/theme_language_controller.dart';
 import 'package:markazi_system_checker/models/system_info.dart';
 import 'package:markazi_system_checker/utils/persian_date_time.dart';
@@ -103,5 +104,61 @@ void main() {
       driverVersion: 'Not available',
     );
     expect(gpu.isMicrosoftBasicDisplayAdapter, isTrue);
+  });
+
+  test('physical storage keeps mounted usage and volume mapping', () {
+    final storage = StorageInfo.fromJson({
+      'model': 'Test SSD',
+      'type': 'SSD',
+      'bus_type': 'NVMe',
+      'capacity_display': '477 GB',
+      'mounted_capacity_bytes': 500000000000,
+      'free_bytes': 125000000000,
+      'used_bytes': 375000000000,
+      'percent_used': 75.0,
+      'volumes': ['C:', 'D:'],
+      'serial': 'TEST123',
+      'health_status': 'Healthy',
+    });
+
+    expect(storage.freeBytes, 125000000000);
+    expect(storage.usedBytes, 375000000000);
+    expect(storage.percentUsed, 75.0);
+    expect(storage.volumes, ['C:', 'D:']);
+  });
+
+  test('Office deployment is disabled for Windows 10 and 11 Home', () {
+    final office = SoftwarePackage.fromJson({
+      'id': 'office_2024_pro_plus',
+      'name': 'Microsoft Office 2024 (Pro Plus)',
+      'filename': 'Setup_Office 2024.cmd',
+      'is_valid': true,
+      'is_installed': false,
+    });
+
+    expect(
+      officeInstallBlockedForWindows(
+        office,
+        WindowsInfo(
+          edition: 'Windows 11 Home',
+          version: '23H2',
+          build: '22631',
+          architecture: '64-bit',
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      officeInstallBlockedForWindows(
+        office,
+        WindowsInfo(
+          edition: 'Windows 11 Enterprise',
+          version: '25H2',
+          build: '26200',
+          architecture: '64-bit',
+        ),
+      ),
+      isFalse,
+    );
   });
 }

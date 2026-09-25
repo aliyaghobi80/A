@@ -166,19 +166,21 @@ class SimpleModeView extends StatelessWidget {
 
             final gpuPrimary = info.gpu.isNotEmpty
                 ? (info.gpu.length > 1
-                    ? info.gpu.map((g) => g.name).join(' + ')
-                    : info.gpu.first.name)
+                      ? info.gpu.map((g) => g.name).join(' + ')
+                      : info.gpu.first.name)
                 : l10n.noGpuDetected;
             final gpuSecondary = info.gpu.isNotEmpty
                 ? (info.gpu.length > 1
-                    ? info.gpu
-                        .map((g) =>
-                            '${g.typeLabelFa}: ${g.name}${g.vramDisplay != "Not available" && g.vramDisplay != "Shared" ? " (${g.vramDisplay})" : ""}')
-                        .join(' • ')
-                    : (info.gpu.first.vramDisplay != 'Not available' &&
-                            info.gpu.first.vramDisplay != 'Shared'
-                        ? '${l10n.dedicatedVram}: ${info.gpu.first.vramDisplay} (${info.gpu.first.typeLabelFa})'
-                        : info.gpu.first.typeLabelFa))
+                      ? info.gpu
+                            .map(
+                              (g) =>
+                                  '${g.typeLabelFa}: ${g.name}${g.vramDisplay != "Not available" && g.vramDisplay != "Shared" ? " (${g.vramDisplay})" : ""}',
+                            )
+                            .join(' • ')
+                      : (info.gpu.first.vramDisplay != 'Not available' &&
+                                info.gpu.first.vramDisplay != 'Shared'
+                            ? '${l10n.dedicatedVram}: ${info.gpu.first.vramDisplay} (${info.gpu.first.typeLabelFa})'
+                            : info.gpu.first.typeLabelFa))
                 : null;
 
             final cardGpu = _buildProminentSpecCard(
@@ -1970,7 +1972,8 @@ class SimpleModeView extends StatelessWidget {
           '',
         );
         gName = gName.replaceAll(RegExp(r'\s+'), ' ').trim();
-        final vram = g.vramDisplay != 'Not available' && g.vramDisplay != 'Shared'
+        final vram =
+            g.vramDisplay != 'Not available' && g.vramDisplay != 'Shared'
             ? ' ${g.vramDisplay}'
             : '';
         gpuParts.add('$gName$vram');
@@ -3472,6 +3475,7 @@ class SimpleModeView extends StatelessWidget {
   ) {
     final isInstalled = pkg.isInstalled;
     final installAllowed = pkg.installAllowed;
+    final officeHomeBlocked = softwareCtrl.isOfficeBlockedOnHome(pkg);
     final isCurrentInstalling = softwareCtrl.isCurrentInstalling(pkg);
     final isCurrentQueued = softwareCtrl.isCurrentQueued(pkg);
 
@@ -3795,10 +3799,7 @@ class SimpleModeView extends StatelessWidget {
             )
           else if (isCurrentInstalling)
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: const Color(0xFF2563EB).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
@@ -3831,10 +3832,7 @@ class SimpleModeView extends StatelessWidget {
             )
           else if (isCurrentQueued)
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: (isDark
                     ? const Color(0xFF1E293B)
@@ -4020,6 +4018,11 @@ class SimpleModeView extends StatelessWidget {
                   );
                 }),
               ],
+            )
+          else if (officeHomeBlocked && !isInstalled)
+            const FilledButton(
+              onPressed: null,
+              child: Text('Windows Home اورجینال — نصب آفیس لازم نیست'),
             )
           else if (installAllowed)
             Obx(() {

@@ -318,8 +318,8 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
       gpuSub = g.isMicrosoftBasicDisplayAdapter
           ? 'نیاز به نصب درایور'
           : (g.vramDisplay != 'Not available' && g.vramDisplay != 'Shared'
-              ? 'حافظه اختصاصی ${g.vramDisplay} (${g.typeLabelFa})'
-              : g.typeLabelFa);
+                ? 'حافظه اختصاصی ${g.vramDisplay} (${g.typeLabelFa})'
+                : g.typeLabelFa);
     } else {
       final discrete = info.gpu.firstWhere(
         (g) => g.isDiscrete,
@@ -1971,21 +1971,30 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
               children: [
                 const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0284C7).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.usb_rounded, size: 18, color: Color(0xFF0284C7)),
+                      const Icon(
+                        Icons.usb_rounded,
+                        size: 18,
+                        color: Color(0xFF0284C7),
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'حافظه‌های فلش متصل (${usbs.length})',
                         style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
                         ),
                       ),
                       const Spacer(),
@@ -1999,7 +2008,15 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                ...usbs.map((usb) => _buildUsbDeviceRow(usb, isDark, accent, systemCtrl, context)),
+                ...usbs.map(
+                  (usb) => _buildUsbDeviceRow(
+                    usb,
+                    isDark,
+                    accent,
+                    systemCtrl,
+                    context,
+                  ),
+                ),
               ],
             );
           }),
@@ -2065,7 +2082,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -2073,7 +2092,10 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF0284C7).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
@@ -2096,7 +2118,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       : 'درایو یو‌اس‌بی • فرمت ${usb.fileSystem}',
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    color: isDark
+                        ? AppTheme.darkTextMuted
+                        : AppTheme.lightTextMuted,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -2108,7 +2132,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                         child: LinearProgressIndicator(
                           value: (usb.percentUsed / 100.0).clamp(0.0, 1.0),
                           minHeight: 6,
-                          backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                          backgroundColor: isDark
+                              ? const Color(0xFF1E293B)
+                              : const Color(0xFFE2E8F0),
                           color: usb.percentUsed > 90
                               ? const Color(0xFFEF4444)
                               : const Color(0xFF0284C7),
@@ -2121,7 +2147,9 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: isDark
+                            ? AppTheme.darkTextMuted
+                            : AppTheme.lightTextMuted,
                       ),
                     ),
                   ],
@@ -2131,11 +2159,23 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
           ),
           const SizedBox(width: 12),
           OutlinedButton.icon(
-            onPressed: () => systemCtrl.safeEjectDrive(context, usb.driveLetter),
-            icon: const Icon(Icons.eject_rounded, size: 16, color: Color(0xFFEF4444)),
-            label: const Text(
-              'خروج ایمن',
-              style: TextStyle(fontSize: 11.5, color: Color(0xFFEF4444)),
+            onPressed: systemCtrl.isEjecting.value
+                ? null
+                : () => systemCtrl.safeEjectDrive(context, usb.driveLetter),
+            icon: systemCtrl.isEjecting.value
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(
+                    Icons.eject_rounded,
+                    size: 16,
+                    color: Color(0xFFEF4444),
+                  ),
+            label: Text(
+              systemCtrl.isEjecting.value ? 'در حال خروج…' : 'خروج ایمن',
+              style: const TextStyle(fontSize: 11.5, color: Color(0xFFEF4444)),
             ),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: Color(0xFFEF4444), width: 1.1),
@@ -2312,6 +2352,69 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
               ),
             ],
           ),
+          if (drive.mountedCapacityBytes > 0) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'فضای آزاد ${_formatStorageBytes(drive.freeBytes)}',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? const Color(0xFF34D399)
+                          : const Color(0xFF047857),
+                    ),
+                  ),
+                ),
+                Text(
+                  'مصرف‌شده ${_formatStorageBytes(drive.usedBytes)} • ${drive.percentUsed.toStringAsFixed(0)}٪',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? AppTheme.darkTextMuted
+                        : AppTheme.lightTextMuted,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: (drive.percentUsed / 100).clamp(0.0, 1.0),
+                minHeight: 8,
+                backgroundColor: isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFE2E8F0),
+                color: drive.percentUsed >= 90
+                    ? const Color(0xFFEF4444)
+                    : drive.percentUsed >= 75
+                    ? const Color(0xFFF59E0B)
+                    : const Color(0xFF0284C7),
+              ),
+            ),
+            if (drive.volumes.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    'Volumes: ${drive.volumes.join('  •  ')}',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: isDark
+                          ? const Color(0xFF64748B)
+                          : const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -2337,6 +2440,12 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
         ],
       ),
     );
+  }
+
+  String _formatStorageBytes(int bytes) {
+    if (bytes <= 0) return '0 GB';
+    final gb = bytes / (1024 * 1024 * 1024);
+    return '${gb >= 100 ? gb.toStringAsFixed(0) : gb.toStringAsFixed(1)} GB';
   }
 
   void _showStorageDetails(

@@ -35,12 +35,27 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
       final isBatchUninstalling = softwareCtrl.isBatchUninstalling.value;
       final batchStatus = softwareCtrl.batchStatus.value;
       final dir = softwareCtrl.packagesDirectory;
+      final isHomeEdition =
+          Get.find<SystemInfoController>()
+              .systemInfo
+              .value
+              ?.windows
+              .isHomeEdition ??
+          false;
+      bool officeBlocked(SoftwarePackage package) =>
+          isHomeEdition && package.isMicrosoftOfficePackage;
 
       // Duplicate installers are always hidden; the canonical entry remains.
       final visiblePackages = packages.where((p) => !p.isDuplicate).toList();
 
       final readyPackages = visiblePackages
-          .where((p) => !p.isInstalled && p.isValid && !p.isPortable)
+          .where(
+            (p) =>
+                !p.isInstalled &&
+                p.isValid &&
+                !p.isPortable &&
+                !officeBlocked(p),
+          )
           .toList();
       final readyIds = readyPackages.map((package) => package.id).toSet();
       final selectedReadyIds = selectedPackageIds.intersection(readyIds);
@@ -48,7 +63,12 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
           .where((p) => p.isInstalled && !p.isPortable)
           .toList();
       final selectablePackages = visiblePackages
-          .where((package) => package.isValid && !package.isPortable)
+          .where(
+            (package) =>
+                package.isValid &&
+                !package.isPortable &&
+                !officeBlocked(package),
+          )
           .toList();
       final selectableIds = selectablePackages
           .map((package) => package.id)
@@ -216,7 +236,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                 const SizedBox(height: 12),
 
                 // 2. Batch Progress (If running or recently completed)
-                if (isBatchRunning || (batchStatus.items.isNotEmpty && batchStatus.total > 0)) ...[
+                if (isBatchRunning ||
+                    (batchStatus.items.isNotEmpty &&
+                        batchStatus.total > 0)) ...[
                   DeploymentFlowPanel(
                     batchStatus: batchStatus,
                     softwareCtrl: softwareCtrl,
@@ -409,6 +431,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                       isThisUninstalling,
                       isDark,
                       accent,
+                      officeBlocked(pkg),
                     );
                   }),
                 if (packages.isNotEmpty && softwareCtrl.directoryExists) ...[
@@ -476,6 +499,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
     bool isUninstalling,
     bool isDark,
     Color accent,
+    bool isOfficeBlocked,
   ) {
     final isInstalled = pkg.isInstalled;
     final isSelected = selectedPackageIds.contains(pkg.id);
@@ -526,15 +550,17 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                     : const Color(0xFF64748B),
                 width: 1.8,
               ),
-              onChanged: (val) {
-                setState(() {
-                  if (val == true) {
-                    selectedPackageIds.add(pkg.id);
-                  } else {
-                    selectedPackageIds.remove(pkg.id);
-                  }
-                });
-              },
+              onChanged: isOfficeBlocked
+                  ? null
+                  : (val) {
+                      setState(() {
+                        if (val == true) {
+                          selectedPackageIds.add(pkg.id);
+                        } else {
+                          selectedPackageIds.remove(pkg.id);
+                        }
+                      });
+                    },
             ),
             const SizedBox(width: 4),
           ],
@@ -637,7 +663,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
           // Status Badge
           StatusBadge(
-            label: isInstalling
+            label: isOfficeBlocked
+                ? 'ویندوز Home اورجینال'
+                : isInstalling
                 ? 'در حال نصب...'
                 : isQueued
                 ? 'در صف نصب'
@@ -650,7 +678,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                 : pkg.isPortable
                 ? 'آماده اجرا'
                 : (isInstalled ? 'نصب شده' : 'آماده نصب'),
-            status: isInstalling
+            status: isOfficeBlocked
+                ? BadgeStatus.neutral
+                : isInstalling
                 ? BadgeStatus.info
                 : isQueued
                 ? BadgeStatus.neutral
@@ -669,7 +699,12 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
           const SizedBox(width: 12),
 
           // Action Button
-          if (isInstalling)
+          if (isOfficeBlocked)
+            const FilledButton(
+              onPressed: null,
+              child: Text('نصب آفیس لازم نیست'),
+            )
+          else if (isInstalling)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
@@ -683,7 +718,10 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: accent),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: accent,
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -701,10 +739,14 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                color: isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFCBD5E1),
                 ),
               ),
               child: Row(
@@ -713,7 +755,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                   Icon(
                     Icons.hourglass_top_rounded,
                     size: 13,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -721,7 +765,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
                     ),
                   ),
                 ],
@@ -876,6 +922,36 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
       return const SizedBox.shrink();
     }
     const officeColor = Color(0xFFEA580C);
+    final isHomeEdition =
+        sysCtrl?.systemInfo.value?.windows.isHomeEdition ?? false;
+    if (isHomeEdition) {
+      return Container(
+        margin: const EdgeInsets.only(top: 14),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0))
+              .withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+          ),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.verified_user_rounded, color: Color(0xFF10B981)),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Windows Home اورجینال شناسایی شد؛ طبق تنظیمات این برنامه نصب آفیس لازم نیست.',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+            SizedBox(width: 10),
+            FilledButton(onPressed: null, child: Text('نصب آفیس غیرفعال')),
+          ],
+        ),
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

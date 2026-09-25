@@ -28,7 +28,7 @@ class LicenseStatusPage extends StatelessWidget {
       final isOffActive = off.activated;
       final hasOffice = off.installed;
       final isHome = info?.windows.isHomeEdition ?? false;
-      final showOriginalHome = isHome && isWinActive;
+      final showOriginalHome = isHome;
 
       final isOemOriginal =
           win.channel.toUpperCase().contains('OEM') ||
@@ -38,7 +38,8 @@ class LicenseStatusPage extends StatelessWidget {
           (win.statusText.toUpperCase().contains('LICENSED') &&
               !win.channel.toUpperCase().contains('VOLUME'));
 
-      final isAllReady = isWinActive && (!hasOffice || isOffActive);
+      final isAllReady =
+          (isHome || isWinActive) && (isHome || !hasOffice || isOffActive);
 
       return LayoutBuilder(
         builder: (context, constraints) {
@@ -89,7 +90,9 @@ class LicenseStatusPage extends StatelessWidget {
                       Expanded(
                         child: Text(
                           isAllReady
-                              ? (l10n.isPersian
+                              ? (isHome
+                                    ? 'Windows Home اورجینال شناسایی شد؛ ابزارهای فعال‌سازی و نصب آفیس غیرفعال هستند.'
+                                    : l10n.isPersian
                                     ? 'لایسنس‌های سیستم تأیید شدند و آماده تحویل است.'
                                     : 'System licenses valid.')
                               : (l10n.isPersian
@@ -103,6 +106,22 @@ class LicenseStatusPage extends StatelessWidget {
                                 : AppTheme.lightTextPrimary,
                           ),
                         ),
+                      ),
+                      const SizedBox(width: 10),
+                      IconButton(
+                        onPressed: activationCtrl.isRefreshingStatus.value
+                            ? null
+                            : activationCtrl.refreshActivationStatus,
+                        tooltip: 'بررسی مجدد و لحظه‌ای وضعیت لایسنس',
+                        icon: activationCtrl.isRefreshingStatus.value
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.refresh_rounded),
                       ),
                     ],
                   ),
@@ -258,14 +277,16 @@ class LicenseStatusPage extends StatelessWidget {
                               ),
                             ],
                             const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
+                            Wrap(
+                              alignment: WrapAlignment.end,
+                              spacing: 8,
+                              runSpacing: 8,
                               children: [
                                 if (isHome)
                                   const FilledButton(
                                     onPressed: null,
                                     child: Text(
-                                      'Windows Home — ابزار فعال‌سازی غیرفعال',
+                                      'ویندوز اورجینال — فعال‌سازی لازم نیست',
                                     ),
                                   )
                                 else if (!isWinActive)
@@ -358,6 +379,37 @@ class LicenseStatusPage extends StatelessWidget {
                                       minimumSize: const Size(0, 34),
                                     ),
                                   ),
+                                if (isWinActive)
+                                  OutlinedButton.icon(
+                                    onPressed:
+                                        activationCtrl
+                                            .isConfiguringDesktopIcons
+                                            .value
+                                        ? null
+                                        : () => activationCtrl
+                                              .showMainDesktopIcons(context),
+                                    icon:
+                                        activationCtrl
+                                            .isConfiguringDesktopIcons
+                                            .value
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.add_to_home_screen_rounded,
+                                            size: 17,
+                                          ),
+                                    label: const Text(
+                                      'افزودن آیکن‌های اصلی دسکتاپ',
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      minimumSize: const Size(0, 44),
+                                    ),
+                                  ),
                               ],
                             ),
                           ],
@@ -446,7 +498,9 @@ class LicenseStatusPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              off.effectiveActivationSummaryFa,
+                              isHome
+                                  ? 'ویندوز Home اورجینال است؛ در این فرایند نیازی به نصب یا فعال‌سازی آفیس نیست.'
+                                  : off.effectiveActivationSummaryFa,
                               style: TextStyle(
                                 fontSize: 13.5,
                                 fontWeight: off.isGenuineOriginal
@@ -501,7 +555,7 @@ class LicenseStatusPage extends StatelessWidget {
                                   const FilledButton(
                                     onPressed: null,
                                     child: Text(
-                                      'Windows Home — ابزار فعال‌سازی غیرفعال',
+                                      'ویندوز اورجینال — نصب و فعال‌سازی آفیس لازم نیست',
                                     ),
                                   )
                                 else if (!hasOffice)

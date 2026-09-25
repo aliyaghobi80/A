@@ -10,6 +10,12 @@ class StorageCard extends StatelessWidget {
 
   const StorageCard({super.key, required this.storage});
 
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 GB';
+    final gb = bytes / (1024 * 1024 * 1024);
+    return '${gb >= 100 ? gb.toStringAsFixed(0) : gb.toStringAsFixed(1)} GB';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -175,6 +181,86 @@ class StorageCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (drive.mountedCapacityBytes > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF0F172A)
+                            : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark
+                              ? const Color(0xFF263654)
+                              : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'فضای آزاد ${_formatBytes(drive.freeBytes)}',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark
+                                        ? const Color(0xFF34D399)
+                                        : const Color(0xFF047857),
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                'مصرف‌شده ${_formatBytes(drive.usedBytes)} • ${drive.percentUsed.toStringAsFixed(0)}٪',
+                                textDirection: TextDirection.rtl,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? const Color(0xFF94A3B8)
+                                      : const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(99),
+                            child: LinearProgressIndicator(
+                              minHeight: 8,
+                              value: (drive.percentUsed / 100).clamp(0.0, 1.0),
+                              color: drive.percentUsed >= 90
+                                  ? const Color(0xFFEF4444)
+                                  : drive.percentUsed >= 75
+                                  ? const Color(0xFFF59E0B)
+                                  : const Color(0xFF06B6D4),
+                              backgroundColor: isDark
+                                  ? const Color(0xFF24324B)
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          if (drive.volumes.isNotEmpty) ...[
+                            const SizedBox(height: 7),
+                            Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Text(
+                                'Volumes: ${drive.volumes.join('  •  ')}',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  color: isDark
+                                      ? const Color(0xFF64748B)
+                                      : const Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   InfoRow(
                     label: l10n.capacity,

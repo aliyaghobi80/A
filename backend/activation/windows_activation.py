@@ -149,6 +149,24 @@ def _query_slmgr_xpr() -> tuple[Optional[bool], Optional[str]]:
         return None, None
 
 
+def _resolve_activation_state(
+    wmi_data: Dict[str, Any],
+    dli_data: Dict[str, Any],
+    xpr_activated: Optional[bool],
+) -> bool:
+    """Combine independent Windows licensing signals without false negatives.
+
+    A transient failure or stale negative result from one provider must not
+    override a positive Licensed result from another official Windows source.
+    """
+    signals = [
+        wmi_data.get("activated"),
+        dli_data.get("activated"),
+        xpr_activated,
+    ]
+    return any(signal is True for signal in signals)
+
+
 def get_windows_activation_info() -> Dict[str, Any]:
     """
     Collects complete Windows activation and licensing details.
@@ -179,11 +197,7 @@ def get_windows_activation_info() -> Dict[str, Any]:
     wmi_data = _query_wmi_licensing()
 
     # Multi-source activation confirmation
-    activated = wmi_data.get('activated') if 'activated' in wmi_data else (
-        (xpr_activated is True) or
-        dli_data.get("activated", False) or
-        wmi_data.get("activated", False)
-    )
+    activated = _resolve_activation_state(wmi_data, dli_data, xpr_activated)
 
     info["activated"] = activated
     info["status_code"] = 1 if activated else wmi_data.get("status_code", 0)

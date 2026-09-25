@@ -23,6 +23,7 @@ class PackagesCard extends StatelessWidget {
   final VoidCallback? onCancelBatch;
   final VoidCallback? onOpenOfficeFolder;
   final bool isOfficeInstalled;
+  final bool blockOfficeInstall;
 
   const PackagesCard({
     super.key,
@@ -43,6 +44,7 @@ class PackagesCard extends StatelessWidget {
     this.onCancelBatch,
     this.onOpenOfficeFolder,
     this.isOfficeInstalled = false,
+    this.blockOfficeInstall = false,
   });
 
   Widget _buildIcon(SoftwarePackage pkg, bool isDark) {
@@ -92,7 +94,8 @@ class PackagesCard extends StatelessWidget {
               p.installAllowed &&
               p.autoInstallSupported &&
               p.isValid &&
-              !p.isInstalled,
+              !p.isInstalled &&
+              !(blockOfficeInstall && p.isMicrosoftOfficePackage),
         )
         .length;
 
@@ -355,6 +358,79 @@ class PackagesCard extends StatelessWidget {
     if (isOfficeInstalled) {
       return const SizedBox.shrink();
     }
+    if (blockOfficeInstall) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF475569)
+                    : const Color(0xFFCBD5E1),
+              ),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 620;
+                final message = Row(
+                  children: [
+                    const Icon(
+                      Icons.verified_user_rounded,
+                      color: Color(0xFF10B981),
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        l10n.isPersian
+                            ? 'Windows Home اورجینال شناسایی شد؛ نصب Office در این برنامه لازم نیست.'
+                            : 'Original Windows Home detected; Office deployment is disabled by policy.',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+                final action = FilledButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.lock_outline_rounded, size: 16),
+                  label: Text(
+                    l10n.isPersian
+                        ? 'نصب آفیس غیرفعال'
+                        : 'Office install disabled',
+                  ),
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                );
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      message,
+                      const SizedBox(height: 10),
+                      Align(alignment: Alignment.centerLeft, child: action),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: message),
+                    const SizedBox(width: 12),
+                    action,
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
     const officeColor = Color(0xFFEA580C);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -536,6 +612,8 @@ class PackagesCard extends StatelessWidget {
   ) {
     final isInstalled = pkg.isInstalled;
     final installAllowed = pkg.installAllowed;
+    final officeHomeBlocked =
+        blockOfficeInstall && pkg.isMicrosoftOfficePackage && !isInstalled;
 
     final statusColor = !pkg.isValid
         ? const Color(0xFFEF4444)
@@ -824,6 +902,11 @@ class PackagesCard extends StatelessWidget {
                   ),
                 ],
               ],
+            )
+          else if (officeHomeBlocked)
+            const FilledButton(
+              onPressed: null,
+              child: Text('Windows Home اورجینال — نصب لازم نیست'),
             )
           else if (installAllowed)
             Row(

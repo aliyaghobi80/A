@@ -1,12 +1,12 @@
 """Reconcile an external process result with actual licensing state."""
 import time
-from activation.windows_activation import _query_wmi_licensing
+from activation.windows_activation import get_windows_activation_info
 from activation.office_activation import get_office_activation_info
 
 def verify_activation_result(target, result, attempts=6):
     if result.get('cancelled'):
         return result
-    query = _query_wmi_licensing if target == 'windows' else get_office_activation_info
+    query = get_windows_activation_info if target == 'windows' else get_office_activation_info
     for attempt in range(attempts):
         state = query()
         if state.get('activated') is True:

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../l10n/app_localizations.dart';
@@ -19,11 +20,77 @@ class ActivationController extends GetxController {
   final RxBool isConfigured = false.obs;
   final RxList<ActivationToolItem> tools = <ActivationToolItem>[].obs;
   final RxBool isScanningTools = false.obs;
+  final RxBool isRefreshingStatus = false.obs;
+  final RxBool isConfiguringDesktopIcons = false.obs;
+  Timer? _statusTimer;
 
   @override
   void onInit() {
     super.onInit();
     fetchToolsStatus();
+    refreshActivationStatus();
+    _statusTimer = Timer.periodic(
+      const Duration(seconds: 8),
+      (_) => refreshActivationStatus(),
+    );
+  }
+
+  @override
+  void onClose() {
+    _statusTimer?.cancel();
+    super.onClose();
+  }
+
+  Future<void> refreshActivationStatus() async {
+    if (isRefreshingStatus.value || !Get.isRegistered<SystemInfoController>()) {
+      return;
+    }
+    isRefreshingStatus.value = true;
+    try {
+      final response = await _apiService.getActivationStatus();
+      final windows = response['windows'];
+      final office = response['office'];
+      final systemCtrl = Get.find<SystemInfoController>();
+      final current = systemCtrl.systemInfo.value;
+      if (current != null &&
+          windows is Map<String, dynamic> &&
+          office is Map<String, dynamic>) {
+        systemCtrl.systemInfo.value = current.copyWith(
+          windowsActivation: WindowsActivationInfo.fromJson(windows),
+          officeActivation: OfficeActivationInfo.fromJson(office),
+        );
+      }
+    } catch (error) {
+      debugPrint('[ActivationController] refresh status error: $error');
+    } finally {
+      isRefreshingStatus.value = false;
+    }
+  }
+
+  Future<void> showMainDesktopIcons(BuildContext context) async {
+    if (isConfiguringDesktopIcons.value) return;
+    final systemInfo = Get.find<SystemInfoController>().systemInfo.value;
+    if (systemInfo?.windowsActivation.activated != true) return;
+
+    isConfiguringDesktopIcons.value = true;
+    try {
+      final result = await _apiService.showDesktopIcons();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result['message'] as String? ??
+                'This PC، Control Panel و Recycle Bin روی دسکتاپ فعال شدند.',
+          ),
+          backgroundColor: result['success'] == true
+              ? const Color(0xFF10B981)
+              : const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      isConfiguringDesktopIcons.value = false;
+    }
   }
 
   Future<void> fetchToolsStatus() async {
@@ -98,12 +165,14 @@ class ActivationController extends GetxController {
     final sysCtrl = Get.find<SystemInfoController>();
 
     // Step 1: Immediate re-scan
+    refreshActivationStatus();
     sysCtrl.fetchSystemInfo(forceRefresh: true);
 
     // Step 2: Progressive follow-up polls (1.5s, 4s, 8s, 12s)
     const intervals = [1500, 4000, 8000, 12000];
     for (final ms in intervals) {
       Future.delayed(Duration(milliseconds: ms), () {
+        refreshActivationStatus();
         sysCtrl.fetchSystemInfo(forceRefresh: true);
       });
     }
@@ -197,9 +266,14 @@ class ActivationController extends GetxController {
             ),
           );
         } else if (result.success) {
+          final iconsResult = await _apiService.showDesktopIcons();
           scaffoldMessenger.showSnackBar(
             SnackBar(
-              content: Text('✓ ${l10n.windowsActivationCompleted}'),
+              content: Text(
+                iconsResult['success'] == true
+                    ? '✓ ${l10n.windowsActivationCompleted} • آیکن‌های اصلی دسکتاپ اضافه شدند.'
+                    : '✓ ${l10n.windowsActivationCompleted}',
+              ),
               backgroundColor: const Color(0xFF10B981),
               duration: const Duration(seconds: 4),
               behavior: SnackBarBehavior.floating,

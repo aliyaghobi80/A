@@ -551,6 +551,31 @@ void main() {
 
       expect(find.text('یادت نره آفیس رو نصب کنی !'), findsOneWidget);
       expect(find.text('بخش اختصاصی آفیس'), findsOneWidget);
+
+      // Case 3: Windows Home policy -> install path is visibly disabled and
+      // remains usable on a narrow desktop layout.
+      tester.view.physicalSize = const Size(375, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildTestableWidget(
+          PackagesCard(
+            packages: packages,
+            summary: pkgSummary,
+            packagesDirectory: r'G:\MarkaziSystem\Packages',
+            directoryExists: true,
+            onOpenOfficeFolder: () {},
+            isOfficeInstalled: false,
+            blockOfficeInstall: true,
+          ),
+          locale: const Locale('fa'),
+        ),
+      );
+
+      expect(find.text('یادت نره آفیس رو نصب کنی !'), findsNothing);
+      expect(find.text('نصب آفیس غیرفعال'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 }

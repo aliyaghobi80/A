@@ -415,6 +415,22 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getActivationStatus() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) {
+      throw Exception('Backend service is not running.');
+    }
+
+    final uri = Uri.parse('$baseUrl/api/activation/status');
+    final response = await http
+        .get(uri, headers: {'Accept': 'application/json'})
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) {
+      throw Exception('Activation status HTTP ${response.statusCode}');
+    }
+    return json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+  }
+
   Future<ActivationResult> activateOffice() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {

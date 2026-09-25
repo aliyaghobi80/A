@@ -11,6 +11,11 @@ import 'system_info_controller.dart';
 import 'device_settings_controller.dart';
 import 'qc_controller.dart';
 
+bool officeInstallBlockedForWindows(
+  SoftwarePackage package,
+  WindowsInfo? windows,
+) => package.isMicrosoftOfficePackage && windows?.isHomeEdition == true;
+
 class SoftwareController extends GetxController {
   final ApiService _apiService = ApiService();
 
@@ -21,6 +26,30 @@ class SoftwareController extends GetxController {
   final RxBool isBatchUninstalling = false.obs;
   final RxString windowsUpdateActionPackageId = ''.obs;
   final RxString officeShortcutPackageId = ''.obs;
+
+  bool isOfficeBlockedOnHome(SoftwarePackage package) {
+    if (!Get.isRegistered<SystemInfoController>()) {
+      return false;
+    }
+    return officeInstallBlockedForWindows(
+      package,
+      Get.find<SystemInfoController>().systemInfo.value?.windows,
+    );
+  }
+
+  bool _showOfficeHomeNotice(BuildContext context, SoftwarePackage package) {
+    if (!isOfficeBlockedOnHome(package)) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Windows Home اورجینال شناسایی شد؛ نصب آفیس در این برنامه غیرفعال است.',
+        ),
+        backgroundColor: Color(0xFF64748B),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return true;
+  }
 
   // Batch auto-install state
   final RxBool isBatchInstalling = false.obs;
@@ -241,11 +270,15 @@ class SoftwareController extends GetxController {
       final currentItem = batchStatus.value.items.firstWhereOrNull(
         (it) =>
             it.id == pkg.id ||
-            (pkg.relativePath.isNotEmpty && it.relativePath == pkg.relativePath) ||
+            (pkg.relativePath.isNotEmpty &&
+                it.relativePath == pkg.relativePath) ||
             it.name.toLowerCase() == pkg.name.toLowerCase(),
       );
-      if (currentItem != null && currentItem.status == 'installing') return true;
-      final currentName = batchStatus.value.currentItemName?.toLowerCase() ?? '';
+      if (currentItem != null && currentItem.status == 'installing') {
+        return true;
+      }
+      final currentName =
+          batchStatus.value.currentItemName?.toLowerCase() ?? '';
       if (currentName.isNotEmpty &&
           (currentName == pkg.name.toLowerCase() ||
               currentName == pkg.id.toLowerCase())) {
@@ -260,7 +293,8 @@ class SoftwareController extends GetxController {
     final currentItem = batchStatus.value.items.firstWhereOrNull(
       (it) =>
           it.id == pkg.id ||
-          (pkg.relativePath.isNotEmpty && it.relativePath == pkg.relativePath) ||
+          (pkg.relativePath.isNotEmpty &&
+              it.relativePath == pkg.relativePath) ||
           it.name.toLowerCase() == pkg.name.toLowerCase(),
     );
     return currentItem != null && currentItem.status == 'queued';
@@ -278,6 +312,8 @@ class SoftwareController extends GetxController {
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    if (_showOfficeHomeNotice(context, pkg)) return;
 
     if (!pkg.isValid || !pkg.manualInstallSupported) {
       scaffoldMessenger.showSnackBar(
@@ -451,6 +487,7 @@ class SoftwareController extends GetxController {
     SoftwarePackage pkg,
   ) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
+    if (_showOfficeHomeNotice(context, pkg)) return;
     final targetId = pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id;
 
     if (!pkg.isValid || !pkg.autoInstallSupported) {
@@ -515,7 +552,9 @@ class SoftwareController extends GetxController {
     int attempts = 0;
     const maxAttempts = 80; // 80 * 2.5s = 200 seconds (~3.3 minutes)
 
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 2500), (timer) async {
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 2500), (
+      timer,
+    ) async {
       attempts++;
       await fetchPackages();
 
@@ -1124,7 +1163,13 @@ class SoftwareController extends GetxController {
     if (targetPackageIds != null && targetPackageIds.isNotEmpty) {
       final targetSet = targetPackageIds.toSet();
       availablePackages = packages
-          .where((p) => targetSet.contains(p.id) && p.isValid && !p.isInstalled)
+          .where(
+            (p) =>
+                targetSet.contains(p.id) &&
+                p.isValid &&
+                !p.isInstalled &&
+                !isOfficeBlockedOnHome(p),
+          )
           .toList();
     } else {
       availablePackages = packages
@@ -1132,7 +1177,8 @@ class SoftwareController extends GetxController {
             (p) =>
                 p.isValid &&
                 !p.isInstalled &&
-                !p.isDuplicate,
+                !p.isDuplicate &&
+                !isOfficeBlockedOnHome(p),
           )
           .toList();
     }
@@ -1375,19 +1421,24 @@ class SoftwareController extends GetxController {
           final matchingItem = status.items.firstWhereOrNull(
             (it) =>
                 it.id == pkg.id ||
-                (pkg.relativePath.isNotEmpty && it.relativePath == pkg.relativePath) ||
+                (pkg.relativePath.isNotEmpty &&
+                    it.relativePath == pkg.relativePath) ||
                 it.name.toLowerCase() == pkg.name.toLowerCase(),
           );
 
-          if (matchingItem != null && matchingItem.status == 'completed' && !pkg.isInstalled) {
+          if (matchingItem != null &&
+              matchingItem.status == 'completed' &&
+              !pkg.isInstalled) {
             anyChanged = true;
-            updatedList.add(pkg.copyWith(
-              isInstalled: true,
-              installedVersion: matchingItem.installedVersion.isNotEmpty
-                  ? matchingItem.installedVersion
-                  : (pkg.version.isNotEmpty ? pkg.version : 'نصب شده'),
-              status: 'Installed',
-            ));
+            updatedList.add(
+              pkg.copyWith(
+                isInstalled: true,
+                installedVersion: matchingItem.installedVersion.isNotEmpty
+                    ? matchingItem.installedVersion
+                    : (pkg.version.isNotEmpty ? pkg.version : 'نصب شده'),
+                status: 'Installed',
+              ),
+            );
           } else {
             updatedList.add(pkg);
           }
@@ -1408,7 +1459,9 @@ class SoftwareController extends GetxController {
             Get.find<DeviceSettingsController>().refreshStatus();
           }
           if (Get.isRegistered<SystemInfoController>()) {
-            Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
+            Get.find<SystemInfoController>().fetchSystemInfo(
+              forceRefresh: true,
+            );
           }
           if (Get.isRegistered<QcController>()) {
             Get.find<QcController>().fetchInitialQcStatus();
@@ -1424,7 +1477,9 @@ class SoftwareController extends GetxController {
             Get.find<DeviceSettingsController>().refreshStatus();
           }
           if (Get.isRegistered<SystemInfoController>()) {
-            Get.find<SystemInfoController>().fetchSystemInfo(forceRefresh: true);
+            Get.find<SystemInfoController>().fetchSystemInfo(
+              forceRefresh: true,
+            );
           }
           if (Get.isRegistered<QcController>()) {
             Get.find<QcController>().fetchInitialQcStatus();

@@ -1,6 +1,7 @@
 import unittest
 import os
 import sys
+from unittest.mock import patch
 
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if backend_dir not in sys.path:
@@ -32,6 +33,12 @@ class TestStorageUsb(unittest.TestCase):
         res = safe_eject_drive(sys_drive)
         self.assertFalse(res['success'])
         self.assertIn('سیستمی', res['message'])
+
+    @patch('hardware.storage.get_connected_usb_drives', return_value=[])
+    def test_safe_eject_rejects_non_removable_target(self, _mock_drives):
+        res = safe_eject_drive('Z:')
+        self.assertFalse(res['success'])
+        self.assertIn('USB', res['message'])
 
 if __name__ == '__main__':
     unittest.main()

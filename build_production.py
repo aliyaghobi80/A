@@ -17,7 +17,7 @@ import zipfile
 import subprocess
 import urllib.request
 
-APP_VERSION = "1.1.28"
+APP_VERSION = "1.1.29"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:

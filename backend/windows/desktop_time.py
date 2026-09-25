@@ -2,7 +2,7 @@
 import ctypes
 import winreg
 from windows.device_settings import _run, _run_elevated_powershell
-from activation.windows_activation import _query_wmi_licensing
+from activation.windows_activation import get_windows_activation_info
 
 ICONS = ('{20D04FE0-3AEA-1069-A2D8-08002B30309D}', '{5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0}', '{645FF040-5081-101B-9F08-00AA002F954E}')
 ICON_ROOT = r'Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons'
@@ -17,7 +17,7 @@ def _read(hive, path, name, default=None):
 def get_desktop_time_status():
     result = {'windows_activated': None, 'desktop_icons_ready': None, 'timezone': 'نامشخص', 'automatic_timezone': None, 'location_enabled': None}
     try:
-        result['windows_activated'] = _query_wmi_licensing().get('activated')
+        result['windows_activated'] = get_windows_activation_info().get('activated')
         hidden = _read(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 'HideIcons', 0) == 1
         result['desktop_icons_ready'] = not hidden and all(_read(winreg.HKEY_CURRENT_USER, ICON_ROOT + '\\NewStartPanel', icon) == 0 for icon in ICONS)
         zone = _run(['tzutil.exe', '/g'])
@@ -30,7 +30,7 @@ def get_desktop_time_status():
     return result
 
 def show_desktop_icons(force: bool = False):
-    if not force and _query_wmi_licensing().get('activated') is not True:
+    if not force and get_windows_activation_info().get('activated') is not True:
         return {'success': False, 'message': 'ابتدا ویندوز را فعال کنید؛ وضعیت فعال‌سازی باید تأیید شود.'}
     try:
         # Ensure desktop icons are not globally hidden

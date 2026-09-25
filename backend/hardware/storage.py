@@ -1,7 +1,7 @@
 import logging
 from typing import List, Dict, Any
 
-from utils.powershell import run_powershell_json
+from utils.powershell import run_powershell_json, get_hidden_subprocess_kwargs
 from utils.formatters import clean_string, clean_serial_number, clean_part_number, format_bytes_to_gb, format_bytes_display
 from hardware.normalizer import normalize_storage_info
 from hardware.storage_health import query_physical_drive_health
@@ -118,6 +118,47 @@ def is_removable_or_usb_physical_disk(disk: Dict[str, Any]) -> bool:
     return False
 
 
+def _get_volume_usage_by_disk() -> Dict[int, Dict[str, Any]]:
+    """Return mounted-volume usage grouped by physical disk number."""
+    script = r"""
+    $result = foreach ($disk in Get-Disk -ErrorAction SilentlyContinue) {
+        $volumes = @(
+            Get-Partition -DiskNumber $disk.Number -ErrorAction SilentlyContinue |
+            Where-Object { $_.DriveLetter } |
+            ForEach-Object { Get-Volume -DriveLetter $_.DriveLetter -ErrorAction SilentlyContinue }
+        )
+        $mountedTotal = [long](($volumes | Measure-Object -Property Size -Sum).Sum)
+        $free = [long](($volumes | Measure-Object -Property SizeRemaining -Sum).Sum)
+        [long]$used = $mountedTotal - $free
+        if ($used -lt 0) { $used = 0 }
+        [PSCustomObject]@{
+            DiskNumber = [int]$disk.Number
+            MountedTotalBytes = $mountedTotal
+            FreeBytes = $free
+            UsedBytes = $used
+            PercentUsed = if ($mountedTotal -gt 0) { [Math]::Round(($used * 100.0) / $mountedTotal, 1) } else { 0 }
+            Volumes = @($volumes | ForEach-Object { [string]$_.DriveLetter + ':' })
+        }
+    }
+    @($result) | ConvertTo-Json -Depth 4
+    """
+    try:
+        raw = run_powershell_json(script, timeout=8)
+        items = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
+        result: Dict[int, Dict[str, Any]] = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            try:
+                result[int(item.get("DiskNumber"))] = item
+            except (TypeError, ValueError):
+                continue
+        return result
+    except Exception as exc:
+        logger.debug("Volume usage query failed: %s", exc)
+        return {}
+
+
 def get_storage_info() -> List[Dict[str, Any]]:
     """
     Detects all physical storage devices and calculates health via the Storage Health Engine.
@@ -141,6 +182,8 @@ def get_storage_info() -> List[Dict[str, Any]]:
             raw_wmi = data_wmi
         else:
             raw_wmi = []
+
+        usage_by_disk = _get_volume_usage_by_disk()
 
         if raw_wmi:
             for i, disk in enumerate(raw_wmi):
@@ -178,6 +221,7 @@ def get_storage_info() -> List[Dict[str, Any]]:
                 media_type = clean_string(disk.get("MediaType"), default="Fixed hard disk media")
 
                 health_data = query_physical_drive_health(idx_int, bus_type, media_type, friendly)
+                usage = usage_by_disk.get(idx_int, {})
 
                 # Refine bus & media type from NVMe direct IOCTL probe or model keywords
                 if "NVMe" in health_data.get("source", "") or "NVMe" in health_data.get("health_source", "") or "NVME" in friendly.upper():
@@ -199,6 +243,11 @@ def get_storage_info() -> List[Dict[str, Any]]:
                     "capacity_bytes": size_int,
                     "capacity_gb": cap_gb,
                     "capacity_display": cap_display,
+                    "mounted_capacity_bytes": int(usage.get("MountedTotalBytes") or 0),
+                    "free_bytes": int(usage.get("FreeBytes") or 0),
+                    "used_bytes": int(usage.get("UsedBytes") or 0),
+                    "percent_used": float(usage.get("PercentUsed") or 0.0),
+                    "volumes": usage.get("Volumes") or [],
                     "serial": serial,
                     "health_status": health_data["health_grade_fa"],
                     "health_percent": health_data["health_percent"],
@@ -272,6 +321,7 @@ def get_storage_info() -> List[Dict[str, Any]]:
 
             norm = normalize_storage_info(disk_model, friendly_name, bus_type, media_type)
             health_data = query_physical_drive_health(dev_idx, bus_type, media_type, friendly_name)
+            usage = usage_by_disk.get(dev_idx, {})
 
             drives.append({
                 "device_id": str(dev_idx),
@@ -284,6 +334,11 @@ def get_storage_info() -> List[Dict[str, Any]]:
                 "capacity_bytes": size_int,
                 "capacity_gb": cap_gb,
                 "capacity_display": cap_display,
+                "mounted_capacity_bytes": int(usage.get("MountedTotalBytes") or 0),
+                "free_bytes": int(usage.get("FreeBytes") or 0),
+                "used_bytes": int(usage.get("UsedBytes") or 0),
+                "percent_used": float(usage.get("PercentUsed") or 0.0),
+                "volumes": usage.get("Volumes") or [],
                 "serial": serial,
                 "health_status": health_data["health_grade_fa"],
                 "health_percent": health_data["health_percent"],
@@ -479,6 +534,7 @@ def safe_eject_drive(drive_letter: str) -> Dict[str, Any]:
     import os
     import re
     import subprocess
+    import time
 
     drive = str(drive_letter).strip().upper()
     if not drive.endswith(":"):
@@ -490,6 +546,16 @@ def safe_eject_drive(drive_letter: str) -> Dict[str, Any]:
     system_drive = (os.environ.get("SystemDrive") or "C:").upper().rstrip("\\")
     if drive == system_drive:
         return {"success": False, "message": "امکان خروج درایو سیستمی ویندوز وجود ندارد."}
+
+    connected = {
+        str(item.get("drive_letter") or "").upper()
+        for item in get_connected_usb_drives()
+    }
+    if drive not in connected:
+        return {
+            "success": False,
+            "message": f"درایو {drive} به‌عنوان فلش USB قابل‌خروج شناسایی نشد.",
+        }
 
     # Execute Explorer Shell native Eject verb
     ps_cmd = (
@@ -503,7 +569,7 @@ def safe_eject_drive(drive_letter: str) -> Dict[str, Any]:
         f"    }} "
         f"  }}; "
         f"  if (-not $ejected) {{ $item.InvokeVerb('E&ject') }}; "
-        f"  Write-Output 'OK' "
+        f"  Write-Output 'VERB_SENT' "
         f"}} else {{ "
         f"  Write-Output 'NOT_FOUND' "
         f"}}"
@@ -514,15 +580,45 @@ def safe_eject_drive(drive_letter: str) -> Dict[str, Any]:
             ["powershell", "-NoProfile", "-Command", ps_cmd],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            **get_hidden_subprocess_kwargs(),
         )
         out = (proc.stdout or "").strip()
         if "NOT_FOUND" in out:
             return {"success": False, "message": f"درایو {drive} یافت نشد یا قبلاً خارج شده است."}
 
+        root = drive + "\\"
+        for _ in range(16):
+            if not os.path.exists(root):
+                return {
+                    "success": True,
+                    "message": f"فلش مموری ({drive}) با موفقیت خارج شد و اکنون قابل جدا کردن است.",
+                }
+            time.sleep(0.5)
+
+        # Explorer may expose Eject but leave a busy volume mounted. MountVol
+        # provides a native, non-forced dismount fallback for this exact,
+        # previously verified removable drive.
+        fallback = subprocess.run(
+            ["mountvol.exe", root, "/P"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            **get_hidden_subprocess_kwargs(),
+        )
+        time.sleep(1)
+        if fallback.returncode == 0 and not os.path.exists(root):
+            return {
+                "success": True,
+                "message": f"فلش مموری ({drive}) با موفقیت خارج شد و اکنون قابل جدا کردن است.",
+            }
+
         return {
-            "success": True,
-            "message": f"فلش مموری ({drive}) با موفقیت به صورت ایمن خارج شد و اکنون قابل جدا کردن است."
+            "success": False,
+            "message": (
+                f"خروج ایمن {drive} کامل نشد. فایل‌ها و پنجره‌های باز روی فلش را ببندید "
+                "و دوباره تلاش کنید."
+            ),
         }
     except Exception as e:
         logger.error(f"Failed to safely eject {drive}: {e}")

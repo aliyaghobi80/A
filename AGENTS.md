@@ -67,6 +67,23 @@ Use fixtures and mocked process runners for every state-changing workflow.
 - Check narrow desktop layouts as well as the normal technician workstation
   size. Prefer `Wrap`/`LayoutBuilder` over fixed-width rows.
 
+## Activation and storage rules
+
+- Combine independent official Windows licensing signals. A positive Licensed
+  result from one source must not be overwritten by a stale negative result
+  from another source.
+- License status is live data: refresh it through `/api/activation/status`
+  instead of waiting for a full hardware rescan.
+- Windows 10/11 Home follows the product's original-Windows policy: activation
+  and Office deployment actions are disabled and the reason stays visible.
+- Desktop icons may only be enabled after consolidated Windows activation has
+  been confirmed.
+- Removable USB media is never listed as an internal disk. Internal capacity
+  usage is derived from volumes mapped to the same physical disk.
+- Safe eject validates that the requested drive is currently removable, waits
+  for the mount point to disappear, and reports failure instead of claiming a
+  successful eject while the drive remains mounted.
+
 ## Release version
 
 Keep these values synchronized: `frontend/pubspec.yaml`,

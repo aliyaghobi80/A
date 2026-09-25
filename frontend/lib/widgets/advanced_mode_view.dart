@@ -294,6 +294,9 @@ class _AdvancedModeViewState extends State<AdvancedModeView> {
                 packagesDirectory: pkgRes.packagesDirectory,
                 directoryExists: pkgRes.directoryExists,
                 isOfficeInstalled: isOfficeInstalled,
+                blockOfficeInstall:
+                    systemCtrl.systemInfo.value?.windows.isHomeEdition ??
+                    info.windows.isHomeEdition,
                 onScan: () => softwareCtrl.scanPackages(),
                 onChangeDirectory: () =>
                     softwareCtrl.changePackagesDirectory(context),
