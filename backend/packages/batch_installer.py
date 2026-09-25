@@ -280,6 +280,25 @@ def start_batch_install(
     if include_system_setup is None:
         include_system_setup = (package_ids is None or len(package_ids) > 1)
 
+    # Windows Update Blocker is a portable action rather than an installer, so
+    # it is normally excluded from selected package IDs.  Append the matching
+    # architecture automatically on non-Home editions as required by the
+    # deployment workflow; Home editions intentionally keep Windows Update on.
+    if target_packages and not any(_is_windows_update_blocker(p) for p in target_packages):
+        try:
+            from windows.device_settings import get_windows_identity
+            edition = str(get_windows_identity().get("edition") or "")
+            if "home" not in edition.lower():
+                blockers = [p for p in all_packages if _is_windows_update_blocker(p)]
+                blockers.sort(
+                    key=lambda p: "x64" in str(p.get("filename", "")).lower(),
+                    reverse=True,
+                )
+                if blockers:
+                    target_packages.append(blockers[0])
+        except Exception:
+            logger.debug("Could not determine Windows edition for WUB queue", exc_info=True)
+
     # Reorder software packages: regular apps, Office, then WUB
     normal_pkgs = [p for p in target_packages if p.get("installer_type") != "office_cmd" and "office" not in p.get("id", "").lower() and not _is_windows_update_blocker(p)]
     office_pkgs = [p for p in target_packages if p.get("installer_type") == "office_cmd" or "office" in p.get("id", "").lower()]

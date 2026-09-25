@@ -23,6 +23,7 @@ class SystemInfoController extends GetxController {
   final RxList<UsbDriveInfo> usbDrives = <UsbDriveInfo>[].obs;
   final RxBool isEjecting = false.obs;
   Timer? _usbPollTimer;
+  Future<void>? _activeFetch;
 
   // Session-based installation & restart suggestion tracking
   final RxInt sessionInstalledSoftwareCount = 0.obs;
@@ -130,6 +131,19 @@ class SystemInfoController extends GetxController {
   }
 
   Future<void> fetchSystemInfo({bool forceRefresh = false}) async {
+    final active = _activeFetch;
+    if (active != null) return active;
+
+    final operation = _fetchSystemInfo(forceRefresh: forceRefresh);
+    _activeFetch = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_activeFetch, operation)) _activeFetch = null;
+    }
+  }
+
+  Future<void> _fetchSystemInfo({required bool forceRefresh}) async {
     if (forceRefresh || systemInfo.value != null) {
       isRefreshing.value = true;
     } else {
@@ -150,6 +164,29 @@ class SystemInfoController extends GetxController {
       isLoading.value = false;
       isRefreshing.value = false;
     }
+  }
+
+  /// Used by the process-driven splash screen. A transient race while the
+  /// local backend starts is retried here instead of showing an immediate
+  /// "Retry" page on newly installed/slow Windows systems.
+  Future<bool> prepareInitialData({
+    void Function(double, String)? report,
+  }) async {
+    if (systemInfo.value != null) return true;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      report?.call(
+        0.58 + (attempt * 0.1),
+        attempt == 0
+            ? 'در حال دریافت مشخصات دستگاه…'
+            : 'در حال تکمیل اطلاعات سخت‌افزار…',
+      );
+      await fetchSystemInfo(forceRefresh: false);
+      if (systemInfo.value != null) return true;
+      if (attempt < 2) {
+        await Future<void>.delayed(Duration(milliseconds: 500 + attempt * 500));
+      }
+    }
+    return false;
   }
 
   void copyToClipboard(BuildContext context, String text, String message) {

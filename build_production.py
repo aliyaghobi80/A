@@ -6,7 +6,7 @@ Complete Automated Production Packaging and Deployment Script for Markazi System
 3. Builds Flutter Windows Release binary (MarkaziSystemChecker.exe).
 4. Synchronizes assets, validated Packages, config, and Visual C++ runtime DLLs.
 5. Stages portable directory (dist/MarkaziSystemChecker).
-6. Creates portable zip archive (dist/MarkaziSystemChecker-Portable-1.1.2.zip).
+6. Creates the versioned portable zip archive.
 7. Compiles Inno Setup Windows installer (dist/MarkaziSystemChecker-Setup.exe).
 """
 
@@ -17,7 +17,7 @@ import zipfile
 import subprocess
 import urllib.request
 
-APP_VERSION = "1.1.27"
+APP_VERSION = "1.1.28"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:

@@ -31,7 +31,9 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('ready backend still waits four seconds', (tester) async {
+  testWidgets('ready backend proceeds without a fixed four-second delay', (
+    tester,
+  ) async {
     var transitions = 0;
     await tester.pumpWidget(
       MaterialApp(
@@ -41,11 +43,8 @@ void main() {
         ),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 3999));
-    expect(transitions, 0);
-    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
     expect(transitions, 1);
-    expect(find.text('Markazi System Checker'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -60,7 +59,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
     expect(find.text('تلاش مجدد'), findsOneWidget);
     expect(transitions, 0);
     await tester.tap(find.text('تلاش مجدد'));
@@ -76,7 +75,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: SplashScreen(connect: () => backend.future)),
     );
-    await tester.pump(const Duration(seconds: 46));
+    await tester.pump(const Duration(seconds: 91));
     expect(find.text('ورود برای بررسی'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     backend.complete(true);
@@ -85,7 +84,7 @@ void main() {
   });
 
   testWidgets(
-    'reduced motion respects minimum and large text fits narrow view',
+    'reduced motion and large text fit narrow view without fixed delay',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(375, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -104,11 +103,9 @@ void main() {
           ),
         ),
       );
-      await tester.pump(const Duration(seconds: 3));
-      expect(transitions, 0);
-      expect(tester.takeException(), isNull);
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
       expect(transitions, 1);
+      expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
   );

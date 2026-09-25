@@ -51,9 +51,11 @@ class TestOfficeAutomation(unittest.TestCase):
         self.assertTrue(result.get("success"))
         items = result.get("items", [])
         self.assertGreaterEqual(len(items), 2)
-        # Office must be the last item in the queue
-        self.assertEqual(items[-1]["installer_type"], "office_cmd")
-        self.assertNotEqual(items[0]["installer_type"], "office_cmd")
+        # Office must run after ordinary applications but before final device
+        # preparation steps added by the deployment orchestrator.
+        office_index = next(i for i, item in enumerate(items) if item["installer_type"] == "office_cmd")
+        chrome_index = next(i for i, item in enumerate(items) if item.get("relative_path") == "Google Chrome/Setup.msi")
+        self.assertGreater(office_index, chrome_index)
 
 
 if __name__ == "__main__":

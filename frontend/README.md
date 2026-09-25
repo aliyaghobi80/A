@@ -1,11 +1,24 @@
-# Markazi System Checker - Frontend (مرکزی سیستم چکر)
+# Markazi System Checker — Flutter frontend
 
-Desktop frontend application for **Markazi System Checker** built with Flutter for Windows.
+رابط دسکتاپ ویندوز با Flutter و GetX. صفحات فارسی RTL هستند، اما ورودی‌های
+عددی، نسخه‌ها، سریال‌ها و مسیرها باید LTR باقی بمانند.
 
-## Features
-- **Bilingual Localization**: English & Persian (Farsi) with native RTL support
-- **Display Modes**:
-  - **Simple Mode** (Default): Fast, invoice-comparison checklist view for store employees
-  - **Advanced Mode**: Detailed hardware diagnostic cards for technicians
-- **Light & Dark Theme** support
-- **Local Preferences Persistence**: Remembers language, display mode, and theme between sessions
+## معماری
+
+- `lib/controllers/`: وضعیت و عملیات صفحات با GetX.
+- `lib/services/`: ارتباط با API محلی و انتخاب پوشه.
+- `lib/screens/`: اسپلش و پوسته اصلی.
+- `lib/widgets/pages/`: صفحات نصب، QC، تنظیمات و محاسبات.
+- `test/`: تست رفتار، واکنش‌گرایی، اسپلش و نمایش سخت‌افزار.
+
+اسپلش بر اساس آماده‌شدن بک‌اند و بارگیری اطلاعات اولیه پیش می‌رود و زمان ثابت
+ندارد. نصب نرم‌افزار و درایور هنگام اجرای صف با polling کوتاه، وضعیت زنده نشان
+می‌دهد و بعد از پایان نیازی به اسکن دستی ندارد.
+
+## بررسی محلی
+
+```powershell
+flutter analyze
+flutter test
+flutter run -d windows
+```

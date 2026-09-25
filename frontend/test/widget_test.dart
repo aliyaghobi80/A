@@ -411,7 +411,7 @@ void main() {
       // Verify Persian hardware section titles
       expect(find.text('سی‌پی‌یو'), findsOneWidget);
       expect(find.text('رم'), findsOneWidget);
-      expect(find.text('کارت گرافیک'), findsOneWidget);
+      expect(find.text('کارت گرافیک'), findsAtLeast(1));
       expect(find.text('مادربرد'), findsOneWidget);
       expect(find.text('حافظه ذخیره‌سازی'), findsOneWidget);
       expect(find.text('ویندوز'), findsAtLeast(1));

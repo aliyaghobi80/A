@@ -249,17 +249,12 @@ def _collect_driver_candidates(dir_path: str, current_depth: int = 0, max_depth:
         found.append(dir_path)
         return found
 
-    # 2. Not a single cohesive package: collect any loose standalone installer EXEs
+    # 2. Not a single cohesive package: every direct EXE/MSI is an independent
+    # OEM package.  This is common after extracting ASUS/Gigabyte/MSI archives
+    # that contain several prerequisites or component installers side-by-side.
+    # Inspection still rejects firmware and uninstall tools before queuing.
     for exe in executables:
-        exe_name = os.path.basename(exe).lower()
-        if (
-            any(k in exe_name for k in ("setup", "install", "asus", "igxp", "dpinst", "rtk", "intel", "amd", "nvidia", "radeon", "geforce"))
-            or re.match(r"^sp\d{4,7}\.exe$", exe_name)
-            or re.match(r"^[a-z0-9]+us\d+\.exe$", exe_name)
-            or "whql" in exe_name
-            or len(executables) == 1
-        ):
-            found.append(exe)
+        found.append(exe)
 
     # 3. Collect valid driver scripts
     for scr in scripts:

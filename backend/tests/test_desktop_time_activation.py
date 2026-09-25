@@ -42,8 +42,9 @@ class DesktopTimeActivationTests(unittest.TestCase):
     @patch('windows.desktop_time._query_wmi_licensing', return_value={'activated': True})
     def test_only_three_icons_enabled_as_dword(self, query, create, write, status, dll):
         self.assertTrue(show_desktop_icons()['success'])
-        self.assertEqual(write.call_count, 6)
-        self.assertEqual({call.args[1] for call in write.call_args_list}, set(ICONS))
+        self.assertEqual(write.call_count, 7)
+        icon_writes = [call for call in write.call_args_list if call.args[1] != 'HideIcons']
+        self.assertEqual({call.args[1] for call in icon_writes}, set(ICONS))
         self.assertTrue(all(call.args[-1] == 0 for call in write.call_args_list))
 
     @patch('windows.desktop_time.get_desktop_time_status')
@@ -53,8 +54,8 @@ class DesktopTimeActivationTests(unittest.TestCase):
         result = set_tehran_automatic_timezone()
         self.assertTrue(result['success'])
         self.assertIn('Location', result['message'])
-        script = run.call_args.args[0]
-        self.assertIn('Iran Standard Time_dstoff', script)
-        self.assertNotIn('ConsentStore', script)
+        # Automatic timezone was already enabled in the mocked readback, so no
+        # elevation is necessary and the direct tzutil path is sufficient.
+        run.assert_not_called()
         state.return_value['timezone'] = 'Pacific Standard Time'
         self.assertFalse(set_tehran_automatic_timezone()['success'])

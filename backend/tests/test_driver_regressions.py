@@ -8,7 +8,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from drivers.driver_installer import _collect_driver_candidates
-from drivers.package_inspector import inspect_driver_package, parse_inf_file
+from drivers.package_inspector import (
+    get_driver_exe_silent_args,
+    inspect_driver_package,
+    parse_inf_file,
+)
 from drivers.queue_manager import _install_single_package, get_driver_queue_status
 from drivers.deduplicator import deduplicate_driver_packages
 from drivers.archive_extractor import auto_unpack_driver_archives, extract_driver_archive
@@ -16,6 +20,29 @@ from drivers.hardware_matcher import match_package_to_hardware
 
 
 class DriverRegressionTests(unittest.TestCase):
+    def test_modern_intel_graphics_uses_documented_silent_switches(self):
+        path = r'C:\Drivers\Intel_Graphics\Installer.exe'
+        self.assertEqual(get_driver_exe_silent_args(path), ['--overwrite', '-s'])
+
+    def test_asus_extracted_folder_queues_every_direct_installer(self):
+        with tempfile.TemporaryDirectory() as root:
+            folder = Path(root) / 'ASUS_Graphics'
+            folder.mkdir()
+            expected = []
+            for name in ('Setup.exe', 'IntelGraphics.exe', 'Component.msi'):
+                path = folder / name
+                path.write_bytes(b'MZ')
+                expected.append(str(path))
+            self.assertCountEqual(_collect_driver_candidates(str(folder)), expected)
+
+    def test_asus_installpackage_script_is_supported(self):
+        with tempfile.TemporaryDirectory() as root:
+            script = Path(root) / 'InstallPackage.bat'
+            script.write_text('@echo off\n', encoding='utf-8')
+            package = inspect_driver_package(str(script), root)
+            self.assertIsNotNone(package)
+            self.assertEqual(package.install_method, 'script')
+
     def test_opaque_downloads_are_separate_even_in_driver_named_folder(self):
         with tempfile.TemporaryDirectory() as root:
             folder = Path(root) / 'driver_laptop'
@@ -127,7 +154,7 @@ class DriverRegressionTests(unittest.TestCase):
             (folder / 'setup.exe').write_bytes(b'MZ')
             self.assertEqual(_collect_driver_candidates(root), [str(folder)])
 
-    def test_all_infs_are_inspected_and_attempted_after_a_failure(self):
+    def test_all_infs_are_inspected_and_installed_as_one_dependency_tree(self):
         with tempfile.TemporaryDirectory() as root:
             for index in range(9):
                 (Path(root) / f'{index}.inf').write_text(
@@ -136,15 +163,12 @@ class DriverRegressionTests(unittest.TestCase):
             package = inspect_driver_package(root, root)
             self.assertEqual(len(package.inf_files), 9)
             self.assertEqual(len(package.hardware_ids), 9)
-            results = [(0, 'ok')] * 9
-            results[2] = (5, 'denied')
-            results[8] = (3010, 'reboot required')
-            with patch('drivers.queue_manager._install_inf_package', side_effect=results) as install, patch('drivers.queue_manager.record_driver_installation'), patch('drivers.queue_manager._log_driver_event'):
+            with patch('drivers.queue_manager._install_inf_package', return_value=(0, '9 driver packages added')) as install, patch('drivers.queue_manager.record_driver_installation'), patch('drivers.queue_manager._log_driver_event'):
                 result = _install_single_package(package.to_dict())
-            self.assertEqual(install.call_count, 9)
-            self.assertFalse(result['success'])
-            self.assertTrue(result['reboot_required'])
-            self.assertEqual(result['exit_code'], 5)
+            install.assert_called_once_with(root, timeout=240)
+            self.assertTrue(result['success'])
+            self.assertFalse(result['reboot_required'])
+            self.assertEqual(result['exit_code'], 0)
 
     def test_component_packages_with_same_hardware_survive(self):
         packages = [dict(source_path=f'C:/drivers/{name}', category='audio', hardware_ids=['PCI\\VEN_1234&DEV_1234'], display_name='Audio') for name in ('base', 'extension', 'component')]

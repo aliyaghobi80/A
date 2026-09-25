@@ -130,7 +130,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.27",
+                "version": "1.1.28",
                 "phase": 4,
                 "api_contract_version": 2,
             }

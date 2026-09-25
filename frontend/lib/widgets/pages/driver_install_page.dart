@@ -382,7 +382,9 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     color: selectedIds.isEmpty
-                        ? (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))
+                        ? (isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B))
                         : accent,
                   ),
                 ),
@@ -391,60 +393,41 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                 onTap: ctrl.installablePackageIds.isEmpty
                     ? null
                     : ctrl.toggleSelectAllPackages,
-                borderRadius: BorderRadius.circular(6),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Checkbox(
-                        value: ctrl.triStateSelectionValue,
-                        tristate: true,
-                        activeColor: accent,
-                        checkColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(10),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Checkbox(
+                          value: ctrl.triStateSelectionValue,
+                          tristate: true,
+                          activeColor: accent,
+                          checkColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          onChanged: ctrl.installablePackageIds.isEmpty
+                              ? null
+                              : (_) => ctrl.toggleSelectAllPackages(),
                         ),
-                        onChanged: ctrl.installablePackageIds.isEmpty
-                            ? null
-                            : (_) => ctrl.toggleSelectAllPackages(),
-                      ),
-                      Text(
-                        ctrl.areAllInstallableSelected
-                            ? 'لغو انتخاب همه'
-                            : 'انتخاب همه',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isDark
-                              ? AppTheme.darkTextPrimary
-                              : AppTheme.lightTextPrimary,
+                        Text(
+                          ctrl.areAllInstallableSelected
+                              ? 'لغو انتخاب همه'
+                              : 'انتخاب همه',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark
+                                ? AppTheme.darkTextPrimary
+                                : AppTheme.lightTextPrimary,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: ctrl.installablePackageIds.isEmpty
-                    ? null
-                    : ctrl.selectAllPackages,
-                icon: const Icon(Icons.select_all_rounded, size: 14),
-                label: const Text('انتخاب همه', style: TextStyle(fontSize: 11.5)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  minimumSize: const Size(0, 30),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: ctrl.selectedPackageIds.isEmpty
-                    ? null
-                    : ctrl.clearSelection,
-                icon: const Icon(Icons.deselect_rounded, size: 14),
-                label: const Text('لغو انتخاب', style: TextStyle(fontSize: 11.5)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  minimumSize: const Size(0, 30),
                 ),
               ),
             ],
@@ -475,13 +458,18 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                   minimumSize: const Size(0, 34),
                 ),
               ),
-              // Auto Install Selected Button
+              // One primary queue action keeps the toolbar predictable: the
+              // select-all checkbox controls whether this means all or a subset.
               ElevatedButton.icon(
                 onPressed: (isBatchRunning || selectedIds.isEmpty)
                     ? null
                     : () => ctrl.installSelectedDrivers(context),
                 icon: const Icon(Icons.auto_mode_rounded, size: 16),
-                label: Text('نصب خودکار (${selectedIds.length})'),
+                label: Text(
+                  ctrl.areAllInstallableSelected
+                      ? 'نصب خودکار همه (${selectedIds.length})'
+                      : 'نصب انتخاب‌شده‌ها (${selectedIds.length})',
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0D9488),
                   foregroundColor: Colors.white,
@@ -495,53 +483,7 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                     horizontal: 12,
                     vertical: 6,
                   ),
-                  minimumSize: const Size(0, 34),
-                ),
-              ),
-              // Manual Install Selected Button
-              ElevatedButton.icon(
-                onPressed: (isBatchRunning || selectedIds.isEmpty)
-                    ? null
-                    : () => ctrl.installSelectedDriversManual(context),
-                icon: const Icon(Icons.launch_rounded, size: 16),
-                label: Text('نصب دستی (${selectedIds.length})'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: isDark
-                      ? const Color(0xFF1E293B)
-                      : const Color(0xFFE2E8F0),
-                  disabledForegroundColor: isDark
-                      ? const Color(0xFF64748B)
-                      : const Color(0xFF94A3B8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  minimumSize: const Size(0, 34),
-                ),
-              ),
-              // Install All Button
-              ElevatedButton.icon(
-                onPressed: isBatchRunning
-                    ? null
-                    : () => ctrl.installAllDrivers(context),
-                icon: const Icon(Icons.play_arrow_rounded, size: 16),
-                label: const Text('نصب خودکار همه'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accent,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: isDark
-                      ? const Color(0xFF1E293B)
-                      : const Color(0xFFE2E8F0),
-                  disabledForegroundColor: isDark
-                      ? const Color(0xFF64748B)
-                      : const Color(0xFF94A3B8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  minimumSize: const Size(0, 34),
+                  minimumSize: const Size(0, 44),
                 ),
               ),
             ],
@@ -1133,8 +1075,8 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                           isRunning
                               ? 'صف نصب خودکار درایورها'
                               : (failed == 0
-                                  ? 'نصب درایورها با موفقیت پایان یافت'
-                                  : 'عملیات پایان یافت (نیازمند بررسی)'),
+                                    ? 'نصب درایورها با موفقیت پایان یافت'
+                                    : 'عملیات پایان یافت (نیازمند بررسی)'),
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
@@ -1168,11 +1110,11 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                     Text(
                       isRunning
                           ? (currentItem != null && currentItem.isNotEmpty
-                              ? 'در حال نصب: $currentItem ($done از $total)'
-                              : 'در حال آماده‌سازی...')
+                                ? 'در حال نصب: $currentItem ($done از $total)'
+                                : 'در حال آماده‌سازی...')
                           : (status.summaryMessage.isNotEmpty
-                              ? status.summaryMessage
-                              : '$completed درایور نصب شد'),
+                                ? status.summaryMessage
+                                : '$completed درایور نصب شد'),
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -1218,7 +1160,10 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                     ),
                   ),
                 ),
-              ] else if (status.cancelled || status.items.any((i) => i.status == 'failed' || i.status == 'pending')) ...[
+              ] else if (status.cancelled ||
+                  status.items.any(
+                    (i) => i.status == 'failed' || i.status == 'pending',
+                  )) ...[
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
                   onPressed: () => ctrl.resumeDriverAutoInstall(context),
@@ -1327,7 +1272,9 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0A1224) : const Color(0xFFF8FAFC),
+                    color: isDark
+                        ? const Color(0xFF0A1224)
+                        : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: chipColor.withValues(alpha: 0.4),

@@ -474,6 +474,7 @@ class DriverPackage:
 def get_driver_exe_silent_args(file_path: str) -> List[str]:
     """Returns vendor-specific silent switches for driver executables (ASUS, Gigabyte, MSI, Lenovo, HP, Dell, NVIDIA, AMD, Intel, Realtek)."""
     name_l = os.path.basename(file_path).lower()
+    path_l = os.path.abspath(file_path).lower().replace("\\", "/")
     if "dpinst" in name_l:
         return ["/q", "/se", "/sa", "/sw"]
     elif any(t in name_l for t in ("nvidia", "geforce", "quadro")) or name_l.endswith("-international-dch-whql.exe") or "-whql" in name_l:
@@ -482,7 +483,16 @@ def get_driver_exe_silent_args(file_path: str) -> List[str]:
         return ["-INSTALL", "-OUTPUT", "screen", "-NORESTART"]
     elif any(t in name_l for t in ("asussetup", "asus")):
         return ["-s", "-norestart"]
-    elif any(t in name_l for t in ("setuprst", "setupchipset", "igxpin", "gfx_win")):
+    # Intel's current Graphics Installer documents ``--overwrite -s``.  The
+    # downloaded EXE may be named gfx_win_*.exe, or become Installer.exe after
+    # extraction, so use the complete path as a vendor/category hint.
+    elif (
+        "gfx_win" in path_l
+        or "igfx" in path_l
+        or ("intel" in path_l and any(t in path_l for t in ("graphic", "display", "vga")))
+    ):
+        return ["--overwrite", "-s"]
+    elif any(t in name_l for t in ("setuprst", "setupchipset", "igxpin")):
         return ["-s", "-norestart"]
     elif re.match(r"^sp\d{4,7}\.exe$", name_l):  # HP SoftPaq
         return ["/s", "-s"]
@@ -560,7 +570,14 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
             alts = [c for c in candidates_exe if c != exe]
             return exe, "setup_exe", get_driver_exe_silent_args(exe), alts
 
-    # 5. Any root or shallow EXE
+    # 5. INF payloads often contain service/helper executables that are not
+    # installers.  Prefer the complete INF tree unless a known OEM wrapper was
+    # selected above; this also ensures every base/extension/component INF is
+    # passed to PnPUtil.
+    if candidates_inf:
+        return candidates_inf[0], "pnputil", [], candidates_inf[1:] + candidates_exe
+
+    # 6. Any root or shallow EXE
     if candidates_exe:
         # Sort by directory depth so shallowest setup is chosen
         candidates_exe.sort(key=lambda p: len(os.path.relpath(p, root_dir).replace("\\", "/").split("/")))
@@ -570,13 +587,9 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
         if len(rel_parts) <= 2 or not candidates_inf:
             return primary, "setup_exe", get_driver_exe_silent_args(primary), candidates_exe[1:]
 
-    # 6. MSI packages
+    # 7. MSI packages
     if candidates_msi:
         return candidates_msi[0], "msiexec", ["/qn", "/norestart", "REBOOT=ReallySuppress"], candidates_msi[1:]
-
-    # 7. INF Tree (when no setup executable is provided)
-    if candidates_inf:
-        return candidates_inf[0], "pnputil", [], candidates_inf[1:]
 
     return "", "none", [], []
 
@@ -623,7 +636,8 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
         elif ext in (".cmd", ".bat"):
             trusted_scripts = {
                 "silentinstall.cmd", "silentinstall.bat", "install.cmd",
-                "install.bat", "setup.cmd", "setup.bat",
+                "install.bat", "setup.cmd", "setup.bat", "installstep.bat",
+                "installpackage.bat", "silent.bat", "silent.cmd",
             }
             # Do not treat arbitrary command files as a driver package.  OEM
             # packages commonly use these named setup wrappers (including

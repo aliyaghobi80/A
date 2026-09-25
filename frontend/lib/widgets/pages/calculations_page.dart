@@ -11,89 +11,57 @@ class ThousandsSeparatorInputFormatter extends TextInputFormatter {
 
   @override
   TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue, TextEditingValue newValue) {
-    if (newValue.text.isEmpty) {
-      return newValue.copyWith(text: '');
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) return const TextEditingValue();
+
+    final raw = newValue.text.replaceAll(separator, '');
+    if (!RegExp(r'^\d*(?:\.\d*)?$').hasMatch(raw)) return oldValue;
+
+    // Track the caret by logical numeric characters, not by visual comma
+    // positions. This keeps sequential typing stable in an RTL application:
+    // typing 1, 0, 0 always becomes 100 (never 001).
+    final caret = newValue.selection.extentOffset.clamp(
+      0,
+      newValue.text.length,
+    );
+    final logicalCaret = newValue.text
+        .substring(0, caret)
+        .replaceAll(separator, '')
+        .length;
+
+    final dotIndex = raw.indexOf('.');
+    final integer = dotIndex >= 0 ? raw.substring(0, dotIndex) : raw;
+    final fraction = dotIndex >= 0 ? raw.substring(dotIndex + 1) : null;
+    final buffer = StringBuffer();
+    for (var index = 0; index < integer.length; index++) {
+      if (index > 0 && (integer.length - index) % 3 == 0) {
+        buffer.write(separator);
+      }
+      buffer.write(integer[index]);
+    }
+    if (fraction != null) {
+      buffer
+        ..write('.')
+        ..write(fraction);
+    }
+    final formatted = buffer.toString();
+
+    var seenLogical = 0;
+    var formattedCaret = formatted.length;
+    for (var index = 0; index < formatted.length; index++) {
+      if (seenLogical == logicalCaret) {
+        formattedCaret = index;
+        break;
+      }
+      if (formatted[index] != separator) seenLogical++;
     }
 
-    String newValueText = newValue.text.replaceAll(separator, '');
-    
-    // Only allow numbers and optionally a dot
-    if (newValueText == '.' || newValueText == '-' || newValueText == '-.') return newValue;
-    
-    final int selectionIndex = newValue.selection.end;
-    
-    // Calculate the number of commas in the original string before cursor
-    int commasBeforeCursor = 0;
-    for (int i = 0; i < oldValue.selection.end && i < oldValue.text.length; i++) {
-      if (oldValue.text[i] == separator) {
-        commasBeforeCursor++;
-      }
-    }
-    
-    // Check if we are deleting a comma
-    if (oldValue.text.length > newValue.text.length && 
-        selectionIndex < oldValue.text.length &&
-        oldValue.text[selectionIndex] == separator) {
-      // It's handled naturally by just recreating the string
-    }
-
-    try {
-      final parts = newValueText.split('.');
-      String integerPart = parts[0];
-      String formattedInteger = '';
-      
-      bool isNegative = integerPart.startsWith('-');
-      if (isNegative) {
-        integerPart = integerPart.substring(1);
-      }
-
-      for (int i = integerPart.length - 1; i >= 0; i--) {
-        formattedInteger = integerPart[i] + formattedInteger;
-        if ((integerPart.length - i) % 3 == 0 && i != 0) {
-          formattedInteger = separator + formattedInteger;
-        }
-      }
-      
-      if (isNegative) {
-        formattedInteger = '-\$formattedInteger';
-      }
-
-      String finalString = formattedInteger;
-      if (parts.length > 1) {
-        finalString += '.\${parts[1]}';
-      } else if (newValueText.endsWith('.')) {
-        finalString += '.';
-      }
-
-      // Calculate new cursor position
-      int newCommasBeforeCursor = 0;
-      int charCount = 0;
-      int newCursorPosition = 0;
-      
-      int targetChars = selectionIndex - commasBeforeCursor;
-      
-      for (int i = 0; i < finalString.length; i++) {
-        if (charCount == targetChars) {
-          newCursorPosition = i;
-          break;
-        }
-        if (finalString[i] != separator) {
-          charCount++;
-        }
-      }
-      
-      if (charCount < targetChars) {
-        newCursorPosition = finalString.length;
-      }
-
-      return TextEditingValue(
-        text: finalString,
-        selection: TextSelection.collapsed(offset: newCursorPosition),
-      );
-    } catch (e) {
-      return oldValue;
-    }
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formattedCaret),
+    );
   }
 }
 
@@ -108,13 +76,13 @@ class CalculationsPage extends StatefulWidget {
 
 class _CalculationsPageState extends State<CalculationsPage> {
   // 0: Dashboard, 1: Game Price, 2: Partition
-  int _currentView = 0; 
+  int _currentView = 0;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Column(
@@ -126,49 +94,54 @@ class _CalculationsPageState extends State<CalculationsPage> {
               children: [
                 if (_currentView != 0) ...[
                   IconButton(
-                    icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : Colors.black87),
+                    icon: Icon(
+                      Icons.arrow_back_rounded,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
                     onPressed: () => setState(() => _currentView = 0),
                     tooltip: 'بازگشت به منوی محاسبات',
                   ),
                   const SizedBox(width: 8),
                 ],
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _currentView == 0 
-                          ? 'محاسبات و ابزارها' 
-                          : _currentView == 1 
-                              ? 'محاسبه قیمت بازی (حجمی)' 
-                              : 'محاسبه پارتیشن‌بندی',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: isDark ? Colors.white : Colors.black87,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _currentView == 0
+                            ? 'محاسبات و ابزارها'
+                            : _currentView == 1
+                            ? 'محاسبه قیمت بازی (حجمی)'
+                            : 'محاسبه پارتیشن‌بندی',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'ابزارهای محاسبه سریع برای فروشگاه',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      const SizedBox(height: 8),
+                      Text(
+                        'ابزارهای محاسبه سریع برای فروشگاه',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          
+
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
               child: _currentView == 0
                   ? _buildDashboard(isDark)
                   : _currentView == 1
-                      ? const GamePriceCalculatorView()
-                      : const PartitionCalculatorView(),
+                  ? const GamePriceCalculatorView()
+                  : const PartitionCalculatorView(),
             ),
           ),
         ],
@@ -179,32 +152,44 @@ class _CalculationsPageState extends State<CalculationsPage> {
   Widget _buildDashboard(bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-      child: Wrap(
-        spacing: 24,
-        runSpacing: 24,
-        children: [
-          _buildToolCard(
-            title: 'محاسبه قیمت بازی',
-            description: 'محاسبه قیمت فروش بازی بر اساس حجم کل بازی‌های انتخابی مشتری',
-            icon: Icons.sports_esports_rounded,
-            color: const Color(0xFF0D9488),
-            isDark: isDark,
-            onTap: () => setState(() => _currentView = 1),
-          ),
-          _buildToolCard(
-            title: 'محاسبه پارتیشن‌بندی',
-            description: 'محاسبه دقیق مگابایت برای درایو C و سایر درایوها جهت نصب ویندوز',
-            icon: Icons.data_usage_rounded,
-            color: const Color(0xFF6366F1),
-            isDark: isDark,
-            onTap: () => setState(() => _currentView = 2),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cardWidth = constraints.maxWidth < 720
+              ? constraints.maxWidth
+              : (constraints.maxWidth - 24) / 2;
+          return Wrap(
+            spacing: 24,
+            runSpacing: 24,
+            children: [
+              _buildToolCard(
+                width: cardWidth,
+                title: 'محاسبه قیمت بازی',
+                description:
+                    'محاسبه قیمت فروش بازی بر اساس حجم کل بازی‌های انتخابی مشتری',
+                icon: Icons.sports_esports_rounded,
+                color: const Color(0xFF0D9488),
+                isDark: isDark,
+                onTap: () => setState(() => _currentView = 1),
+              ),
+              _buildToolCard(
+                width: cardWidth,
+                title: 'محاسبه پارتیشن‌بندی',
+                description:
+                    'محاسبه دقیق مگابایت برای درایو C و سایر درایوها جهت نصب ویندوز',
+                icon: Icons.data_usage_rounded,
+                color: const Color(0xFF6366F1),
+                isDark: isDark,
+                onTap: () => setState(() => _currentView = 2),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   Widget _buildToolCard({
+    required double width,
     required String title,
     required String description,
     required IconData icon,
@@ -213,6 +198,7 @@ class _CalculationsPageState extends State<CalculationsPage> {
     required VoidCallback onTap,
   }) {
     return ToolCard(
+      width: width,
       title: title,
       description: description,
       icon: icon,
@@ -229,13 +215,16 @@ class GamePriceCalculatorView extends StatefulWidget {
   const GamePriceCalculatorView({super.key});
 
   @override
-  State<GamePriceCalculatorView> createState() => _GamePriceCalculatorViewState();
+  State<GamePriceCalculatorView> createState() =>
+      _GamePriceCalculatorViewState();
 }
 
 class _GamePriceCalculatorViewState extends State<GamePriceCalculatorView> {
   final TextEditingController _gameSizeCtrl = TextEditingController();
   final TextEditingController _baseSizeCtrl = TextEditingController(text: '50');
-  final TextEditingController _basePriceCtrl = TextEditingController(text: '300,000');
+  final TextEditingController _basePriceCtrl = TextEditingController(
+    text: '300,000',
+  );
 
   String _totalPrice = '۰';
 
@@ -248,13 +237,22 @@ class _GamePriceCalculatorViewState extends State<GamePriceCalculatorView> {
   }
 
   void _calculatePrice() {
-    final double? gameSize = double.tryParse(_gameSizeCtrl.text.replaceAll(',', ''));
-    final double? baseSize = double.tryParse(_baseSizeCtrl.text.replaceAll(',', ''));
-    final double? basePrice = double.tryParse(_basePriceCtrl.text.replaceAll(',', ''));
+    final double? gameSize = double.tryParse(
+      _gameSizeCtrl.text.replaceAll(',', ''),
+    );
+    final double? baseSize = double.tryParse(
+      _baseSizeCtrl.text.replaceAll(',', ''),
+    );
+    final double? basePrice = double.tryParse(
+      _basePriceCtrl.text.replaceAll(',', ''),
+    );
 
-    if (gameSize != null && baseSize != null && baseSize > 0 && basePrice != null) {
+    if (gameSize != null &&
+        baseSize != null &&
+        baseSize > 0 &&
+        basePrice != null) {
       final double total = (gameSize / baseSize) * basePrice;
-      
+
       final format = NumberFormat.decimalPattern('en');
       setState(() {
         _totalPrice = format.format(total);
@@ -283,47 +281,38 @@ class _GamePriceCalculatorViewState extends State<GamePriceCalculatorView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _buildInputField(
-                    label: 'حجم کل بازی‌ها (گیگابایت)',
-                    controller: _gameSizeCtrl,
-                    isDark: isDark,
-                    hint: 'مثلاً 120',
-                    autoFocus: true,
-                    onChanged: (_) => _calculatePrice(),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildInputField(
-                    label: 'حجم پایه فروش (گیگ)',
-                    controller: _baseSizeCtrl,
-                    isDark: isDark,
-                    hint: 'مثلاً 50',
-                    onChanged: (_) => _calculatePrice(),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildInputField(
-                    label: 'قیمت پایه (تومان)',
-                    controller: _basePriceCtrl,
-                    isDark: isDark,
-                    hint: 'مثلاً 300,000',
-                    onChanged: (_) => _calculatePrice(),
-                  ),
-                ),
-              ],
-            ),
+            _responsiveColumns([
+              _buildInputField(
+                label: 'حجم کل بازی‌ها (گیگابایت)',
+                controller: _gameSizeCtrl,
+                isDark: isDark,
+                hint: 'مثلاً 120',
+                autoFocus: true,
+                onChanged: (_) => _calculatePrice(),
+              ),
+              _buildInputField(
+                label: 'حجم پایه فروش (گیگ)',
+                controller: _baseSizeCtrl,
+                isDark: isDark,
+                hint: 'مثلاً 50',
+                onChanged: (_) => _calculatePrice(),
+              ),
+              _buildInputField(
+                label: 'قیمت پایه (تومان)',
+                controller: _basePriceCtrl,
+                isDark: isDark,
+                hint: 'مثلاً 300,000',
+                onChanged: (_) => _calculatePrice(),
+              ),
+            ]),
             const SizedBox(height: 32),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                color: isDark
+                    ? const Color(0xFF0F172A)
+                    : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: const Color(0xFF0D9488).withValues(alpha: 0.3),
@@ -342,32 +331,35 @@ class _GamePriceCalculatorViewState extends State<GamePriceCalculatorView> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        _totalPrice,
-                        style: const TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF0D9488),
-                          letterSpacing: 2.0,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 8.0),
-                        child: Text(
-                          'تومان',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          _totalPrice,
+                          style: const TextStyle(
+                            fontSize: 48,
+                            fontWeight: FontWeight.w900,
                             color: Color(0xFF0D9488),
+                            letterSpacing: 2.0,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 8.0),
+                          child: Text(
+                            'تومان',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0D9488),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -385,13 +377,20 @@ class PartitionCalculatorView extends StatefulWidget {
   const PartitionCalculatorView({super.key});
 
   @override
-  State<PartitionCalculatorView> createState() => _PartitionCalculatorViewState();
+  State<PartitionCalculatorView> createState() =>
+      _PartitionCalculatorViewState();
 }
 
 class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
-  final TextEditingController _totalDiskCtrl = TextEditingController(text: '500');
-  final TextEditingController _cDriveSizeCtrl = TextEditingController(text: '150');
-  final TextEditingController _otherPartitionsCtrl = TextEditingController(text: '2');
+  final TextEditingController _totalDiskCtrl = TextEditingController(
+    text: '500',
+  );
+  final TextEditingController _cDriveSizeCtrl = TextEditingController(
+    text: '150',
+  );
+  final TextEditingController _otherPartitionsCtrl = TextEditingController(
+    text: '2',
+  );
 
   String _cDriveMB = '153600';
   String _otherDriveMB = '0';
@@ -419,9 +418,15 @@ class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
       _errorMsg = '';
     });
 
-    final double? totalDisk = double.tryParse(_totalDiskCtrl.text.replaceAll(',', ''));
-    final double? cDriveGB = double.tryParse(_cDriveSizeCtrl.text.replaceAll(',', ''));
-    final int? otherCount = int.tryParse(_otherPartitionsCtrl.text.replaceAll(',', ''));
+    final double? totalDisk = double.tryParse(
+      _totalDiskCtrl.text.replaceAll(',', ''),
+    );
+    final double? cDriveGB = double.tryParse(
+      _cDriveSizeCtrl.text.replaceAll(',', ''),
+    );
+    final int? otherCount = int.tryParse(
+      _otherPartitionsCtrl.text.replaceAll(',', ''),
+    );
 
     if (totalDisk == null || cDriveGB == null || otherCount == null) {
       return;
@@ -430,13 +435,14 @@ class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
     // Windows setup uses 1 GB = 1024 MB
     // A 500GB drive sold by manufacturers is 500 * 10^9 bytes.
     // Usable capacity in GiB (what Windows reports) = (500 * 10^9) / (1024^3) ≈ 465.66 GiB
-    final double realTotalGB = (totalDisk * 1000 * 1000 * 1000) / (1024 * 1024 * 1024);
+    final double realTotalGB =
+        (totalDisk * 1000 * 1000 * 1000) / (1024 * 1024 * 1024);
     _actualTotalGB = realTotalGB.toStringAsFixed(1);
-    
+
     // In MB, Windows setup uses MiB
     final double realTotalMB = realTotalGB * 1024;
     final double cDriveMB = cDriveGB * 1024; // e.g. 150 * 1024 = 153600 MB
-    
+
     if (cDriveMB >= realTotalMB) {
       setState(() {
         _hasError = true;
@@ -448,7 +454,7 @@ class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
     }
 
     final double remainingMB = realTotalMB - cDriveMB;
-    
+
     double otherDriveMB = 0;
     if (otherCount > 0) {
       otherDriveMB = remainingMB / otherCount;
@@ -463,7 +469,7 @@ class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
       child: Container(
@@ -483,11 +489,16 @@ class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
               decoration: BoxDecoration(
                 color: const Color(0xFF6366F1).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, color: Color(0xFF6366F1)),
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    color: Color(0xFF6366F1),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -503,46 +514,35 @@ class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
               ),
             ),
             const SizedBox(height: 24),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _buildInputField(
-                    label: 'حجم اسمی کل دیسک (گیگابایت)',
-                    controller: _totalDiskCtrl,
-                    isDark: isDark,
-                    hint: '500, 1000, 2000...',
-                    autoFocus: true,
-                    onChanged: (_) => _calculatePartitions(),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildInputField(
-                    label: 'حجم درایو C (گیگابایت)',
-                    controller: _cDriveSizeCtrl,
-                    isDark: isDark,
-                    hint: '150',
-                    onChanged: (_) => _calculatePartitions(),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildInputField(
-                    label: 'تعداد پارتیشن‌های باقی‌مانده (D, E...)',
-                    controller: _otherPartitionsCtrl,
-                    isDark: isDark,
-                    hint: '2, 3...',
-                    onChanged: (_) => _calculatePartitions(),
-                  ),
-                ),
-              ],
-            ),
+            _responsiveColumns([
+              _buildInputField(
+                label: 'حجم اسمی کل دیسک (گیگابایت)',
+                controller: _totalDiskCtrl,
+                isDark: isDark,
+                hint: '500, 1000, 2000...',
+                autoFocus: true,
+                onChanged: (_) => _calculatePartitions(),
+              ),
+              _buildInputField(
+                label: 'حجم درایو C (گیگابایت)',
+                controller: _cDriveSizeCtrl,
+                isDark: isDark,
+                hint: '150',
+                onChanged: (_) => _calculatePartitions(),
+              ),
+              _buildInputField(
+                label: 'تعداد پارتیشن‌های باقی‌مانده (D, E...)',
+                controller: _otherPartitionsCtrl,
+                isDark: isDark,
+                hint: '2, 3...',
+                onChanged: (_) => _calculatePartitions(),
+              ),
+            ]),
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
-                'حجم واقعی و قابل استفاده هارد شما در ویندوز تقریباً \$_actualTotalGB گیگابایت است.',
+                'حجم واقعی و قابل استفاده هارد شما در ویندوز تقریباً $_actualTotalGB گیگابایت است.',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -551,7 +551,7 @@ class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
               ),
             ),
             const SizedBox(height: 32),
-            
+
             if (_hasError)
               Container(
                 margin: const EdgeInsets.only(bottom: 24),
@@ -562,41 +562,41 @@ class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444)),
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Color(0xFFEF4444),
+                    ),
                     const SizedBox(width: 12),
                     Text(
                       _errorMsg,
-                      style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w700),
+                      style: const TextStyle(
+                        color: Color(0xFFEF4444),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
               ),
 
             // Results Row
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: _buildResultCard(
-                    title: 'حجم مگابایت درایو C',
-                    value: _cDriveMB,
-                    color: const Color(0xFF0D9488),
-                    isDark: isDark,
-                    context: context,
-                  ),
+            _responsiveColumns(
+              [
+                _buildResultCard(
+                  title: 'حجم مگابایت درایو C',
+                  value: _cDriveMB,
+                  color: const Color(0xFF0D9488),
+                  isDark: isDark,
+                  context: context,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 3,
-                  child: _buildResultCard(
-                    title: 'حجم مگابایت برای سایر درایوها (هر کدام)',
-                    value: _otherDriveMB,
-                    color: const Color(0xFF3B82F6),
-                    isDark: isDark,
-                    context: context,
-                  ),
+                _buildResultCard(
+                  title: 'حجم مگابایت برای سایر درایوها (هر کدام)',
+                  value: _otherDriveMB,
+                  color: const Color(0xFF3B82F6),
+                  isDark: isDark,
+                  context: context,
                 ),
               ],
+              flex: const [2, 3],
             ),
           ],
         ),
@@ -622,10 +622,7 @@ class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
       decoration: BoxDecoration(
         color: color.withValues(alpha: isDark ? 0.1 : 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 2,
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -669,16 +666,18 @@ class _PartitionCalculatorViewState extends State<PartitionCalculatorView> {
           ),
           const SizedBox(height: 20),
           ElevatedButton.icon(
-            onPressed: value != '0' ? () {
-              Clipboard.setData(ClipboardData(text: value));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('عدد \$value با موفقیت کپی شد'),
-                  backgroundColor: color,
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            } : null,
+            onPressed: value != '0'
+                ? () {
+                    Clipboard.setData(ClipboardData(text: value));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('عدد $value با موفقیت کپی شد'),
+                        backgroundColor: color,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                : null,
             icon: const Icon(Icons.copy_rounded, size: 18),
             label: const Text('کپی دقیق عدد'),
             style: ElevatedButton.styleFrom(
@@ -723,7 +722,8 @@ Widget _buildInputField({
         child: TextField(
           controller: controller,
           autofocus: autoFocus,
-          textAlign: TextAlign.center,
+          textDirection: ui.TextDirection.ltr,
+          textAlign: TextAlign.left,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
@@ -744,7 +744,10 @@ Widget _buildInputField({
             ),
             filled: true,
             fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(
@@ -759,10 +762,7 @@ Widget _buildInputField({
             ),
             focusedBorder: const OutlineInputBorder(
               borderRadius: BorderRadius.all(Radius.circular(10)),
-              borderSide: BorderSide(
-                color: Color(0xFF0D9488),
-                width: 2,
-              ),
+              borderSide: BorderSide(color: Color(0xFF0D9488), width: 2),
             ),
           ),
         ),
@@ -771,7 +771,37 @@ Widget _buildInputField({
   );
 }
 
+Widget _responsiveColumns(List<Widget> children, {List<int>? flex}) {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      if (constraints.maxWidth < 760) {
+        return Column(
+          children: [
+            for (var index = 0; index < children.length; index++) ...[
+              SizedBox(width: double.infinity, child: children[index]),
+              if (index < children.length - 1) const SizedBox(height: 14),
+            ],
+          ],
+        );
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var index = 0; index < children.length; index++) ...[
+            Expanded(
+              flex: flex != null && index < flex.length ? flex[index] : 1,
+              child: children[index],
+            ),
+            if (index < children.length - 1) const SizedBox(width: 16),
+          ],
+        ],
+      );
+    },
+  );
+}
+
 class ToolCard extends StatefulWidget {
+  final double width;
   final String title;
   final String description;
   final IconData icon;
@@ -781,6 +811,7 @@ class ToolCard extends StatefulWidget {
 
   const ToolCard({
     super.key,
+    required this.width,
     required this.title,
     required this.description,
     required this.icon,
@@ -793,7 +824,8 @@ class ToolCard extends StatefulWidget {
   State<ToolCard> createState() => _ToolCardState();
 }
 
-class _ToolCardState extends State<ToolCard> with SingleTickerProviderStateMixin {
+class _ToolCardState extends State<ToolCard>
+    with SingleTickerProviderStateMixin {
   bool _isHovered = false;
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
@@ -805,9 +837,10 @@ class _ToolCardState extends State<ToolCard> with SingleTickerProviderStateMixin
       vsync: this,
       duration: const Duration(milliseconds: 150),
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.95,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -833,39 +866,49 @@ class _ToolCardState extends State<ToolCard> with SingleTickerProviderStateMixin
           animation: _scaleAnimation,
           builder: (context, child) {
             return Transform.scale(
-              scale: _isHovered ? (_scaleAnimation.value + 0.02) : _scaleAnimation.value,
+              scale: _isHovered
+                  ? (_scaleAnimation.value + 0.02)
+                  : _scaleAnimation.value,
               child: child,
             );
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            width: 320,
+            width: widget.width,
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: widget.isDark ? AppTheme.darkCard : AppTheme.lightCard,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: _isHovered 
-                  ? widget.color.withValues(alpha: 0.5) 
-                  : (widget.isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                color: _isHovered
+                    ? widget.color.withValues(alpha: 0.5)
+                    : (widget.isDark
+                          ? AppTheme.darkBorder
+                          : AppTheme.lightBorder),
               ),
               boxShadow: _isHovered
                   ? [
                       // Neomorphic-style glowing shadow on hover
                       BoxShadow(
-                        color: widget.color.withValues(alpha: widget.isDark ? 0.3 : 0.2),
+                        color: widget.color.withValues(
+                          alpha: widget.isDark ? 0.3 : 0.2,
+                        ),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: widget.isDark ? 0.4 : 0.1),
+                        color: Colors.black.withValues(
+                          alpha: widget.isDark ? 0.4 : 0.1,
+                        ),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
                     ]
                   : [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: widget.isDark ? 0.2 : 0.05),
+                        color: Colors.black.withValues(
+                          alpha: widget.isDark ? 0.2 : 0.05,
+                        ),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -880,11 +923,7 @@ class _ToolCardState extends State<ToolCard> with SingleTickerProviderStateMixin
                     color: widget.color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    widget.icon,
-                    color: widget.color,
-                    size: 32,
-                  ),
+                  child: Icon(widget.icon, color: widget.color, size: 32),
                 ),
                 const SizedBox(height: 20),
                 Text(
@@ -912,4 +951,3 @@ class _ToolCardState extends State<ToolCard> with SingleTickerProviderStateMixin
     );
   }
 }
-

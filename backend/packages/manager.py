@@ -746,7 +746,7 @@ _PORTABLE_TOOL_STEMS = {
     "aact", "aact_x64", "aact_portable",
     "mas", "mas_aio", "microsoft_activation_scripts",
     "heu_kms", "kms_vl_all",
-    "teamviewer_qs", "teamviewerqs"
+    "teamviewer_qs", "teamviewerqs", "anydesk"
 }
 
 _PORTABLE_KEYWORDS = (
@@ -794,7 +794,7 @@ def _is_portable_tool(
     if stem in _PORTABLE_TOOL_STEMS or bare_stem in _PORTABLE_TOOL_STEMS:
         return True
 
-    if any(stem.startswith(s) for s in ("wub", "dcontrol", "rufus")):
+    if any(stem.startswith(s) for s in ("wub", "dcontrol", "rufus", "anydesk")):
         return True
 
     if "wub" in stem or "update_blocker" in stem or "updateblocker" in stem:
@@ -1958,8 +1958,10 @@ def _get_silent_args(pkg: Dict[str, Any]) -> str:
     elif "zoom" in combined:
         return "/silent"
 
-    # 4. Universal fallback switch for Windows installers
-    return "/S"
+    # Unknown EXEs do not have a universal silent contract.  Guessing /S can
+    # merely open the wizard (or mean something unrelated), so keep them
+    # manual-only unless the format/vendor was positively identified above.
+    return ""
 
 
 SEE_MASK_NOCLOSEPROCESS = 0x00000040

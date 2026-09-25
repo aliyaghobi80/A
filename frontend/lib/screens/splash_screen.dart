@@ -4,8 +4,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../controllers/system_info_controller.dart';
 import '../controllers/startup_controller.dart';
 import '../main.dart';
+import '../services/backend_process_manager.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, this.connect, this.onReady});
@@ -23,30 +25,39 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _rgb;
   late final StartupController _startup;
   late final Worker _statusWorker;
-  Timer? _minimumTimer;
-  bool _minimumElapsed = false;
   bool _navigated = false;
   bool? _reducedMotion;
 
   @override
   void initState() {
     super.initState();
-    _startup = StartupController(connect: widget.connect);
+    _startup = StartupController(
+      connect: widget.connect,
+      connectWithProgress: widget.connect == null ? _prepareApplication : null,
+    );
     _entrance = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 4),
+      duration: const Duration(milliseconds: 1600),
     )..forward();
     _rgb = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     );
     _statusWorker = ever(_startup.status, (_) => _navigateIfReady());
-    _minimumTimer = Timer(const Duration(seconds: 4), () {
-      if (!mounted) return;
-      setState(() => _minimumElapsed = true);
-      _navigateIfReady();
-    });
     unawaited(_startup.connect());
+  }
+
+  Future<bool> _prepareApplication(StartupProgressReporter report) async {
+    report(0.12, 'در حال راه‌اندازی سرویس برنامه…');
+    final backendReady = await BackendProcessManager.ensureBackendRunning();
+    if (!backendReady) return false;
+    report(0.48, 'سرویس آماده شد؛ در حال خواندن مشخصات دستگاه…');
+    if (!Get.isRegistered<SystemInfoController>()) return true;
+    final ready = await Get.find<SystemInfoController>().prepareInitialData(
+      report: report,
+    );
+    if (ready) report(0.92, 'در حال آماده‌سازی رابط کاربری…');
+    return ready;
   }
 
   @override
@@ -67,7 +78,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _continue() {
-    if (!mounted || !_minimumElapsed || _navigated) return;
+    if (!mounted || _navigated) return;
     _navigated = true;
     if (widget.onReady != null) {
       widget.onReady!();
@@ -80,7 +91,6 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
-    _minimumTimer?.cancel();
     _statusWorker.dispose();
     _startup.onDelete();
     _entrance.dispose();
@@ -227,14 +237,25 @@ class _SplashScreenState extends State<SplashScreen>
                               opacity: loaderPhase,
                               child: Transform.scale(
                                 scaleX: 0.72 + loaderPhase * 0.28,
-                                child: RepaintBoundary(
-                                  child: CustomPaint(
-                                    key: const ValueKey('splash-rgb-loader'),
-                                    size: const Size(236, 24),
-                                    painter: _RgbLoadingPainter(
-                                      phase: rgbProgress,
-                                      trackColor: colors.onSurface.withValues(
-                                        alpha: dark ? 0.14 : 0.09,
+                                child: Obx(
+                                  () => Semantics(
+                                    label: _startup.message.value,
+                                    value:
+                                        '${(_startup.progress.value * 100).round()} درصد',
+                                    child: RepaintBoundary(
+                                      child: CustomPaint(
+                                        key: const ValueKey(
+                                          'splash-rgb-loader',
+                                        ),
+                                        size: const Size(236, 24),
+                                        painter: _RgbLoadingPainter(
+                                          phase: rgbProgress,
+                                          progress: _startup.progress.value,
+                                          trackColor: colors.onSurface
+                                              .withValues(
+                                                alpha: dark ? 0.14 : 0.09,
+                                              ),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -244,7 +265,6 @@ class _SplashScreenState extends State<SplashScreen>
                             const SizedBox(height: 22),
                             _StartupStatus(
                               startup: _startup,
-                              minimumElapsed: _minimumElapsed,
                               onContinue: _continue,
                             ),
                           ],
@@ -319,9 +339,14 @@ class _CoverLogo extends StatelessWidget {
 }
 
 class _RgbLoadingPainter extends CustomPainter {
-  const _RgbLoadingPainter({required this.phase, required this.trackColor});
+  const _RgbLoadingPainter({
+    required this.phase,
+    required this.progress,
+    required this.trackColor,
+  });
 
   final double phase;
+  final double progress;
   final Color trackColor;
 
   @override
@@ -336,14 +361,24 @@ class _RgbLoadingPainter extends CustomPainter {
       final hue = (phase * 360 + index * 60) % 360;
       return HSVColor.fromAHSV(1, hue, 0.82, 1).toColor();
     });
+    final activeRect = Rect.fromLTWH(
+      0,
+      9,
+      size.width * progress.clamp(0.0, 1.0),
+      6,
+    );
+    final activeBar = RRect.fromRectAndRadius(
+      activeRect,
+      const Radius.circular(99),
+    );
     final shader = LinearGradient(colors: colors).createShader(bar.outerRect);
     canvas.drawRRect(
-      bar,
+      activeBar,
       Paint()
         ..shader = shader
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
     );
-    canvas.drawRRect(bar, Paint()..shader = shader);
+    canvas.drawRRect(activeBar, Paint()..shader = shader);
 
     final scannerX = (size.width + 44) * phase - 22;
     final scanner = RRect.fromRectAndRadius(
@@ -351,7 +386,7 @@ class _RgbLoadingPainter extends CustomPainter {
       const Radius.circular(99),
     );
     canvas.save();
-    canvas.clipRRect(bar);
+    canvas.clipRRect(activeBar);
     canvas.drawRRect(
       scanner,
       Paint()
@@ -363,19 +398,16 @@ class _RgbLoadingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RgbLoadingPainter oldDelegate) {
-    return oldDelegate.phase != phase || oldDelegate.trackColor != trackColor;
+    return oldDelegate.phase != phase ||
+        oldDelegate.progress != progress ||
+        oldDelegate.trackColor != trackColor;
   }
 }
 
 class _StartupStatus extends StatelessWidget {
-  const _StartupStatus({
-    required this.startup,
-    required this.minimumElapsed,
-    required this.onContinue,
-  });
+  const _StartupStatus({required this.startup, required this.onContinue});
 
   final StartupController startup;
-  final bool minimumElapsed;
   final VoidCallback onContinue;
 
   @override
@@ -403,7 +435,7 @@ class _StartupStatus extends StatelessWidget {
                   label: const Text('تلاش مجدد'),
                 ),
                 OutlinedButton(
-                  onPressed: minimumElapsed ? onContinue : null,
+                  onPressed: onContinue,
                   child: const Text('ورود برای بررسی'),
                 ),
               ],
@@ -411,12 +443,7 @@ class _StartupStatus extends StatelessWidget {
           ],
         );
       }
-      return Text(
-        status == StartupStatus.ready
-            ? 'آمادهٔ شروع'
-            : 'در حال آماده‌سازی برنامه…',
-        textAlign: TextAlign.center,
-      );
+      return Text(startup.message.value, textAlign: TextAlign.center);
     });
   }
 }

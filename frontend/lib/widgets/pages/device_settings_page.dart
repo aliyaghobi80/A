@@ -62,7 +62,9 @@ class DeviceSettingsPage extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                          color: const Color(
+                            0xFF3B82F6,
+                          ).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
@@ -81,7 +83,9 @@ class DeviceSettingsPage extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
-                                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1E293B),
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -89,7 +93,9 @@ class DeviceSettingsPage extends StatelessWidget {
                               'تنظیم خودکار آیکون‌های دسکتاپ، ساعت تهران، حالت Never اسلیپ، باتری و بهینه‌سازی استارتاپ به صورت یکجا',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF475569),
                               ),
                             ),
                           ],
@@ -98,25 +104,33 @@ class DeviceSettingsPage extends StatelessWidget {
                     ],
                   );
 
-                  final buttons = Row(
-                    mainAxisSize: MainAxisSize.min,
+                  final buttons = Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
                     children: [
                       TextButton.icon(
-                        onPressed: controller.isLoading.value ? null : controller.refreshStatus,
+                        onPressed: controller.isLoading.value
+                            ? null
+                            : controller.refreshStatus,
                         icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: Text(
-                          controller.isLoading.value ? 'بررسی...' : 'بررسی مجدد',
+                          controller.isLoading.value
+                              ? 'بررسی...'
+                              : 'بررسی مجدد',
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
-                      const SizedBox(width: 8),
                       FilledButton.icon(
                         onPressed: controller.isApplyingAll.value
                             ? null
                             : () => controller.applyAllSettings(context),
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFF2563EB),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -150,10 +164,7 @@ class DeviceSettingsPage extends StatelessWidget {
                       children: [
                         info,
                         const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: buttons,
-                        ),
+                        Align(alignment: Alignment.centerLeft, child: buttons),
                       ],
                     );
                   }
