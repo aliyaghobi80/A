@@ -2307,6 +2307,7 @@ class DriverInstallItem {
   final String? packageId;
   final String? displayName;
   final String? failureReason;
+  final String category;
 
   DriverInstallItem({
     required this.filename,
@@ -2319,6 +2320,7 @@ class DriverInstallItem {
     this.packageId,
     this.displayName,
     this.failureReason,
+    this.category = '',
   });
 
   factory DriverInstallItem.fromJson(Map<String, dynamic> json) {
@@ -2337,6 +2339,7 @@ class DriverInstallItem {
       packageId: json['package_id'] as String?,
       displayName: json['display_name'] as String?,
       failureReason: json['failure_reason'] as String?,
+      category: json['category'] as String? ?? '',
     );
   }
 }

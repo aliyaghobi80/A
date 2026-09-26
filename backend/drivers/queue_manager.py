@@ -36,9 +36,19 @@ from .history import record_driver_installation
 
 logger = logging.getLogger(__name__)
 
-LOG_FILE = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "data", "logs", "driver_manager.log")
-)
+def _resolve_driver_log_file(local_app_data: Optional[str] = None) -> str:
+    """Return a writable diagnostic path in installed and development builds."""
+    app_data = local_app_data if local_app_data is not None else os.environ.get("LOCALAPPDATA")
+    if app_data:
+        return os.path.abspath(
+            os.path.join(app_data, "MarkaziSystemChecker", "logs", "driver_manager.log")
+        )
+    return os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "data", "logs", "driver_manager.log")
+    )
+
+
+LOG_FILE = _resolve_driver_log_file()
 
 PRIORITY_ORDER = {
     "chipset": 1,
@@ -72,6 +82,9 @@ _queue_state: Dict[str, Any] = {
     "reboot_required": False,
     "summary_message": "",
     "resolved_devices_count": 0,
+    "last_update_time": None,
+    "worker_alive": False,
+    "fatal_error": "",
     "items": [],
 }
 _queue_thread: Optional[threading.Thread] = None
@@ -328,84 +341,159 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
 
 
 def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
-    """Worker thread that executes the sorted driver queue."""
+    """Worker thread that executes the sorted driver queue.
+
+    The outer ``finally`` is intentional: a vendor installer, history writer,
+    hardware query, or unexpected Python error must never leave the UI seeing
+    an immortal ``is_running`` state.
+    """
     global _queue_state
     total = len(packages)
-    any_reboot = False
-
-    # Snapshot problem devices before installation
-    problems_before = set(_query_problematic_devices())
-
-    for idx, pkg in enumerate(packages):
-        with _queue_lock:
-            if _queue_state["cancelled"]:
-                _log_driver_event("Installation queue was cancelled by user.")
-                break
-            # Skip if resuming and this item is already completed successfully
-            if idx < len(_queue_state["items"]) and _queue_state["items"][idx].get("status") == "completed":
-                continue
-            
-            _queue_state["current_index"] = idx
-            _queue_state["current_package"] = pkg.get("display_name")
-            _queue_state["progress_percent"] = round((idx / total) * 100.0, 1)
-            if idx < len(_queue_state["items"]):
-                _queue_state["items"][idx]["status"] = "installing"
-
-        res = _install_single_package(pkg)
-
-        if res.get("reboot_required"):
-            any_reboot = True
-
-        with _queue_lock:
-            if idx < len(_queue_state["items"]):
-                # If we had failed before, subtract from failed count since we retried
-                if _queue_state["items"][idx].get("status") == "failed":
-                    _queue_state["failed"] = max(0, _queue_state["failed"] - 1)
-
-                if res.get("success"):
-                    _queue_state["items"][idx]["status"] = "completed"
-                    _queue_state["items"][idx]["message"] = res.get("message", "نصب شد.")
-                    _queue_state["completed"] += 1
-                else:
-                    _queue_state["items"][idx]["status"] = "failed"
-                    _queue_state["items"][idx]["message"] = res.get("message", "خطا در نصب.")
-                    _queue_state["items"][idx]["failure_reason"] = res.get("message", "خطا در نصب.")
-                    _queue_state["failed"] += 1
-
-            _queue_state["reboot_required"] = any_reboot
-            _queue_state["progress_percent"] = round(((idx + 1) / total) * 100.0, 1)
-
-        if res.get("exit_code") == -2:
-            _log_driver_event(f"Driver package {pkg.get('display_name')} timed out (-2); continuing with remaining queue items.")
-        time.sleep(1.0)
-
-    # Re-evaluate problem devices after installation (Verification)
-    problems_after = set(_query_problematic_devices())
-    resolved = len(problems_before - problems_after)
+    with _queue_lock:
+        any_reboot = bool(_queue_state.get("reboot_required", False))
+    fatal_error = ""
+    current_index: Optional[int] = None
+    current_previous_status = "pending"
 
     with _queue_lock:
-        _queue_state["is_running"] = False
-        _queue_state["current_package"] = None
-        _queue_state["progress_percent"] = 100.0
-        _queue_state["end_time"] = time.time()
-        _queue_state["resolved_devices_count"] = resolved
+        _queue_state["worker_alive"] = True
+        _queue_state["last_update_time"] = time.time()
 
-        c = _queue_state["completed"]
-        f = _queue_state["failed"]
-        if _queue_state["cancelled"]:
-            _queue_state["summary_message"] = f"عملیات نصب لغو شد ({c} موفق، {f} ناموفق)."
-        elif f == 0:
-            _queue_state["summary_message"] = f"✓ تمامی {c} بسته درایور با موفقیت نصب شدند."
-        else:
-            _queue_state["summary_message"] = f"پایان نصب: {c} درایور موفق، {f} درایور با خطا مواجه شدند."
+    try:
+        problems_before = set(_query_problematic_devices())
 
-        if resolved > 0:
-            _queue_state["summary_message"] += f" ({resolved} خطای سخت‌افزاری برطرف گردید)"
+        for idx, pkg in enumerate(packages):
+            previous_status = "pending"
+            with _queue_lock:
+                if _queue_state["cancelled"]:
+                    _log_driver_event("Installation queue was cancelled by user.")
+                    break
+                if (
+                    idx < len(_queue_state["items"])
+                    and _queue_state["items"][idx].get("status") == "completed"
+                ):
+                    continue
 
-        if c > 0 or any_reboot:
-            _queue_state["summary_message"] += " — یادتان نرود پس از پایان همهٔ کارها، سیستم را دستی ری‌استارت کنید."
+                current_index = idx
+                _queue_state["current_index"] = idx
+                _queue_state["current_package"] = pkg.get("display_name")
+                _queue_state["progress_percent"] = round((idx / max(total, 1)) * 100.0, 1)
+                _queue_state["last_update_time"] = time.time()
+                if idx < len(_queue_state["items"]):
+                    previous_status = _queue_state["items"][idx].get("status", "pending")
+                    current_previous_status = previous_status
+                    _queue_state["items"][idx]["status"] = "installing"
+                    _queue_state["items"][idx]["message"] = "در حال نصب..."
 
-    _log_driver_event(f"Queue finished: {_queue_state['summary_message']}")
+            res = _install_single_package(pkg)
+            any_reboot = any_reboot or bool(res.get("reboot_required"))
+
+            with _queue_lock:
+                if idx < len(_queue_state["items"]):
+                    item = _queue_state["items"][idx]
+                    # Resume retries replace the earlier result instead of
+                    # double-counting it.
+                    if previous_status == "failed":
+                        _queue_state["failed"] = max(0, _queue_state["failed"] - 1)
+
+                    item["exit_code"] = res.get("exit_code")
+                    if res.get("success"):
+                        item["status"] = "completed"
+                        item["message"] = res.get("message", "نصب شد.")
+                        item.pop("failure_reason", None)
+                        _queue_state["completed"] += 1
+                    else:
+                        failure_message = res.get("message", "خطا در نصب.")
+                        item["status"] = "failed"
+                        item["message"] = failure_message
+                        item["failure_reason"] = failure_message
+                        _queue_state["failed"] += 1
+
+                _queue_state["reboot_required"] = any_reboot
+                _queue_state["progress_percent"] = round(
+                    ((idx + 1) / max(total, 1)) * 100.0, 1
+                )
+                _queue_state["last_update_time"] = time.time()
+
+            if res.get("exit_code") == -2:
+                _log_driver_event(
+                    f"Driver package {pkg.get('display_name')} timed out (-2); "
+                    "continuing with remaining queue items."
+                )
+            time.sleep(1.0)
+
+        try:
+            problems_after = set(_query_problematic_devices())
+            resolved = len(problems_before - problems_after)
+        except Exception as exc:
+            logger.warning("Post-install device verification failed: %s", exc)
+            resolved = 0
+    except Exception as exc:
+        fatal_error = f"{type(exc).__name__}: {exc}"
+        logger.exception("Unexpected failure in the driver installation queue")
+        _log_driver_event(f"Fatal queue error: {fatal_error}")
+        resolved = 0
+        with _queue_lock:
+            if current_index is not None and current_index < len(_queue_state["items"]):
+                item = _queue_state["items"][current_index]
+                if item.get("status") == "installing":
+                    message = "صف نصب به‌علت خطای داخلی متوقف شد؛ این بسته را دوباره اجرا کنید."
+                    if current_previous_status == "failed":
+                        _queue_state["failed"] = max(0, _queue_state["failed"] - 1)
+                    item["status"] = "failed"
+                    item["message"] = message
+                    item["failure_reason"] = message
+                    item["exit_code"] = -5
+                    _queue_state["failed"] += 1
+    finally:
+        with _queue_lock:
+            _queue_state["is_running"] = False
+            _queue_state["worker_alive"] = False
+            _queue_state["current_package"] = None
+            _queue_state["end_time"] = time.time()
+            _queue_state["last_update_time"] = time.time()
+            _queue_state["resolved_devices_count"] = resolved
+            _queue_state["fatal_error"] = fatal_error
+
+            completed = _queue_state["completed"]
+            failed = _queue_state["failed"]
+            processed = completed + failed + _queue_state.get("skipped", 0)
+            if not fatal_error and not _queue_state["cancelled"]:
+                _queue_state["progress_percent"] = 100.0
+            else:
+                _queue_state["progress_percent"] = round(
+                    (processed / max(total, 1)) * 100.0, 1
+                )
+
+            if fatal_error:
+                _queue_state["summary_message"] = (
+                    f"صف نصب غیرمنتظره متوقف شد ({completed} موفق، {failed} ناموفق). "
+                    "برای بسته‌های باقی‌مانده «ادامه نصب» را بزنید."
+                )
+            elif _queue_state["cancelled"]:
+                _queue_state["summary_message"] = (
+                    f"عملیات نصب لغو شد ({completed} موفق، {failed} ناموفق)."
+                )
+            elif failed == 0:
+                _queue_state["summary_message"] = (
+                    f"✓ تمامی {completed} بسته درایور با موفقیت نصب شدند."
+                )
+            else:
+                _queue_state["summary_message"] = (
+                    f"پایان نصب: {completed} درایور موفق، {failed} درایور با خطا مواجه شدند."
+                )
+
+            if resolved > 0:
+                _queue_state["summary_message"] += (
+                    f" ({resolved} خطای سخت‌افزاری برطرف گردید)"
+                )
+            if completed > 0 or any_reboot:
+                _queue_state["summary_message"] += (
+                    " — یادتان نرود پس از پایان همهٔ کارها، سیستم را دستی ری‌استارت کنید."
+                )
+            summary = _queue_state["summary_message"]
+
+        _log_driver_event(f"Queue finished: {summary}")
 
 
 _last_packages = []
@@ -429,6 +517,10 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False) -> 
             _queue_state["is_running"] = True
             _queue_state["cancelled"] = False
             _queue_state["summary_message"] = "در حال از سرگیری صف نصب درایورها..."
+            _queue_state["worker_alive"] = False
+            _queue_state["fatal_error"] = ""
+            _queue_state["start_time"] = time.time()
+            _queue_state["last_update_time"] = time.time()
             # Keep completed/failed counts, we will just skip them in the loop
             _queue_state["end_time"] = None
     else:
@@ -450,6 +542,9 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False) -> 
                 "reboot_required": False,
                 "summary_message": "در حال آغاز صف نصب درایورها...",
                 "resolved_devices_count": 0,
+                "last_update_time": time.time(),
+                "worker_alive": False,
+                "fatal_error": "",
                 "items": [
                     {
                         "package_id": p.get("package_id"),
@@ -475,6 +570,11 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False) -> 
     except Exception:
         with _queue_lock:
             _queue_state["is_running"] = False
+            _queue_state["worker_alive"] = False
+            _queue_state["end_time"] = time.time()
+            _queue_state["last_update_time"] = time.time()
+            _queue_state["fatal_error"] = "thread_start_failed"
+            _queue_state["summary_message"] = "شروع صف نصب ناموفق بود؛ دوباره تلاش کنید."
         logger.exception("Unable to start driver queue")
         return {"success": False, "message": "شروع صف نصب ناموفق بود؛ دوباره تلاش کنید."}
 
@@ -487,8 +587,41 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False) -> 
 
 
 def get_driver_queue_status() -> Dict[str, Any]:
-    """Returns current state of the installation queue."""
+    """Return a snapshot and repair a stale state left by a dead worker."""
+    global _queue_state, _queue_thread
     with _queue_lock:
+        worker_alive = bool(_queue_thread and _queue_thread.is_alive())
+        # A thread has an ident only after start(). The age check avoids
+        # misclassifying the tiny window between state initialization and
+        # Thread.start() as a crash.
+        started_at = _queue_state.get("start_time") or time.time()
+        worker_was_started_and_stopped = _queue_thread is None or (
+            _queue_thread.ident is not None and not worker_alive
+        )
+        stale_running_state = (
+            _queue_state.get("is_running")
+            and worker_was_started_and_stopped
+            and time.time() - started_at >= 1.0
+        )
+        if stale_running_state:
+            for item in _queue_state.get("items", []):
+                if item.get("status") == "installing":
+                    message = "پردازش نصب غیرمنتظره متوقف شد؛ این بسته را دوباره اجرا کنید."
+                    item["status"] = "failed"
+                    item["message"] = message
+                    item["failure_reason"] = message
+                    item["exit_code"] = -5
+                    _queue_state["failed"] += 1
+                    break
+            _queue_state["is_running"] = False
+            _queue_state["current_package"] = None
+            _queue_state["end_time"] = time.time()
+            _queue_state["fatal_error"] = "worker_thread_stopped"
+            _queue_state["summary_message"] = (
+                "پردازش صف درایورها متوقف شد؛ برای بسته‌های باقی‌مانده «ادامه نصب» را بزنید."
+            )
+            _log_driver_event("Repaired stale queue state after worker thread stopped.")
+        _queue_state["worker_alive"] = worker_alive and _queue_state.get("is_running", False)
         return copy.deepcopy(_queue_state)
 
 

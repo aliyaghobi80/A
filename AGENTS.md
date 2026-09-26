@@ -38,6 +38,9 @@ Use fixtures and mocked process runners for every state-changing workflow.
   but show matching information as guidance rather than silently dropping OEM
   components.
 - Queue packages sequentially and expose every queue item's live state.
+- Queue workers must clear `is_running` in a `finally` path. A dead worker must
+  be detected and repaired by the status endpoint so controls never remain
+  locked indefinitely.
 - For a folder with several independent direct `.exe`/`.msi` installers and no
   cohesive INF package, queue every installer.
 - Prefer a recognized OEM wrapper when a package is cohesive. Otherwise install
@@ -50,6 +53,14 @@ Use fixtures and mocked process runners for every state-changing workflow.
 - Never select “Restart now”. Suppress installer restarts where supported and
   show a single reminder after the queue finishes so the technician can restart
   manually.
+- GUI autopilot may control only the launched installer process tree, an owned
+  dialog, or a newly-created helper inside the selected package directory.
+  Generic titles such as `Setup` are never ownership evidence.
+- Advance only safe installer states (`Next`, license acceptance, `Install`,
+  success `OK`, `Finish`, `Close`) one action at a time. Never interpret
+  maintenance actions such as Uninstall/Remove/Repair as installation.
+- Use bounded window messages so a hung OEM dialog cannot freeze the queue, and
+  do not advance to the next package while a tracked child wizard remains open.
 - Do not queue firmware, BIOS flashers, uninstallers, diagnostics, or cleanup
   utilities as ordinary drivers.
 
@@ -62,6 +73,15 @@ Use fixtures and mocked process runners for every state-changing workflow.
   all” must toggle every currently scanned package on and off.
 - Use stable item IDs/keys for stateful queues and poll active operations for
   real-time status instead of requiring a manual rescan.
+- Prefer Flutter's low-power graphics adapter on hybrid systems so installing a
+  dedicated GPU driver does not invalidate the UI renderer. After a Windows
+  display reset, the native runner must verify that a new frame is produced and
+  recover only the UI process when necessary; never restart Windows.
+- A replacement UI process must adopt the existing backend session during
+  graphics recovery so an active sequential driver queue is not lost.
+- Do not run a full hardware scan after every queue item. Update lightweight
+  progress in real time, then refresh hardware once after the queue and allow a
+  longer display-settle interval when a GPU package was involved.
 - Splash progress reflects backend readiness and initial-data loading. Do not
   add a fixed minimum delay; only expose retry after genuine repeated failure.
 - Check narrow desktop layouts as well as the normal technician workstation

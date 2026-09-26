@@ -33,6 +33,24 @@ void main() {
     expect(toggledSelectAll({'a'}, {'a', 'b'}), {'a', 'b'});
   });
 
+  test(
+    'driver queue status preserves GPU category for safe refresh timing',
+    () {
+      final status = DriverBatchStatus.fromJson({
+        'is_running': true,
+        'total': 1,
+        'items': [
+          {
+            'display_name': 'Intel Graphics',
+            'category': 'gpu',
+            'status': 'installing',
+          },
+        ],
+      });
+      expect(status.items.single.category, 'gpu');
+    },
+  );
+
   test('numeric calculator input keeps sequential digits LTR', () {
     final formatter = ThousandsSeparatorInputFormatter();
     var value = const TextEditingValue();

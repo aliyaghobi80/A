@@ -1995,7 +1995,11 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
 
     # Start auto-pilot in background to automatically advance wizard dialogs (OK, Next, Agree, Finish, Reboot Later)
     from packages.auto_wizard import InstallerAutoPilot
-    autopilot = InstallerAutoPilot(target_title_keywords=keywords or [], timeout_seconds=timeout_seconds)
+    autopilot = InstallerAutoPilot(
+        target_title_keywords=keywords or [],
+        timeout_seconds=timeout_seconds,
+        trusted_roots=[working_dir] if working_dir else [],
+    )
     deadline = time.monotonic() + timeout_seconds
 
     try:
@@ -2020,7 +2024,10 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
                 # Do not kill an installer halfway through a transaction.
                 return -2
             wait_for_remaining = max(0.5, deadline - time.monotonic())
-            autopilot.wait_for_children(wait_for_remaining)
+            if not autopilot.wait_for_children(wait_for_remaining):
+                # A child wizard is still alive. Do not advance the sequential
+                # queue and overlap the next driver with an unfinished setup.
+                return -2
             return int(process.returncode)
         finally:
             autopilot.stop()
@@ -2066,7 +2073,8 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
         if not ctypes.windll.kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(exit_code)):
             return -3
         wait_for_remaining = max(0.5, deadline - time.monotonic())
-        autopilot.wait_for_children(wait_for_remaining)
+        if not autopilot.wait_for_children(wait_for_remaining):
+            return -2
         return int(exit_code.value)
     finally:
         autopilot.stop()

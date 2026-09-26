@@ -11,7 +11,6 @@ Automatically navigates installer GUI steps:
 """
 
 import os
-import sys
 import time
 import ctypes
 import logging
@@ -35,23 +34,41 @@ user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
 user32.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
 user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
+user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+user32.GetAncestor.restype = wintypes.HWND
+user32.GetWindow.argtypes = [wintypes.HWND, wintypes.UINT]
+user32.GetWindow.restype = wintypes.HWND
+user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+user32.SetActiveWindow.argtypes = [wintypes.HWND]
+user32.SetActiveWindow.restype = wintypes.HWND
+user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+user32.SetForegroundWindow.restype = wintypes.BOOL
+user32.BringWindowToTop.argtypes = [wintypes.HWND]
+user32.BringWindowToTop.restype = wintypes.BOOL
+user32.SendMessageTimeoutW.argtypes = [
+    wintypes.HWND,
+    wintypes.UINT,
+    wintypes.WPARAM,
+    wintypes.LPARAM,
+    wintypes.UINT,
+    wintypes.UINT,
+    ctypes.POINTER(ctypes.c_size_t),
+]
+user32.SendMessageTimeoutW.restype = ctypes.c_size_t
 
 # Win32 Constants
 BM_CLICK = 0x00F5
 BM_GETCHECK = 0x00F0
-BM_SETCHECK = 0x00F1
 BST_UNCHECKED = 0x0000
 BST_CHECKED = 0x0001
-BST_INDETERMINATE = 0x0002
-
-WM_COMMAND = 0x0111
-WM_CLOSE = 0x0010
-BN_CLICKED = 0
 GWL_STYLE = -16
 BS_TYPEMASK = 0x0000000F
 _CHECKABLE_BUTTON_TYPES = {2, 3, 4, 5, 6, 9}
-CB_GETCOUNT = 0x0146
-CB_SETCURSEL = 0x014E
+GA_ROOT = 2
+GW_OWNER = 4
+SMTO_ABORTIFHUNG = 0x0002
+SMTO_ERRORONEXIT = 0x0020
+_MESSAGE_TIMEOUT_MS = 1500
 
 # Target Button Labels (Priority order: Finish/Close/Done > Install > I Agree > Next > OK)
 _AFFIRMATIVE_BUTTONS = [
@@ -99,6 +116,14 @@ _NEVER_CLICK_BUTTONS = [
     "< قبلی",
     "do not accept",
     "don't accept",
+    "do not install",
+    "don't install",
+    "uninstall",
+    "remove",
+    "repair",
+    "modify",
+    "حذف",
+    "تعمیر",
 ]
 
 _ACCEPT_CHECKBOX_KEYWORDS = [
@@ -152,6 +177,38 @@ _REBOOT_NOW_KEYWORDS = [
     "راه‌اندازی مجدد",
 ]
 
+_REBOOT_PROMPT_KEYWORDS = [
+    "restart your computer",
+    "restart the computer",
+    "restart windows",
+    "restart is required",
+    "restart required",
+    "must restart",
+    "would you like to restart",
+    "reboot your computer",
+    "reboot the computer",
+    "reboot is required",
+    "راه‌اندازی مجدد سیستم",
+    "راه اندازی مجدد سیستم",
+    "سیستم را ری‌استارت",
+    "سیستم را ری استارت",
+]
+
+_NO_REBOOT_REQUIRED_KEYWORDS = [
+    "no restart is required",
+    "restart is not required",
+    "does not require a restart",
+    "no reboot is required",
+    "reboot is not required",
+]
+
+
+def _is_reboot_now_text(text: str) -> bool:
+    normalized = text.lower().replace("&", "").strip()
+    return normalized in {"restart", "reboot", "ری‌استارت", "ری استارت"} or any(
+        keyword in normalized for keyword in _REBOOT_NOW_KEYWORDS
+    )
+
 
 def _get_window_text(hwnd: int) -> str:
     length = user32.GetWindowTextLengthW(hwnd)
@@ -172,6 +229,21 @@ def _get_process_id_for_window(hwnd: int) -> int:
     pid = wintypes.DWORD()
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     return pid.value
+
+
+def _send_message_timeout(hwnd: int, message: int, wparam: int = 0, lparam: int = 0) -> Optional[int]:
+    """Send a Win32 control message without allowing a hung OEM UI to block us."""
+    result = ctypes.c_size_t()
+    delivered = user32.SendMessageTimeoutW(
+        hwnd,
+        message,
+        wparam,
+        lparam,
+        SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT,
+        _MESSAGE_TIMEOUT_MS,
+        ctypes.byref(result),
+    )
+    return int(result.value) if delivered else None
 
 
 def _process_parents() -> Dict[int, int]:
@@ -230,18 +302,72 @@ def _is_installer_process(pid: int) -> bool:
         kernel32.CloseHandle(handle)
 
 
+def _process_image_path(pid: int) -> str:
+    """Return a process image path without executing or mutating the process."""
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.QueryFullProcessImageNameW.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.LPWSTR,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    handle = kernel32.OpenProcess(0x1000, False, pid)
+    if not handle:
+        return ""
+    try:
+        path = ctypes.create_unicode_buffer(32768)
+        size = wintypes.DWORD(len(path))
+        if kernel32.QueryFullProcessImageNameW(handle, 0, path, ctypes.byref(size)):
+            return os.path.abspath(path.value)
+        return ""
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _path_is_within(path: str, root: str) -> bool:
+    if not path or not root:
+        return False
+    try:
+        return os.path.commonpath((os.path.normcase(path), os.path.normcase(root))) == os.path.normcase(root)
+    except (OSError, ValueError):
+        return False
+
+
 class InstallerAutoPilot:
     """
-    Monitors and automatically navigates installer windows for a given target process or window title.
+    Navigates only windows owned by the launched installer process tree or a
+    newly-created helper located inside its trusted package directory.
+
+    ``target_title_keywords`` is retained for diagnostic logging; a title is
+    never used as ownership evidence.
     """
 
-    def __init__(self, target_pids: Optional[Set[int]] = None, target_title_keywords: Optional[List[str]] = None, timeout_seconds: int = 180):
+    def __init__(
+        self,
+        target_pids: Optional[Set[int]] = None,
+        target_title_keywords: Optional[List[str]] = None,
+        timeout_seconds: int = 180,
+        trusted_roots: Optional[List[str]] = None,
+    ):
         self.target_pids = set(target_pids) if target_pids else set()
         self.target_title_keywords = [k.lower() for k in (target_title_keywords or []) if k]
+        self.trusted_roots = [
+            os.path.normcase(os.path.abspath(root))
+            for root in (trusted_roots or [])
+            if root
+        ]
         self.timeout_seconds = timeout_seconds
         self._stop_event = threading.Event()
         self._action_count = 0
         self._last_clicked_time: Dict[int, float] = {}
+        self._last_action_time = 0.0
+        self._parent_history: Dict[int, int] = {}
+        # A helper executable started from the selected package directory is
+        # in scope only when it did not already exist before this installation.
+        # This catches OEM bootstrapper hand-offs without authorizing an
+        # unrelated installer that the technician had open already.
+        self._baseline_pids = set(_process_parents())
 
     def add_pid(self, pid: int):
         if pid > 0:
@@ -252,9 +378,14 @@ class InstallerAutoPilot:
 
     def _refresh_child_pids(self):
         parents = _process_parents()
+        self._parent_history.update(parents)
         known = set(self.target_pids)
         while True:
-            children = {pid for pid, parent in parents.items() if parent in known}
+            children = {
+                pid
+                for pid, parent in self._parent_history.items()
+                if parent in known
+            }
             expanded = known | children
             if expanded == known:
                 break
@@ -286,6 +417,29 @@ class InstallerAutoPilot:
         if self.target_pids and w_pid in self.target_pids:
             return True
 
+        # Dialogs/message boxes can be owned top-level windows. Follow only an
+        # explicit HWND ownership chain back to a process already in scope.
+        owner = user32.GetWindow(hwnd, GW_OWNER)
+        visited = set()
+        while owner and owner not in visited:
+            visited.add(owner)
+            if _get_process_id_for_window(owner) in self.target_pids:
+                if w_pid > 0:
+                    self.target_pids.add(w_pid)
+                return True
+            owner = user32.GetWindow(owner, GW_OWNER)
+
+        # Some OEM launchers hand off to a sibling helper and immediately
+        # exit, breaking the observable parent chain. A newly-created process
+        # is still safe to adopt when its executable lives inside the exact
+        # driver package directory selected for this installation.
+        if w_pid > 0 and w_pid not in self._baseline_pids and self.trusted_roots:
+            image_path = _process_image_path(w_pid)
+            if any(_path_is_within(image_path, root) for root in self.trusted_roots):
+                self.target_pids.add(w_pid)
+                logger.info("[AutoPilot] Adopted package-local helper PID %s (%s)", w_pid, image_path)
+                return True
+
         # Never interact with another installer's or application's window.
         # A title is not ownership evidence.
         return False
@@ -307,25 +461,44 @@ class InstallerAutoPilot:
     def _click_button(self, hwnd: int, text: str) -> bool:
         now = time.time()
         last = self._last_clicked_time.get(hwnd, 0)
-        # Avoid clicking the exact same control faster than once every 800ms
-        if now - last < 0.8:
+        # OEM wizards often rebuild a button with a new HWND while changing
+        # pages. Apply both a per-control and a global throttle so one scan
+        # cannot jump through multiple pages before the UI has settled.
+        if now - last < 0.8 or now - self._last_action_time < 0.55:
             return False
 
         if not user32.IsWindowEnabled(hwnd):
             return False
 
         logger.info(f"[AutoPilot] Clicking button HWND {hwnd}: '{text}'")
-        user32.SendMessageW(hwnd, BM_CLICK, 0, 0)
+        # Microsoft documents that BM_CLICK can be ignored when the containing
+        # dialog is inactive. Activate the root dialog first, then use a
+        # bounded send so a frozen vendor window cannot hang the queue worker.
+        root = user32.GetAncestor(hwnd, GA_ROOT) or hwnd
+        try:
+            user32.SetActiveWindow(root)
+            user32.SetForegroundWindow(root)
+            user32.BringWindowToTop(root)
+        except Exception:
+            pass
+
+        if _send_message_timeout(hwnd, BM_CLICK) is None:
+            logger.warning("[AutoPilot] Button did not respond: HWND %s '%s'", hwnd, text)
+            return False
         self._last_clicked_time[hwnd] = now
+        self._last_action_time = now
         self._action_count += 1
         return True
 
     def _check_control(self, hwnd: int, check: bool = True) -> bool:
-        current = user32.SendMessageW(hwnd, BM_GETCHECK, 0, 0)
+        current = _send_message_timeout(hwnd, BM_GETCHECK)
+        if current is None:
+            return False
         target = BST_CHECKED if check else BST_UNCHECKED
         if current != target:
-            user32.SendMessageW(hwnd, BM_CLICK, 0, 0)
-            return user32.SendMessageW(hwnd, BM_GETCHECK, 0, 0) == target
+            if not self._click_button(hwnd, _get_window_text(hwnd) or "checkable control"):
+                return False
+            return _send_message_timeout(hwnd, BM_GETCHECK) == target
         return False
 
     @staticmethod
@@ -348,27 +521,48 @@ class InstallerAutoPilot:
 
         texts = " ".join(text.lower().replace("&", "") for _, text, _ in children)
         license_page = any(keyword in texts for keyword in _LICENSE_PAGE_KEYWORDS)
-        reboot_dialog = any(word in texts for word in (
-            "restart", "reboot", "ری‌استارت", "ری استارت",
-            "راه‌اندازی مجدد", "راه اندازی مجدد"))
-        reboot_later_selected = False
+        explicit_reboot_control = any(
+            any(word in text.lower() for word in _REBOOT_LATER_KEYWORDS)
+            or _is_reboot_now_text(text)
+            for _, text, _ in children
+        )
+        reboot_dialog = explicit_reboot_control or (
+            not any(word in texts for word in _NO_REBOOT_REQUIRED_KEYWORDS)
+            and any(word in texts for word in _REBOOT_PROMPT_KEYWORDS)
+        )
         if reboot_dialog:
             later_controls = [
                 (control, text, cls) for control, text, cls in children
                 if any(word in text.lower() for word in _REBOOT_LATER_KEYWORDS)
                 and user32.IsWindowEnabled(control)
+                and "button" in cls.lower()
             ]
-            # Never press Finish/OK on a reboot dialog until an explicit
-            # "restart later" choice exists and has been selected.
-            if not later_controls:
-                return False
-            for control, text, cls in later_controls:
-                if user32.SendMessageW(control, BM_GETCHECK, 0, 0) == BST_CHECKED:
-                    reboot_later_selected = True
-                    break
-                if self._click_button(control, text):
-                    logger.info(f"[AutoPilot] Selected Reboot Later: '{text}'")
-                    return True
+            # Never press Finish/OK until restart has explicitly been deferred.
+            if later_controls:
+                for control, text, cls in later_controls:
+                    if _send_message_timeout(control, BM_GETCHECK) == BST_CHECKED:
+                        break
+                    if self._click_button(control, text):
+                        logger.info(f"[AutoPilot] Selected Reboot Later: '{text}'")
+                        return True
+            else:
+                restart_now_checkables = [
+                    (control, text, cls)
+                    for control, text, cls in children
+                    if _is_reboot_now_text(text)
+                    and user32.IsWindowEnabled(control)
+                    and self._is_checkable_control(control, cls)
+                ]
+                if not restart_now_checkables:
+                    # A push button that can only restart immediately is never
+                    # pressed and never bypassed with Finish/OK.
+                    return False
+                control, text, _ = restart_now_checkables[0]
+                if _send_message_timeout(control, BM_GETCHECK) == BST_CHECKED:
+                    if self._check_control(control, False):
+                        logger.info(f"[AutoPilot] Cleared Restart Now: '{text}'")
+                        return True
+                    return False
 
         handled = False
 
@@ -379,7 +573,10 @@ class InstallerAutoPilot:
                 continue
 
             # Accept license agreements
-            if any(k in c_text_lower for k in _ACCEPT_CHECKBOX_KEYWORDS):
+            if (
+                self._is_checkable_control(c_hwnd, c_cls)
+                and any(k in c_text_lower for k in _ACCEPT_CHECKBOX_KEYWORDS)
+            ):
                 if not any(k in c_text_lower for k in ["do not", "don't", "عدم"]):
                     if self._check_control(c_hwnd, True):
                         logger.info(f"[AutoPilot] Checked agreement: '{c_text}'")
@@ -431,7 +628,7 @@ class InstallerAutoPilot:
             c_text_lower = c_text.lower().replace("&", "").strip()
             if not c_text_lower:
                 continue
-            if any(k in c_text_lower for k in _REBOOT_NOW_KEYWORDS):
+            if _is_reboot_now_text(c_text_lower):
                 continue
             if reboot_dialog and any(k in c_text_lower for k in _REBOOT_LATER_KEYWORDS):
                 continue
@@ -478,10 +675,14 @@ class InstallerAutoPilot:
 
             for hwnd in matching_windows:
                 try:
-                    self.process_window(hwnd)
+                    if self.process_window(hwnd):
+                        # One state-changing action per pass. Modal success
+                        # dialogs stay ahead of their disabled parent window,
+                        # and the next pass handles the following page safely.
+                        break
                 except Exception as e:
                     logger.debug(f"[AutoPilot] Error processing window {hwnd}: {e}")
 
-            time.sleep(0.4)
+            self._stop_event.wait(0.15)
 
         logger.info(f"[AutoPilot] Finished with {self._action_count} actions taken.")

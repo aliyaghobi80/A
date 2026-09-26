@@ -20,6 +20,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
   flutter::DartProject project(L"data");
+  // Prefer the integrated/low-power adapter on hybrid laptops. A dedicated
+  // NVIDIA/AMD driver installer can reset its adapter mid-install; keeping the
+  // technician UI on the integrated adapter prevents the renderer from being
+  // taken down with it. Flutter automatically falls back when only one adapter
+  // is available.
+  project.set_gpu_preference(flutter::GpuPreference::LowPowerPreference);
+  LogStartup("Low-power GPU preference enabled for driver-install resilience");
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();

@@ -1,6 +1,9 @@
 #include "flutter_window.h"
 
+#include <chrono>
 #include <optional>
+#include <string>
+#include <vector>
 
 #include "flutter/generated_plugin_registrant.h"
 #include "startup_log.h"
@@ -8,7 +11,13 @@
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
-FlutterWindow::~FlutterWindow() {}
+namespace {
+constexpr unsigned long long kDisplayRecoveryTimeoutMs = 20000;
+}
+
+FlutterWindow::~FlutterWindow() {
+  StopDisplayRecoveryWatchdog();
+}
 
 bool FlutterWindow::OnCreate() {
   LogStartup("Creating Flutter window");
@@ -30,8 +39,11 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
+  flutter_controller_->engine()->SetNextFrameCallback([this]() {
     KillTimer(GetHandle(), 1);
+    first_frame_rendered_.store(true);
+    display_recovery_pending_.store(false);
+    display_recovery_deadline_ms_.store(0);
     LogStartup("First Flutter frame rendered");
     this->Show();
   });
@@ -41,12 +53,14 @@ bool FlutterWindow::OnCreate() {
   // registered. The following call ensures a frame is pending to ensure the
   // window is shown. It is a no-op if the first frame hasn't completed yet.
   flutter_controller_->ForceRedraw();
+  StartDisplayRecoveryWatchdog();
 
   return true;
 }
 
 void FlutterWindow::OnDestroy() {
   KillTimer(GetHandle(), 1);
+  StopDisplayRecoveryWatchdog();
   LogStartup("Window closed");
   // The backend's parent watchdog owns process cleanup. Never kill other
   // sessions' backend processes by image name.
@@ -73,6 +87,14 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         L"Markazi System Checker - Startup diagnostics", MB_OK | MB_ICONWARNING);
     return 0;
   }
+  // Arm recovery before Flutter sees WM_DISPLAYCHANGE. If ANGLE blocks while
+  // handling a graphics-device reset, the independent native watchdog can
+  // still replace the UI process.
+  if (message == WM_DISPLAYCHANGE) {
+    LogStartup("Windows display reset detected; arming renderer recovery");
+    ArmDisplayRecoveryWatchdog();
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   // Wrap with exception handling to safely survive DirectX 11 / DXGI device resets
   // that occur during GPU graphics driver installations.
@@ -104,4 +126,101 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
+}
+
+void FlutterWindow::ArmDisplayRecoveryWatchdog() {
+  if (!flutter_controller_) {
+    return;
+  }
+
+  display_recovery_deadline_ms_.store(GetTickCount64() +
+                                      kDisplayRecoveryTimeoutMs);
+  display_recovery_pending_.store(true);
+
+  if (first_frame_rendered_.load()) {
+    flutter_controller_->engine()->SetNextFrameCallback([this]() {
+      display_recovery_pending_.store(false);
+      display_recovery_deadline_ms_.store(0);
+      LogStartup("Flutter renderer recovered after display reset");
+    });
+  }
+  flutter_controller_->ForceRedraw();
+}
+
+void FlutterWindow::StartDisplayRecoveryWatchdog() {
+  if (recovery_watchdog_thread_.joinable()) {
+    return;
+  }
+  recovery_watchdog_stop_.store(false);
+  recovery_watchdog_thread_ = std::thread([this]() {
+    while (!recovery_watchdog_stop_.load()) {
+      if (display_recovery_pending_.load()) {
+        const auto deadline = display_recovery_deadline_ms_.load();
+        if (deadline != 0 && GetTickCount64() >= deadline) {
+          RelaunchAfterDisplayReset();
+        }
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    }
+  });
+}
+
+void FlutterWindow::StopDisplayRecoveryWatchdog() {
+  recovery_watchdog_stop_.store(true);
+  if (recovery_watchdog_thread_.joinable() &&
+      recovery_watchdog_thread_.get_id() != std::this_thread::get_id()) {
+    recovery_watchdog_thread_.join();
+  }
+}
+
+void FlutterWindow::RelaunchAfterDisplayReset() {
+  if (recovery_relaunch_started_.exchange(true)) {
+    return;
+  }
+
+  wchar_t executable_path[32768] = {};
+  const DWORD length =
+      GetModuleFileNameW(nullptr, executable_path, std::size(executable_path));
+  if (length == 0 || length >= std::size(executable_path)) {
+    LogStartup("Renderer recovery could not resolve executable path");
+    recovery_relaunch_started_.store(false);
+    display_recovery_pending_.store(false);
+    return;
+  }
+
+  const DWORD old_pid = GetCurrentProcessId();
+  std::wstring command_line = L"\"";
+  command_line.append(executable_path);
+  command_line.append(L"\" --display-recovery-from=");
+  command_line.append(std::to_wstring(old_pid));
+  std::vector<wchar_t> mutable_command(command_line.begin(), command_line.end());
+  mutable_command.push_back(L'\0');
+
+  STARTUPINFOW startup_info = {};
+  startup_info.cb = sizeof(startup_info);
+  PROCESS_INFORMATION process_info = {};
+  std::wstring executable(executable_path, length);
+  const auto separator = executable.find_last_of(L"\\/");
+  const std::wstring working_directory = separator == std::wstring::npos
+                                             ? std::wstring()
+                                             : executable.substr(0, separator);
+
+  LogStartup("Flutter renderer did not recover; relaunching technician UI");
+  const BOOL started = CreateProcessW(
+      executable_path, mutable_command.data(), nullptr, nullptr, FALSE, 0,
+      nullptr, working_directory.empty() ? nullptr : working_directory.c_str(),
+      &startup_info, &process_info);
+  if (!started) {
+    LogStartup("Automatic UI relaunch failed after display reset");
+    recovery_relaunch_started_.store(false);
+    display_recovery_pending_.store(false);
+    return;
+  }
+
+  CloseHandle(process_info.hThread);
+  CloseHandle(process_info.hProcess);
+  // The backend grants the replacement process a hand-off window and keeps
+  // the active driver queue alive. End only this unresponsive Flutter UI.
+  Sleep(750);
+  TerminateProcess(GetCurrentProcess(), 70);
 }

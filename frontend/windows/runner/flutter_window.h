@@ -4,7 +4,9 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 
+#include <atomic>
 #include <memory>
+#include <thread>
 
 #include "win32_window.h"
 
@@ -23,11 +25,27 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  void ArmDisplayRecoveryWatchdog();
+  void StartDisplayRecoveryWatchdog();
+  void StopDisplayRecoveryWatchdog();
+  void RelaunchAfterDisplayReset();
+
   // The project to run.
   flutter::DartProject project_;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // GPU installers can invalidate ANGLE's D3D device. If a forced frame is not
+  // produced after Windows announces a display reset, restart only the UI; the
+  // detached backend and its sequential install queue are adopted by the new
+  // process and continue uninterrupted.
+  std::atomic<bool> first_frame_rendered_{false};
+  std::atomic<bool> display_recovery_pending_{false};
+  std::atomic<bool> recovery_relaunch_started_{false};
+  std::atomic<unsigned long long> display_recovery_deadline_ms_{0};
+  std::atomic<bool> recovery_watchdog_stop_{false};
+  std::thread recovery_watchdog_thread_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

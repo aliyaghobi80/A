@@ -29,9 +29,11 @@ else:
 try:
     from api_server import run_server
     from collector import collect_all_system_info
+    from session_watchdog import start_parent_watchdog
 except (ImportError, ModuleNotFoundError):
     from backend.api_server import run_server
     from backend.collector import collect_all_system_info
+    from backend.session_watchdog import start_parent_watchdog
 
 DEFAULT_PORT = 18088
 
@@ -69,52 +71,6 @@ def setup_logging(verbose: bool = False):
         datefmt="%H:%M:%S",
         handlers=handlers if handlers else None
     )
-
-
-def start_parent_watchdog(parent_pid: int = None):
-    """Monitors the parent process (Flutter frontend).
-    If the parent process exits or crashes, this backend terminates immediately."""
-    import threading
-    if parent_pid is None or parent_pid <= 0:
-        return
-    if parent_pid <= 1:
-        return
-
-    def _watch():
-        import ctypes
-        from ctypes import wintypes
-        import time
-        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
-        kernel.OpenProcess.restype = wintypes.HANDLE
-        kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
-        kernel.WaitForSingleObject.restype = wintypes.DWORD
-        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
-        kernel.CloseHandle.restype = wintypes.BOOL
-        SYNCHRONIZE = 0x00100000
-        INFINITE = 0xFFFFFFFF
-        try:
-            handle = kernel.OpenProcess(SYNCHRONIZE, False, int(parent_pid))
-            if handle:
-                result = kernel.WaitForSingleObject(handle, INFINITE)
-                kernel.CloseHandle(handle)
-                if result == 0:
-                    os._exit(0)
-        except Exception:
-            pass
-
-        while True:
-            time.sleep(1.5)
-            try:
-                h = kernel.OpenProcess(0x0400, False, int(parent_pid))
-                if not h:
-                    os._exit(0)
-                kernel.CloseHandle(h)
-            except Exception:
-                os._exit(0)
-
-    t = threading.Thread(target=_watch, daemon=True, name="ParentProcessWatchdog")
-    t.start()
 
 
 def main():

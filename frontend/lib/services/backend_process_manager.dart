@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 class BackendProcessManager {
   static Process? _process;
   static Future<bool>? _startupFuture;
+  static int? _attachedPort;
   static int activePort = 18088;
   static const List<int> candidatePorts = [18088, 18080, 18089, 18090, 18091];
   static const int requiredApiContractVersion = 2;
@@ -166,10 +167,14 @@ class BackendProcessManager {
       activePort,
       const Duration(milliseconds: 120),
     )) {
+      await _attachFrontendSession(activePort);
       debugPrint(
         '[BackendProcessManager] Connected to active backend on port $activePort.',
       );
       return true;
+    }
+    if (_attachedPort == activePort) {
+      _attachedPort = null;
     }
 
     // Parallel check across all candidate ports (~180ms max)
@@ -187,6 +192,7 @@ class BackendProcessManager {
     for (final port in portChecks) {
       if (port != null) {
         activePort = port;
+        await _attachFrontendSession(activePort);
         debugPrint(
           '[BackendProcessManager] Connected to active backend on port $activePort.',
         );
@@ -286,6 +292,7 @@ class BackendProcessManager {
       // Prioritize targetPort first
       if (await isBackendRunningOnPort(targetPort, checkTimeout)) {
         activePort = targetPort;
+        await _attachFrontendSession(activePort);
         debugPrint(
           '[BackendProcessManager] Backend is UP and healthy on port $activePort (iteration $i).',
         );
@@ -298,6 +305,7 @@ class BackendProcessManager {
           if (port == targetPort) continue;
           if (await isBackendRunningOnPort(port, checkTimeout)) {
             activePort = port;
+            await _attachFrontendSession(activePort);
             debugPrint(
               '[BackendProcessManager] Backend is UP on fallback port $activePort (iteration $i).',
             );
@@ -310,7 +318,34 @@ class BackendProcessManager {
     return false;
   }
 
+  /// Reassigns an already-running backend to this UI process. This keeps an
+  /// active driver queue alive when the native runner recovers from a graphics
+  /// driver display reset by launching a replacement Flutter process.
+  static Future<void> _attachFrontendSession(int port) async {
+    if (_attachedPort == port) return;
+    try {
+      final response = await http
+          .post(
+            Uri.parse('http://127.0.0.1:$port/api/session/attach'),
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: json.encode({'parent_pid': pid}),
+          )
+          .timeout(const Duration(seconds: 2));
+      if (response.statusCode == 200) {
+        _attachedPort = port;
+        debugPrint(
+          '[BackendProcessManager] Backend session attached to frontend PID $pid.',
+        );
+      }
+    } catch (e) {
+      // Older development backends do not expose the hand-off endpoint. The
+      // health check is still valid, so attachment failure is non-fatal.
+      debugPrint('[BackendProcessManager] Session attachment skipped: $e');
+    }
+  }
+
   static Future<void> shutdownBackend() async {
+    _attachedPort = null;
     for (final port in candidatePorts) {
       try {
         await http

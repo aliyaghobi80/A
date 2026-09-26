@@ -47,6 +47,7 @@ from hardware.battery import get_battery_info
 from hardware.storage import get_connected_usb_drives, safe_eject_drive
 from qc.qc_engine import evaluate_system_qc
 from windows.power_settings import set_laptop_power_modes
+from session_watchdog import adopt_parent_process, get_parent_processes, get_parent_session
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +131,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.29",
+                "version": "1.1.30",
                 "phase": 4,
                 "api_contract_version": 2,
             }
@@ -363,6 +364,29 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
         
+        if path == "/api/session/attach":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+            success = adopt_parent_process(payload.get("parent_pid"))
+            parent_pid, generation = get_parent_session()
+            result = {
+                "success": success,
+                "parent_pid": parent_pid,
+                "parent_pids": get_parent_processes(),
+                "generation": generation,
+                "message": "Frontend session attached." if success else "Invalid frontend process.",
+            }
+            self.send_response(200 if success else 400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode("utf-8"))
+            return
+
         if path == "/api/refresh" or path == "/api/system-info":
             logger.info("Force refresh requested via POST...")
             with _cache_lock:

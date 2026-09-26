@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/system_info.dart';
@@ -806,7 +807,9 @@ class ApiService {
 
   Future<DriverBatchStatus> getDriverBatchStatus() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
-    if (!isRunning) return DriverBatchStatus.empty();
+    if (!isRunning) {
+      throw StateError('سرویس بک‌اند برای دریافت وضعیت صف در دسترس نیست.');
+    }
 
     try {
       final uri = Uri.parse('$baseUrl/api/drivers/batch-status');
@@ -820,10 +823,13 @@ class ApiService {
         );
         return DriverBatchStatus.fromJson(data);
       }
-      return DriverBatchStatus.empty();
+      throw HttpException(
+        'Driver queue status returned HTTP ${response.statusCode}.',
+        uri: uri,
+      );
     } catch (e) {
       debugPrint('[ApiService] getDriverBatchStatus error: $e');
-      return DriverBatchStatus.empty();
+      rethrow;
     }
   }
 

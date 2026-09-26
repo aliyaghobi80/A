@@ -112,7 +112,9 @@ class DriverInstallController extends GetxController {
   bool? get triStateSelectionValue {
     final ids = installablePackageIds;
     if (ids.isEmpty || selectedPackageIds.isEmpty) return false;
-    final selectedCount = ids.where((id) => selectedPackageIds.contains(id)).length;
+    final selectedCount = ids
+        .where((id) => selectedPackageIds.contains(id))
+        .length;
     if (selectedCount == 0) return false;
     if (selectedCount == ids.length) return true;
     return null; // Indeterminate
@@ -263,10 +265,7 @@ class DriverInstallController extends GetxController {
     );
 
     if (confirmed == true && context.mounted) {
-      await _executeDriverQueue(
-        context,
-        packageIds: selectedIds,
-      );
+      await _executeDriverQueue(context, packageIds: selectedIds);
     }
   }
 
@@ -502,6 +501,9 @@ class DriverInstallController extends GetxController {
       );
 
       if (res['success'] == true) {
+        if (!resume) {
+          batchStatus.value = DriverBatchStatus.empty();
+        }
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
@@ -540,7 +542,7 @@ class DriverInstallController extends GetxController {
 
   void _startDriverBatchPolling(ScaffoldMessengerState? scaffoldMessenger) {
     _pollTimer?.cancel();
-    int lastCompletedCount = -1;
+    int lastCompletedCount = batchStatus.value.completed;
     _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
       timer,
     ) async {
@@ -551,16 +553,16 @@ class DriverInstallController extends GetxController {
         if (isClosed || timer != _pollTimer) return;
         batchStatus.value = status;
 
-        // Real-time intermediate system update as each driver finishes
+        // Update the session counters in real time, but do not launch a full
+        // WMI/hardware refresh after every package. That refresh used to pile
+        // up exactly while graphics installers were resetting the display.
         if (status.completed > lastCompletedCount) {
+          final newlyCompleted = status.completed - lastCompletedCount;
           lastCompletedCount = status.completed;
           try {
             if (Get.isRegistered<SystemInfoController>()) {
               Get.find<SystemInfoController>().recordDriverInstall(
-                status.completed,
-              );
-              Get.find<SystemInfoController>().fetchSystemInfo(
-                forceRefresh: true,
+                newlyCompleted,
               );
             }
           } catch (_) {}
@@ -570,37 +572,9 @@ class DriverInstallController extends GetxController {
           timer.cancel();
           isBatchInstalling.value = false;
 
-          // Refresh system info to update driver status
-          try {
-            if (Get.isRegistered<SystemInfoController>()) {
-              if (status.completed > 0) {
-                Get.find<SystemInfoController>().recordDriverInstall(
-                  status.completed,
-                );
-              }
-              Get.find<SystemInfoController>().fetchSystemInfo(
-                forceRefresh: true,
-              );
-            }
-          } catch (_) {}
-
-          // Rescan driver folder to update UI badges
-          if (driverFolder.value.isNotEmpty) {
-            final folder = driverFolder.value;
-            final generation = _scanGeneration;
-            _apiService
-                .intelligentScanDrivers(folderPath: folder)
-                .then((res) {
-                  if (!isClosed &&
-                      generation == _scanGeneration &&
-                      folder == driverFolder.value) {
-                    scanResult.value = res;
-                  }
-                })
-                .catchError((Object error) {
-                  debugPrint('[DriverInstallController] Rescan failed: $error');
-                });
-          }
+          // Let Windows finish rebuilding the display stack, then refresh the
+          // hardware and folder once. GPU queues receive a longer settle time.
+          unawaited(_refreshAfterCompletedQueue(status));
 
           if (scaffoldMessenger != null && status.summaryMessage.isNotEmpty) {
             scaffoldMessenger.showSnackBar(
@@ -626,6 +600,40 @@ class DriverInstallController extends GetxController {
         _pollInFlight = false;
       }
     });
+  }
+
+  Future<void> _refreshAfterCompletedQueue(DriverBatchStatus status) async {
+    final touchedGraphics = status.items.any(
+      (item) => item.category.toLowerCase() == 'gpu',
+    );
+    await Future<void>.delayed(Duration(seconds: touchedGraphics ? 8 : 2));
+    if (isClosed) return;
+
+    try {
+      if (Get.isRegistered<SystemInfoController>()) {
+        await Get.find<SystemInfoController>().fetchSystemInfo(
+          forceRefresh: true,
+        );
+      }
+    } catch (error) {
+      debugPrint('[DriverInstallController] System refresh failed: $error');
+    }
+
+    final folder = driverFolder.value;
+    if (folder.isEmpty || isClosed) return;
+    final generation = _scanGeneration;
+    try {
+      final result = await _apiService.intelligentScanDrivers(
+        folderPath: folder,
+      );
+      if (!isClosed &&
+          generation == _scanGeneration &&
+          folder == driverFolder.value) {
+        scanResult.value = result;
+      }
+    } catch (error) {
+      debugPrint('[DriverInstallController] Rescan failed: $error');
+    }
   }
 
   void _showRebootRequiredDialog() {
