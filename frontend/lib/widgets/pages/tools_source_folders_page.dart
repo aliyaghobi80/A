@@ -16,7 +16,7 @@ class ToolsSourceFoldersPage extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final softwareCtrl = Get.find<SoftwareController>();
     final driverCtrl = Get.find<DriverInstallController>();
-    final activationCtrl = Get.put(ActivationController());
+    final activationCtrl = Get.find<ActivationController>();
     final l10n = AppLocalizations.of(context);
 
     return SingleChildScrollView(

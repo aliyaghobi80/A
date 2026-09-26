@@ -14,7 +14,7 @@ class LicenseStatusPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final systemCtrl = Get.find<SystemInfoController>();
-    final activationCtrl = Get.put(ActivationController());
+    final activationCtrl = Get.find<ActivationController>();
     final l10n = AppLocalizations.of(context);
 
     return Obx(() {

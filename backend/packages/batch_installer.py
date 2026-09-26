@@ -45,6 +45,65 @@ _batch_state: Dict[str, Any] = {
 _batch_thread: Optional[threading.Thread] = None
 
 
+def _active_batch_response_locked() -> Dict[str, Any]:
+    """Return an idempotent start response for the queue already in flight.
+
+    The desktop UI can be recreated independently of the backend (for example
+    after navigation/theme rebuilds or graphics recovery).  Treating a second
+    start request as a hard error leaves that replacement UI looking idle even
+    though this worker is still installing packages.  Returning the live
+    snapshot lets the client adopt the existing session immediately.
+    """
+    status = copy.deepcopy(_batch_state)
+    return {
+        "success": True,
+        "already_running": True,
+        "adopted_existing": True,
+        "message": "صف نصب فعال بازیابی شد؛ وضعیت زنده نمایش داده می‌شود.",
+        "status": status,
+        "total": status.get("total", 0),
+        "items": status.get("items", []),
+    }
+
+
+def _mark_batch_worker_failed_locked(reason: str) -> None:
+    """Unlock a queue whose worker exited before normal finalization."""
+    now = time.time()
+    for item in _batch_state.get("items", []):
+        status = item.get("status")
+        if status == "installing":
+            item["status"] = "failed"
+            item["message"] = reason
+        elif status == "queued":
+            item["status"] = "skipped"
+            item["message"] = "به علت توقف غیرمنتظره صف اجرا نشد."
+
+    items = _batch_state.get("items", [])
+    _batch_state["completed"] = sum(1 for item in items if item.get("status") == "completed")
+    _batch_state["failed"] = sum(1 for item in items if item.get("status") == "failed")
+    _batch_state["skipped"] = sum(1 for item in items if item.get("status") == "skipped")
+    _batch_state["is_running"] = False
+    _batch_state["current_item_name"] = None
+    _batch_state["end_time"] = now
+    _batch_state["progress_percent"] = 100.0 if _batch_state.get("total", 0) else 0.0
+    _batch_state["summary_message"] = (
+        "صف نصب به‌طور غیرمنتظره متوقف شد؛ کنترل‌ها آزاد شدند. "
+        "جزئیات مرحله ناموفق را بررسی و دوباره تلاش کنید."
+    )
+
+
+def _repair_dead_worker_locked() -> None:
+    """Repair stale running state after an unhandled worker termination."""
+    thread = _batch_thread
+    if not _batch_state.get("is_running") or thread is None:
+        return
+    # ``ident is None`` is the tiny valid interval between constructing and
+    # starting a thread, so it must not be mistaken for a crashed worker.
+    if thread.ident is not None and not thread.is_alive():
+        logger.error("[BatchInstall] Dead worker detected; repairing queue state")
+        _mark_batch_worker_failed_locked("پردازش نصب به‌طور غیرمنتظره متوقف شد.")
+
+
 def _home_office_shortcuts_result() -> Dict[str, Any]:
     """Create Office shortcuts without installing or activating anything."""
     from packages.office_shortcuts import ensure_office_desktop_shortcuts
@@ -88,7 +147,7 @@ def _reset_state():
     }
 
 
-def _run_batch_install(items_to_run: List[Dict[str, Any]], custom_dir: Optional[str] = None):
+def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Optional[str] = None):
     """Background thread worker: installs packages and executes orchestrator steps one by one."""
     global _batch_state
 
@@ -281,6 +340,19 @@ def _run_batch_install(items_to_run: List[Dict[str, Any]], custom_dir: Optional[
     logger.info(f"[BatchInstall] Batch complete: {_batch_state['summary_message']}")
 
 
+def _run_batch_install(items_to_run: List[Dict[str, Any]], custom_dir: Optional[str] = None):
+    """Failure-safe worker wrapper that can never leave UI controls locked."""
+    try:
+        _run_batch_install_impl(items_to_run, custom_dir)
+    except BaseException as exc:  # pragma: no branch - final safety boundary
+        logger.exception("[BatchInstall] Worker terminated unexpectedly: %s", exc)
+        with _batch_lock:
+            if _batch_state.get("is_running"):
+                _mark_batch_worker_failed_locked(
+                    f"خطای غیرمنتظره در پردازش صف: {exc}"
+                )
+
+
 def start_batch_install(
     package_ids: Optional[List[str]] = None,
     custom_dir: Optional[str] = None,
@@ -295,11 +367,9 @@ def start_batch_install(
     global _batch_thread, _batch_state
 
     with _batch_lock:
+        _repair_dead_worker_locked()
         if _batch_state["is_running"]:
-            return {
-                "success": False,
-                "message": "یک عملیات نصب خودکار در حال اجرا است. لطفاً صبر کنید یا آن را لغو کنید.",
-            }
+            return _active_batch_response_locked()
 
     pkg_data = scan_packages(custom_dir)
     pkg_dir = custom_dir or (pkg_data.get("packages_directory") if isinstance(pkg_data, dict) else None)
@@ -524,32 +594,56 @@ def start_batch_install(
         }
 
     with _batch_lock:
+        _repair_dead_worker_locked()
         if _batch_state["is_running"]:
-            return {"success": False, "message": "صف نصب نرم‌افزارها در حال اجراست."}
+            return _active_batch_response_locked()
         _reset_state()
         _batch_state["is_running"] = True
         _batch_state["cancelled"] = False
         _batch_state["total"] = len(queue_items)
         _batch_state["items"] = copy.deepcopy(queue_items)
+        # Clear the previous completed worker before publishing the new
+        # running state. The status endpoint treats a non-alive published
+        # worker as crashed; keeping the old thread here would create a small
+        # false-positive window before the replacement thread is assigned.
+        _batch_thread = None
 
     _batch_thread = threading.Thread(
         target=_run_batch_install,
         args=(queue_items, custom_dir),
         daemon=True,
     )
-    _batch_thread.start()
+    try:
+        _batch_thread.start()
+    except Exception as exc:
+        logger.exception("[BatchInstall] Could not start worker thread: %s", exc)
+        with _batch_lock:
+            _mark_batch_worker_failed_locked(
+                f"پردازش صف نصب شروع نشد: {exc}"
+            )
+            status = copy.deepcopy(_batch_state)
+        return {
+            "success": False,
+            "message": status["summary_message"],
+            "status": status,
+        }
+
+    with _batch_lock:
+        status = copy.deepcopy(_batch_state)
 
     return {
         "success": True,
         "message": f"فرآیند نصب خودکار و تنظیمات سیستم ({len(queue_items)} مرحله) آغاز شد...",
         "total": len(queue_items),
-        "items": list(_batch_state["items"]),
+        "items": status["items"],
+        "status": status,
     }
 
 
 def get_batch_status() -> Dict[str, Any]:
     """Returns current batch install progress and status."""
     with _batch_lock:
+        _repair_dead_worker_locked()
         return copy.deepcopy(_batch_state)
 
 

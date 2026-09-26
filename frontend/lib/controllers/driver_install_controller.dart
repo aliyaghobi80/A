@@ -34,13 +34,14 @@ class DriverInstallController extends GetxController {
 
   Timer? _pollTimer;
   bool _pollInFlight = false;
+  bool _syncInFlight = false;
   int _scanGeneration = 0;
 
   @override
   void onInit() {
     super.onInit();
     _loadInitialConfig();
-    _checkInitialDriverBatchStatus();
+    synchronizeDriverBatchState();
   }
 
   @override
@@ -68,16 +69,29 @@ class DriverInstallController extends GetxController {
     }
   }
 
-  Future<void> _checkInitialDriverBatchStatus() async {
+  Future<bool> synchronizeDriverBatchState() async {
+    if (_syncInFlight || isClosed) return batchStatus.value.isRunning;
+    _syncInFlight = true;
     try {
       final status = await _apiService.getDriverBatchStatus();
+      if (isClosed) return false;
       batchStatus.value = status;
       if (status.isRunning) {
         isBatchInstalling.value = true;
         driverFolder.value = status.folderPath;
-        _startDriverBatchPolling(null);
+        if (_pollTimer?.isActive != true) {
+          _startDriverBatchPolling(null);
+        }
+      } else {
+        isBatchInstalling.value = false;
       }
-    } catch (_) {}
+      return status.isRunning;
+    } catch (error) {
+      debugPrint('[DriverInstallController] Queue state sync error: $error');
+      return batchStatus.value.isRunning;
+    } finally {
+      _syncInFlight = false;
+    }
   }
 
   void toggleAdvancedMode() {
@@ -491,6 +505,20 @@ class DriverInstallController extends GetxController {
     bool resume = false,
   }) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final activeQueue = await synchronizeDriverBatchState();
+    if (activeQueue) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'صف نصب درایورها از قبل فعال است؛ وضعیت زنده بازیابی شد.',
+          ),
+          backgroundColor: Color(0xFF0284C7),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (!context.mounted) return;
     isBatchInstalling.value = true;
 
     try {
@@ -516,6 +544,17 @@ class DriverInstallController extends GetxController {
         );
         _startDriverBatchPolling(scaffoldMessenger);
       } else {
+        final recovered = await synchronizeDriverBatchState();
+        if (recovered) {
+          scaffoldMessenger.showSnackBar(
+            const SnackBar(
+              content: Text('صف نصب درایورها فعال است؛ وضعیت زنده بازیابی شد.'),
+              backgroundColor: Color(0xFF0284C7),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
         isBatchInstalling.value = false;
         scaffoldMessenger.showSnackBar(
           SnackBar(
@@ -529,6 +568,17 @@ class DriverInstallController extends GetxController {
         );
       }
     } catch (e) {
+      final recovered = await synchronizeDriverBatchState();
+      if (recovered) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('صف نصب درایورها فعال است؛ وضعیت زنده بازیابی شد.'),
+            backgroundColor: Color(0xFF0284C7),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
       isBatchInstalling.value = false;
       scaffoldMessenger.showSnackBar(
         SnackBar(

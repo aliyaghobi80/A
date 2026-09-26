@@ -2,7 +2,7 @@
 ; Production Installer Generation for Windows 64-bit
 
 #define MyAppName "Markazi System Checker"
-#define MyAppVersion "1.1.31"
+#define MyAppVersion "1.1.32"
 #define MyAppPublisher "Markazi System"
 #define MyAppExeName "MarkaziSystemChecker.exe"
 

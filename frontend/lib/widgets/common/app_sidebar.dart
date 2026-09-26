@@ -160,6 +160,11 @@ class AppSidebar extends StatelessWidget {
                   .where((p) => !p.isInstalled && p.isValid)
                   .length;
               final scannedDrivers = driverCtrl.scannedFiles.length;
+              final softwareBatch = softwareCtrl.batchStatus.value;
+              final driverBatch = driverCtrl.batchStatus.value;
+              final softwareBusy = softwareCtrl.hasActiveBatch;
+              final driverBusy =
+                  driverCtrl.isBatchInstalling.value || driverBatch.isRunning;
 
               return ListView(
                 padding: EdgeInsets.symmetric(
@@ -179,6 +184,10 @@ class AppSidebar extends StatelessWidget {
                     index: 1,
                     icon: Icons.extension_rounded,
                     title: l10n.isPersian ? 'نصب درایورها' : 'Install Drivers',
+                    isBusy: driverBusy,
+                    busyProgress: driverBatch.total > 0
+                        ? '${driverBatch.completed}/${driverBatch.total}'
+                        : null,
                     badgeCount: scannedDrivers > 0 ? scannedDrivers : null,
                     badgeColor: AppTheme.statusWarning,
                     isDark: isDark,
@@ -191,6 +200,10 @@ class AppSidebar extends StatelessWidget {
                     title: l10n.isPersian
                         ? 'نصب نرم‌افزارها'
                         : 'Install Software',
+                    isBusy: softwareBusy,
+                    busyProgress: softwareBatch.total > 0
+                        ? '${softwareBatch.completed}/${softwareBatch.total}'
+                        : null,
                     badgeCount: uninstalledPackages > 0
                         ? uninstalledPackages
                         : null,
@@ -336,6 +349,8 @@ class AppSidebar extends StatelessWidget {
     required String title,
     int? badgeCount,
     Color? badgeColor,
+    bool isBusy = false,
+    String? busyProgress,
     required bool isDark,
     required ThemeLanguageController themeCtrl,
     required bool isCompact,
@@ -389,7 +404,20 @@ class AppSidebar extends StatelessWidget {
                               ? AppTheme.darkTextSecondary
                               : AppTheme.lightTextSecondary),
                   ),
-                  if (badgeCount != null && badgeCount > 0)
+                  if (isBusy)
+                    Positioned(
+                      top: 5,
+                      right: 8,
+                      child: SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: badgeColor ?? accent,
+                        ),
+                      ),
+                    )
+                  else if (badgeCount != null && badgeCount > 0)
                     Positioned(
                       top: 6,
                       right: 10,
@@ -478,7 +506,46 @@ class AppSidebar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (badgeCount != null && badgeCount > 0) ...[
+              if (isBusy) ...[
+                Semantics(
+                  label: 'عملیات نصب در حال اجرا است',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (badgeColor ?? accent).withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: badgeColor ?? accent,
+                          ),
+                        ),
+                        if (busyProgress != null) ...[
+                          const SizedBox(width: 5),
+                          Text(
+                            busyProgress,
+                            textDirection: TextDirection.ltr,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: badgeColor ?? accent,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ] else if (badgeCount != null && badgeCount > 0) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 6,

@@ -57,7 +57,9 @@ class ApiService {
   Future<PackagesResponse> fetchPackages({String? customDir}) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return PackagesResponse.empty();
+      throw StateError(
+        'سرویس بک‌اند برای دریافت فهرست نرم‌افزارها در دسترس نیست.',
+      );
     }
 
     try {
@@ -77,17 +79,20 @@ class ApiService {
         final Map<String, dynamic> data = json.decode(rawBody);
         return PackagesResponse.fromJson(data);
       }
-      return PackagesResponse.empty();
+      throw HttpException(
+        'Packages endpoint returned HTTP ${response.statusCode}.',
+        uri: uri,
+      );
     } catch (e) {
       debugPrint('[ApiService] fetchPackages error: $e');
-      return PackagesResponse.empty();
+      rethrow;
     }
   }
 
   Future<PackagesResponse> scanPackages() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
-      return PackagesResponse.empty();
+      throw StateError('سرویس بک‌اند برای اسکن نرم‌افزارها در دسترس نیست.');
     }
 
     try {
@@ -102,10 +107,13 @@ class ApiService {
         final Map<String, dynamic> data = json.decode(rawBody);
         return PackagesResponse.fromJson(data);
       }
-      return PackagesResponse.empty();
+      throw HttpException(
+        'Package scan returned HTTP ${response.statusCode}.',
+        uri: uri,
+      );
     } catch (e) {
       debugPrint('[ApiService] scanPackages error: $e');
-      return PackagesResponse.empty();
+      rethrow;
     }
   }
 
@@ -505,7 +513,11 @@ class ApiService {
 
   Future<PackagesResponse> setPackagesDirectory(String dir) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
-    if (!isRunning) return PackagesResponse.empty();
+    if (!isRunning) {
+      throw StateError(
+        'سرویس بک‌اند برای تغییر پوشه نرم‌افزارها در دسترس نیست.',
+      );
+    }
 
     try {
       final uri = Uri.parse('$baseUrl/api/packages/directory');
@@ -524,11 +536,15 @@ class ApiService {
         if (data.containsKey('packages_data')) {
           return PackagesResponse.fromJson(data['packages_data']);
         }
+        return await fetchPackages();
       }
-      return await fetchPackages();
+      throw HttpException(
+        'Package directory update returned HTTP ${response.statusCode}.',
+        uri: uri,
+      );
     } catch (e) {
       debugPrint('[ApiService] setPackagesDirectory error: $e');
-      return PackagesResponse.empty();
+      rethrow;
     }
   }
 
@@ -693,7 +709,9 @@ class ApiService {
 
   Future<BatchInstallStatus> getBatchInstallStatus() async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
-    if (!isRunning) return BatchInstallStatus.empty();
+    if (!isRunning) {
+      throw StateError('سرویس بک‌اند برای دریافت وضعیت نصب در دسترس نیست.');
+    }
 
     try {
       final uri = Uri.parse('$baseUrl/api/packages/batch-status');
@@ -707,10 +725,13 @@ class ApiService {
         );
         return BatchInstallStatus.fromJson(data);
       }
-      return BatchInstallStatus.empty();
+      throw HttpException(
+        'Software queue status returned HTTP ${response.statusCode}.',
+        uri: uri,
+      );
     } catch (e) {
       debugPrint('[ApiService] getBatchInstallStatus error: $e');
-      return BatchInstallStatus.empty();
+      rethrow;
     }
   }
 

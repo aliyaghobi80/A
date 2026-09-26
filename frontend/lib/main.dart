@@ -40,15 +40,18 @@ void main() async {
   );
 
   // Initialize GetX Controllers
-  final themeLanguageCtrl = Get.put(ThemeLanguageController());
+  final themeLanguageCtrl = Get.put(ThemeLanguageController(), permanent: true);
   themeLanguageCtrl.loadFromSettings(settings);
 
-  Get.put(SystemInfoController());
-  Get.put(SoftwareController());
-  Get.put(DriverInstallController());
-  Get.put(DeviceSettingsController());
-  Get.put(ActivationController());
-  Get.put(QcController());
+  // These controllers own app-wide sessions, not individual pages. Keeping
+  // them permanent prevents GetX route/view rebuilds from discarding active
+  // queues, selections, filters, or live installation progress.
+  Get.put(SystemInfoController(), permanent: true);
+  Get.put(SoftwareController(), permanent: true);
+  Get.put(DriverInstallController(), permanent: true);
+  Get.put(DeviceSettingsController(), permanent: true);
+  Get.put(ActivationController(), permanent: true);
+  Get.put(QcController(), permanent: true);
 
   runApp(const MarkaziSystemCheckerApp());
 }
@@ -118,8 +121,35 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    BackendProcessManager.terminateAll();
+    // A dashboard/widget disposal is not necessarily an application exit
+    // (theme/navigation rebuilds and renderer recovery can also dispose it).
+    // Explicit exits are handled by didRequestAppExit / ExitDialog; otherwise
+    // keep the backend-owned installation queue alive for the replacement UI.
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (Get.isRegistered<SoftwareController>()) {
+      unawaited(Get.find<SoftwareController>().synchronizeBatchInstallState());
+    }
+    if (Get.isRegistered<DriverInstallController>()) {
+      unawaited(
+        Get.find<DriverInstallController>().synchronizeDriverBatchState(),
+      );
+    }
+  }
+
+  void _selectNavigationPage(int index) {
+    Get.find<ThemeLanguageController>().setNavIndex(index);
+    if (index == 2 && Get.isRegistered<SoftwareController>()) {
+      unawaited(Get.find<SoftwareController>().synchronizeBatchInstallState());
+    } else if (index == 1 && Get.isRegistered<DriverInstallController>()) {
+      unawaited(
+        Get.find<DriverInstallController>().synchronizeDriverBatchState(),
+      );
+    }
   }
 
   @override
@@ -174,8 +204,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     // Adaptive Responsive Sidebar (220px desktop, 70px compact rail for tablet / small screens)
                     AppSidebar(
                       selectedIndex: navIndex,
-                      onItemSelected: (idx) =>
-                          themeLanguageCtrl.setNavIndex(idx),
+                      onItemSelected: _selectNavigationPage,
                       isCompact: isCompactScreen,
                     ),
 

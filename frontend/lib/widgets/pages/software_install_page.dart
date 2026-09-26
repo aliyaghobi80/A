@@ -10,15 +10,8 @@ import '../../theme/app_theme.dart';
 import '../common/design_components.dart';
 import '../common/deployment_flow_panel.dart';
 
-class SoftwareInstallPage extends StatefulWidget {
+class SoftwareInstallPage extends StatelessWidget {
   const SoftwareInstallPage({super.key});
-
-  @override
-  State<SoftwareInstallPage> createState() => _SoftwareInstallPageState();
-}
-
-class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
-  final Set<String> selectedPackageIds = {};
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +23,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
     return Obx(() {
       final packages = softwareCtrl.packages;
+      final selectedPackageIds = softwareCtrl.selectedPackageIds.toSet();
       final isScanning = softwareCtrl.isScanning.value;
-      final isBatchRunning = softwareCtrl.isBatchInstalling.value;
+      final isBatchRunning = softwareCtrl.hasActiveBatch;
       final isBatchUninstalling = softwareCtrl.isBatchUninstalling.value;
       final batchStatus = softwareCtrl.batchStatus.value;
       final dir = softwareCtrl.packagesDirectory;
@@ -183,7 +177,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                             ),
                           ),
                           OutlinedButton.icon(
-                            onPressed: isScanning
+                            onPressed: isScanning || isBatchRunning
                                 ? null
                                 : () => softwareCtrl.changePackagesDirectory(
                                     context,
@@ -202,10 +196,10 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                             ),
                           ),
                           ElevatedButton.icon(
-                            onPressed: isScanning
+                            onPressed: isScanning || isBatchRunning
                                 ? null
                                 : () => softwareCtrl.fetchPackages(),
-                            icon: isScanning
+                            icon: isScanning || isBatchRunning
                                 ? const SizedBox(
                                     width: 14,
                                     height: 14,
@@ -216,7 +210,11 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                                   )
                                 : const Icon(Icons.refresh_rounded, size: 16),
                             label: Text(
-                              isScanning ? 'در حال اسکن...' : 'اسکن مجدد',
+                              isBatchRunning
+                                  ? 'نصب در حال اجراست'
+                                  : (isScanning
+                                        ? 'در حال اسکن...'
+                                        : 'اسکن مجدد'),
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: accent,
@@ -277,13 +275,9 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                         child: InkWell(
                           onTap: selectableIds.isEmpty
                               ? null
-                              : () => setState(() {
-                                  if (allVisibleSelected) {
-                                    selectedPackageIds.removeAll(selectableIds);
-                                  } else {
-                                    selectedPackageIds.addAll(selectableIds);
-                                  }
-                                }),
+                              : () => softwareCtrl.toggleSelectAllPackages(
+                                  selectableIds,
+                                ),
                           borderRadius: BorderRadius.circular(8),
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(minHeight: 44),
@@ -296,17 +290,10 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                                   activeColor: accent,
                                   onChanged: selectableIds.isEmpty
                                       ? null
-                                      : (_) => setState(() {
-                                          if (allVisibleSelected) {
-                                            selectedPackageIds.removeAll(
+                                      : (_) => softwareCtrl
+                                            .toggleSelectAllPackages(
                                               selectableIds,
-                                            );
-                                          } else {
-                                            selectedPackageIds.addAll(
-                                              selectableIds,
-                                            );
-                                          }
-                                        }),
+                                            ),
                                 ),
                                 Text(
                                   allVisibleSelected
@@ -348,10 +335,8 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                                       context,
                                       selectedInstalledPackages,
                                     );
-                                if (mounted && removed.isNotEmpty) {
-                                  setState(
-                                    () => selectedPackageIds.removeAll(removed),
-                                  );
+                                if (removed.isNotEmpty) {
+                                  softwareCtrl.removePackageSelections(removed);
                                 }
                               },
                         icon: isBatchUninstalling
@@ -387,8 +372,21 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                                 context,
                                 targetPackageIds: installTargetIds.toList(),
                               ),
-                        icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                        label: Text('نصب خودکار (${installTargetIds.length})'),
+                        icon: isBatchRunning
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.play_arrow_rounded, size: 18),
+                        label: Text(
+                          isBatchRunning
+                              ? 'در حال نصب (${batchStatus.completed}/${batchStatus.total})'
+                              : 'نصب خودکار (${installTargetIds.length})',
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: accent,
                           minimumSize: const Size(0, 44),
@@ -424,6 +422,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
                     final isThisUninstalling = softwareCtrl
                         .isCurrentUninstalling(pkg);
                     return _buildPackageRow(
+                      context,
                       pkg,
                       softwareCtrl,
                       isThisInstalling,
@@ -492,6 +491,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
   }
 
   Widget _buildPackageRow(
+    BuildContext context,
     SoftwarePackage pkg,
     SoftwareController ctrl,
     bool isInstalling,
@@ -502,7 +502,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
     bool isOfficeBlocked,
   ) {
     final isInstalled = pkg.isInstalled;
-    final isSelected = selectedPackageIds.contains(pkg.id);
+    final isSelected = ctrl.selectedPackageIds.contains(pkg.id);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -552,15 +552,7 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
               ),
               onChanged: isOfficeBlocked
                   ? null
-                  : (val) {
-                      setState(() {
-                        if (val == true) {
-                          selectedPackageIds.add(pkg.id);
-                        } else {
-                          selectedPackageIds.remove(pkg.id);
-                        }
-                      });
-                    },
+                  : (_) => ctrl.togglePackageSelection(pkg.id),
             ),
             const SizedBox(width: 4),
           ],

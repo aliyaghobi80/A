@@ -4,8 +4,29 @@ import 'package:markazi_system_checker/controllers/driver_install_controller.dar
 import 'package:markazi_system_checker/controllers/software_controller.dart';
 import 'package:markazi_system_checker/controllers/theme_language_controller.dart';
 import 'package:markazi_system_checker/models/system_info.dart';
+import 'package:markazi_system_checker/services/api_service.dart';
 import 'package:markazi_system_checker/utils/persian_date_time.dart';
 import 'package:markazi_system_checker/widgets/pages/calculations_page.dart';
+
+class _FakeBatchApiService extends ApiService {
+  BatchInstallStatus status;
+  bool fail = false;
+
+  _FakeBatchApiService(this.status);
+
+  @override
+  Future<BatchInstallStatus> getBatchInstallStatus() async {
+    if (fail) throw StateError('temporary backend outage');
+    return status;
+  }
+}
+
+class _FailingPackagesApiService extends ApiService {
+  @override
+  Future<PackagesResponse> fetchPackages({String? customDir}) async {
+    throw StateError('temporary package endpoint outage');
+  }
+}
 
 void main() {
   test('seventh sidebar destination opens application settings', () {
@@ -32,6 +53,95 @@ void main() {
     expect(toggledSelectAll({'a', 'b'}, {'a', 'b'}), isEmpty);
     expect(toggledSelectAll({'a'}, {'a', 'b'}), {'a', 'b'});
   });
+
+  test(
+    'software selection is controller-owned and toggles without page state',
+    () {
+      expect(toggledSoftwareSelection({}, {'app-a', 'app-b'}), {
+        'app-a',
+        'app-b',
+      });
+      expect(
+        toggledSoftwareSelection({'app-a', 'app-b'}, {'app-a', 'app-b'}),
+        isEmpty,
+      );
+
+      final controller = SoftwareController();
+      controller.togglePackageSelection('app-a');
+      expect(controller.selectedPackageIds, contains('app-a'));
+      controller.toggleSelectAllPackages({'app-a', 'app-b'});
+      expect(controller.selectedPackageIds, containsAll({'app-a', 'app-b'}));
+    },
+  );
+
+  test(
+    'software controller adopts active backend queue and preserves it on outage',
+    () async {
+      final api = _FakeBatchApiService(
+        BatchInstallStatus.fromJson({
+          'is_running': true,
+          'total': 2,
+          'completed': 1,
+          'current_item_name': 'App B',
+          'items': [
+            {'id': 'app-a', 'name': 'App A', 'status': 'completed'},
+            {'id': 'app-b', 'name': 'App B', 'status': 'installing'},
+          ],
+        }),
+      );
+      final controller = SoftwareController(apiService: api);
+
+      expect(
+        await controller.synchronizeBatchInstallState(startPolling: false),
+        isTrue,
+      );
+      expect(controller.isBatchInstalling.value, isTrue);
+      expect(controller.batchStatus.value.currentItemName, 'App B');
+
+      api.fail = true;
+      expect(
+        await controller.synchronizeBatchInstallState(startPolling: false),
+        isTrue,
+      );
+      expect(controller.batchStatus.value.currentItemName, 'App B');
+    },
+  );
+
+  test(
+    'failed package refresh preserves list and technician selection',
+    () async {
+      final controller = SoftwareController(
+        apiService: _FailingPackagesApiService(),
+      );
+      controller.packagesResponse.value = PackagesResponse.fromJson({
+        'directory_exists': true,
+        'packages_directory': r'H:\PROGRAM',
+        'packages': [
+          {
+            'id': 'vlc',
+            'name': 'VLC media player',
+            'filename': 'vlc.exe',
+            'relative_path': 'vlc.exe',
+            'version': '3.0',
+            'publisher': 'VideoLAN',
+            'is_valid': true,
+            'status': 'Not Installed',
+            'is_installed': false,
+            'installed_version': '',
+            'install_allowed': true,
+            'has_icon': false,
+          },
+        ],
+        'summary': {'total_packages': 1, 'valid_packages': 1},
+      });
+      controller.togglePackageSelection('vlc');
+
+      await controller.fetchPackages();
+
+      expect(controller.packages.single.id, 'vlc');
+      expect(controller.selectedPackageIds, contains('vlc'));
+    },
+  );
 
   test(
     'driver queue status preserves GPU category for safe refresh timing',

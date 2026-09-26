@@ -16,8 +16,25 @@ bool officeInstallBlockedForWindows(
   WindowsInfo? windows,
 ) => package.isMicrosoftOfficePackage && windows?.isHomeEdition == true;
 
+Set<String> toggledSoftwareSelection(
+  Set<String> current,
+  Set<String> selectable,
+) {
+  final result = Set<String>.from(current);
+  if (selectable.isEmpty) return result;
+  if (result.containsAll(selectable)) {
+    result.removeAll(selectable);
+  } else {
+    result.addAll(selectable);
+  }
+  return result;
+}
+
 class SoftwareController extends GetxController {
-  final ApiService _apiService = ApiService();
+  SoftwareController({ApiService? apiService})
+    : _apiService = apiService ?? ApiService();
+
+  final ApiService _apiService;
 
   final Rx<PackagesResponse> packagesResponse = PackagesResponse.empty().obs;
   final RxBool isScanning = false.obs;
@@ -54,10 +71,12 @@ class SoftwareController extends GetxController {
   // Batch auto-install state
   final RxBool isBatchInstalling = false.obs;
   final Rx<BatchInstallStatus> batchStatus = BatchInstallStatus.empty().obs;
+  final RxSet<String> selectedPackageIds = <String>{}.obs;
 
   Timer? _pollTimer;
   Timer? _initialTimer;
   bool _batchPollInFlight = false;
+  bool _batchSyncInFlight = false;
   bool _syncInFlight = false;
   int _scanGeneration = 0;
   Timer? _debounceTimer;
@@ -70,10 +89,48 @@ class SoftwareController extends GetxController {
   PackageSummary get summary => packagesResponse.value.summary;
   bool get directoryExists => packagesResponse.value.directoryExists;
   String get packagesDirectory => packagesResponse.value.packagesDirectory;
+  bool get hasActiveBatch =>
+      isBatchInstalling.value || batchStatus.value.isRunning;
+
+  void togglePackageSelection(String packageId) {
+    if (selectedPackageIds.contains(packageId)) {
+      selectedPackageIds.remove(packageId);
+    } else {
+      selectedPackageIds.add(packageId);
+    }
+    selectedPackageIds.refresh();
+  }
+
+  void toggleSelectAllPackages(Set<String> selectableIds) {
+    selectedPackageIds.assignAll(
+      toggledSoftwareSelection(selectedPackageIds, selectableIds),
+    );
+    selectedPackageIds.refresh();
+  }
+
+  void removePackageSelections(Iterable<String> packageIds) {
+    selectedPackageIds.removeAll(packageIds);
+    selectedPackageIds.refresh();
+  }
+
+  void _reconcilePackageSelection(Iterable<SoftwarePackage> latestPackages) {
+    if (selectedPackageIds.isEmpty) return;
+    final knownIds = latestPackages.map((package) => package.id).toSet();
+    final staleIds = selectedPackageIds
+        .where((packageId) => !knownIds.contains(packageId))
+        .toList();
+    if (staleIds.isNotEmpty) {
+      selectedPackageIds.removeAll(staleIds);
+      selectedPackageIds.refresh();
+    }
+  }
 
   @override
   void onInit() {
     super.onInit();
+    // Queue ownership lives in the backend. Reconnect immediately so a
+    // recreated Flutter view never looks idle while installers are running.
+    unawaited(_checkInitialBatchStatus());
     _loadCacheAndFetch();
   }
 
@@ -82,6 +139,7 @@ class SoftwareController extends GetxController {
       final cached = await CacheService.loadCachedPackages();
       if (cached != null && !isClosed) {
         packagesResponse.value = cached;
+        _reconcilePackageSelection(cached.packages);
       }
     } catch (_) {}
 
@@ -91,7 +149,6 @@ class SoftwareController extends GetxController {
       if (isClosed) return;
       fetchPackages();
       _startPeriodicSync();
-      _checkInitialBatchStatus();
     });
   }
 
@@ -125,6 +182,7 @@ class SoftwareController extends GetxController {
         final res = await _apiService.setPackagesDirectory(selectedPath);
         if (isClosed || generation != _scanGeneration) return;
         packagesResponse.value = res;
+        _reconcilePackageSelection(res.packages);
         _updateWatcher(res.packagesDirectory);
 
         if (context.mounted) {
@@ -165,6 +223,7 @@ class SoftwareController extends GetxController {
       final res = await _apiService.fetchPackages(customDir: customDir);
       if (isClosed || generation != _scanGeneration) return;
       packagesResponse.value = res;
+      _reconcilePackageSelection(res.packages);
       _updateWatcher(res.packagesDirectory);
     } catch (e) {
       debugPrint('[SoftwareController] fetchPackages error: $e');
@@ -181,6 +240,7 @@ class SoftwareController extends GetxController {
       final res = await _apiService.scanPackages();
       if (isClosed || generation != _scanGeneration) return;
       packagesResponse.value = res;
+      _reconcilePackageSelection(res.packages);
       _updateWatcher(res.packagesDirectory);
     } catch (e) {
       debugPrint('[SoftwareController] scanPackages error: $e');
@@ -230,9 +290,14 @@ class SoftwareController extends GetxController {
 
   void _startPeriodicSync() {
     _periodicSyncTimer?.cancel();
-    // Heartbeat every 4 seconds to catch any USB drive inserts or changes where watcher events might not fire
+    // One low-cost heartbeat owns recovery for both package changes and a
+    // backend queue that outlived/replaced the current Flutter view.
     _periodicSyncTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
-      if (_syncInFlight || isClosed || isBatchInstalling.value) return;
+      if (isClosed) return;
+      if (_batchPollTimer?.isActive != true) {
+        await synchronizeBatchInstallState();
+      }
+      if (_syncInFlight || isClosed || hasActiveBatch) return;
       if (!isScanning.value && installingPackageId.value.isEmpty) {
         _syncInFlight = true;
         final generation = _scanGeneration;
@@ -252,6 +317,7 @@ class SoftwareController extends GetxController {
               '[SoftwareController] Real-time periodic sync updated package list.',
             );
             packagesResponse.value = res;
+            _reconcilePackageSelection(res.packages);
             _updateWatcher(res.packagesDirectory);
           }
         } catch (_) {
@@ -488,6 +554,7 @@ class SoftwareController extends GetxController {
   ) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     if (_showOfficeHomeNotice(context, pkg)) return;
+    if (await _recoverExistingBatch(scaffoldMessenger)) return;
     final targetId = pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id;
 
     if (!pkg.isValid || !pkg.autoInstallSupported) {
@@ -510,16 +577,31 @@ class SoftwareController extends GetxController {
         customDir: packagesDirectory.isNotEmpty ? packagesDirectory : null,
       );
       if (res['success'] == true) {
+        final adoptedExisting = res['already_running'] == true;
+        _adoptBatchStartResponse(res, scaffoldMessenger: scaffoldMessenger);
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text('نصب خودکار و بی‌صدا ${pkg.name} شروع شد...'),
-            backgroundColor: const Color(0xFF10B981),
+            content: Text(
+              adoptedExisting
+                  ? 'صف نصب فعال بازیابی شد؛ جزئیات آن اکنون نمایش داده می‌شود.'
+                  : 'نصب خودکار و بی‌صدا ${pkg.name} شروع شد...',
+            ),
+            backgroundColor: adoptedExisting
+                ? const Color(0xFF0284C7)
+                : const Color(0xFF10B981),
             duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
           ),
         );
-        _startBatchStatusPolling(scaffoldMessenger);
+        if (_batchPollTimer?.isActive != true) {
+          _startBatchStatusPolling(scaffoldMessenger);
+        }
       } else {
+        final recovered = await synchronizeBatchInstallState();
+        if (recovered) {
+          _showActiveBatchNotice(scaffoldMessenger);
+          return;
+        }
         isBatchInstalling.value = false;
         scaffoldMessenger.showSnackBar(
           SnackBar(
@@ -533,6 +615,11 @@ class SoftwareController extends GetxController {
         );
       }
     } catch (e) {
+      final recovered = await synchronizeBatchInstallState();
+      if (recovered) {
+        _showActiveBatchNotice(scaffoldMessenger);
+        return;
+      }
       isBatchInstalling.value = false;
       scaffoldMessenger.showSnackBar(
         SnackBar(
@@ -1142,14 +1229,100 @@ class SoftwareController extends GetxController {
   // -------------------------------------------------------------
 
   Future<void> _checkInitialBatchStatus() async {
+    await synchronizeBatchInstallState();
+  }
+
+  /// Reconciles the GetX state with the backend-owned queue.
+  ///
+  /// This is intentionally public so app-resume/navigation hooks can restore
+  /// progress after a Flutter view or graphics process is recreated.
+  Future<bool> synchronizeBatchInstallState({bool startPolling = true}) async {
+    if (_batchSyncInFlight || isClosed) return batchStatus.value.isRunning;
+    _batchSyncInFlight = true;
     try {
       final status = await _apiService.getBatchInstallStatus();
-      batchStatus.value = status;
-      if (status.isRunning) {
-        isBatchInstalling.value = true;
+      if (isClosed) return false;
+      _applyBatchStatus(status, startPolling: startPolling);
+      return status.isRunning;
+    } catch (error) {
+      // Preserve the last known state on a transient backend/HTTP failure.
+      // Replacing it with BatchInstallStatus.empty() would make an active
+      // installer disappear from the UI and re-enable conflicting controls.
+      debugPrint('[SoftwareController] Batch state sync error: $error');
+      return batchStatus.value.isRunning;
+    } finally {
+      _batchSyncInFlight = false;
+    }
+  }
+
+  void _applyBatchStatus(
+    BatchInstallStatus status, {
+    bool startPolling = true,
+  }) {
+    batchStatus.value = status;
+    isBatchInstalling.value = status.isRunning;
+    if (status.isRunning && startPolling && _batchPollTimer?.isActive != true) {
+      _startBatchStatusPolling(null);
+    }
+  }
+
+  BatchInstallStatus? _statusFromStartResponse(Map<String, dynamic> response) {
+    final rawStatus = response['status'];
+    if (rawStatus is Map) {
+      return BatchInstallStatus.fromJson(Map<String, dynamic>.from(rawStatus));
+    }
+    if (response.containsKey('is_running')) {
+      return BatchInstallStatus.fromJson(response);
+    }
+    return null;
+  }
+
+  bool _adoptBatchStartResponse(
+    Map<String, dynamic> response, {
+    ScaffoldMessengerState? scaffoldMessenger,
+  }) {
+    final status = _statusFromStartResponse(response);
+    if (status != null) {
+      _applyBatchStatus(status, startPolling: false);
+    }
+    final adoptedExisting = response['already_running'] == true;
+    if (status?.isRunning == true || adoptedExisting) {
+      isBatchInstalling.value = true;
+      _startBatchStatusPolling(scaffoldMessenger);
+      return true;
+    }
+    return false;
+  }
+
+  void _showActiveBatchNotice(ScaffoldMessengerState scaffoldMessenger) {
+    final status = batchStatus.value;
+    final progress = status.total > 0
+        ? ' (${status.completed} از ${status.total})'
+        : '';
+    scaffoldMessenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'صف نصب از قبل در حال اجراست$progress؛ وضعیت زنده بازیابی شد.',
+        ),
+        backgroundColor: const Color(0xFF0284C7),
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<bool> _recoverExistingBatch(
+    ScaffoldMessengerState scaffoldMessenger,
+  ) async {
+    final running = await synchronizeBatchInstallState();
+    if (running) {
+      _showActiveBatchNotice(scaffoldMessenger);
+      if (_batchPollTimer?.isActive != true) {
         _startBatchStatusPolling(null);
       }
-    } catch (_) {}
+      return true;
+    }
+    return false;
   }
 
   Future<void> startAutoInstallAll(
@@ -1158,6 +1331,8 @@ class SoftwareController extends GetxController {
   }) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
+    if (await _recoverExistingBatch(scaffoldMessenger)) return;
+    if (!context.mounted) return;
 
     final List<SoftwarePackage> availablePackages;
     if (targetPackageIds != null && targetPackageIds.isNotEmpty) {
@@ -1360,18 +1535,31 @@ class SoftwareController extends GetxController {
           includeSystemSetup: true,
         );
         if (res['success'] == true) {
+          final adoptedExisting = res['already_running'] == true;
+          _adoptBatchStartResponse(res, scaffoldMessenger: scaffoldMessenger);
           scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text(
-                res['message'] as String? ?? 'نصب خودکار شروع شد...',
+                adoptedExisting
+                    ? 'صف نصب فعال بازیابی شد؛ جزئیات آن اکنون نمایش داده می‌شود.'
+                    : (res['message'] as String? ?? 'نصب خودکار شروع شد...'),
               ),
-              backgroundColor: const Color(0xFF10B981),
+              backgroundColor: adoptedExisting
+                  ? const Color(0xFF0284C7)
+                  : const Color(0xFF10B981),
               duration: const Duration(seconds: 3),
               behavior: SnackBarBehavior.floating,
             ),
           );
-          _startBatchStatusPolling(scaffoldMessenger);
+          if (_batchPollTimer?.isActive != true) {
+            _startBatchStatusPolling(scaffoldMessenger);
+          }
         } else {
+          final recovered = await synchronizeBatchInstallState();
+          if (recovered) {
+            _showActiveBatchNotice(scaffoldMessenger);
+            return;
+          }
           isBatchInstalling.value = false;
           scaffoldMessenger.showSnackBar(
             SnackBar(
@@ -1385,6 +1573,11 @@ class SoftwareController extends GetxController {
           );
         }
       } catch (e) {
+        final recovered = await synchronizeBatchInstallState();
+        if (recovered) {
+          _showActiveBatchNotice(scaffoldMessenger);
+          return;
+        }
         isBatchInstalling.value = false;
         scaffoldMessenger.showSnackBar(
           SnackBar(
@@ -1399,7 +1592,6 @@ class SoftwareController extends GetxController {
 
   void _startBatchStatusPolling(ScaffoldMessengerState? scaffoldMessenger) {
     _batchPollTimer?.cancel();
-    int lastCompletedCount = -1;
 
     _batchPollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
       timer,
@@ -1409,7 +1601,7 @@ class SoftwareController extends GetxController {
       try {
         final status = await _apiService.getBatchInstallStatus();
         if (isClosed || timer != _batchPollTimer) return;
-        batchStatus.value = status;
+        _applyBatchStatus(status, startPolling: false);
 
         // REAL-TIME IN-MEMORY UPDATE:
         // Update package cards immediately as each package finishes in the batch queue
@@ -1451,26 +1643,8 @@ class SoftwareController extends GetxController {
           packagesResponse.refresh();
         }
 
-        // Trigger background rescan whenever an item completes
-        if (status.completed > lastCompletedCount) {
-          lastCompletedCount = status.completed;
-          fetchPackages();
-          if (Get.isRegistered<DeviceSettingsController>()) {
-            Get.find<DeviceSettingsController>().refreshStatus();
-          }
-          if (Get.isRegistered<SystemInfoController>()) {
-            Get.find<SystemInfoController>().fetchSystemInfo(
-              forceRefresh: true,
-            );
-          }
-          if (Get.isRegistered<QcController>()) {
-            Get.find<QcController>().fetchInitialQcStatus();
-          }
-        }
-
         if (!status.isRunning) {
           timer.cancel();
-          isBatchInstalling.value = false;
           await scanPackages(silent: true, force: true);
 
           if (Get.isRegistered<DeviceSettingsController>()) {
