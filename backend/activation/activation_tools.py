@@ -334,6 +334,26 @@ def execute_activation_tool(target: str, timeout_seconds: int = 180) -> Dict[str
             "message": "هدف فعالسازی نامعتبر است."
         }
 
+    # Never rely solely on disabled UI controls. A stale frontend, batch
+    # worker, or direct API call must still be unable to run an activator on
+    # Windows 10/11 Home.
+    from windows.device_settings import get_windows_identity
+    identity = get_windows_identity()
+    if identity.get("is_home") is True:
+        label = str(identity.get("label") or "Windows Home")
+        return {
+            "success": False,
+            "skipped": True,
+            "blocked": True,
+            "home_guard": True,
+            "cancelled": False,
+            "exit_code": 0,
+            "output": "",
+            "error": "Activation is disabled by the Windows Home policy.",
+            "windows": identity,
+            "message": f"{label} اورجینال شناسایی شد؛ ابزار فعال‌سازی اجرا نشد.",
+        }
+
     status = get_tool_status(target)
     if not status.get("available") or not status.get("absolute_path"):
         err_msg = status.get("error") or "ابزار فعالسازی پیدا نشد."

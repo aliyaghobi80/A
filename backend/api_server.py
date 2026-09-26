@@ -131,7 +131,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.30",
+                "version": "1.1.31",
                 "phase": 4,
                 "api_contract_version": 2,
             }
@@ -709,10 +709,25 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             logger.info("Executing configured Windows activation tool...")
             from activation.verification import verify_activation_result
             from windows.device_settings import get_windows_identity
-            if get_windows_identity().get('is_home'):
-                result = {'success': False, 'message': 'اجرای ابزار فعال‌سازی روی نسخهٔ Home غیرفعال است.'}
+            identity = get_windows_identity()
+            if identity.get('is_home'):
+                result = {
+                    'success': False,
+                    'skipped': True,
+                    'blocked': True,
+                    'home_guard': True,
+                    'windows': identity,
+                    'message': f"{identity.get('label') or 'Windows Home'} اورجینال است؛ ابزار فعال‌سازی اجرا نشد.",
+                }
             else:
-                result = verify_activation_result('windows', execute_activation_tool("windows"))
+                from packages.orchestrator import activate_windows_from_packages
+                result = verify_activation_result(
+                    'windows',
+                    activate_windows_from_packages(
+                        get_current_packages_directory(),
+                        timeout_seconds=90,
+                    ),
+                )
             
             # Invalidate cached system info so next fetch gets updated activation status
             with _cache_lock:
@@ -731,8 +746,16 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             logger.info("Executing configured Office activation tool...")
             from activation.verification import verify_activation_result
             from windows.device_settings import get_windows_identity
-            if get_windows_identity().get('is_home'):
-                result = {'success': False, 'message': 'اجرای ابزار فعال‌سازی روی نسخهٔ Home غیرفعال است.'}
+            identity = get_windows_identity()
+            if identity.get('is_home'):
+                result = {
+                    'success': False,
+                    'skipped': True,
+                    'blocked': True,
+                    'home_guard': True,
+                    'windows': identity,
+                    'message': f"{identity.get('label') or 'Windows Home'} اورجینال است؛ فعال‌سازی Office اجرا نشد.",
+                }
             elif not get_office_activation_info().get('installed'):
                 result = {'success': False, 'message': 'ابتدا آفیس را نصب کنید.'}
             else:

@@ -74,6 +74,17 @@ def ensure_office_extracted(packages_dir: str) -> Dict[str, Any]:
     If not extracted, extracts any Office archive (.rar, .zip, .7z) found in packages_dir.
     If already extracted, returns successfully without redundant work.
     """
+    identity = get_windows_identity()
+    if identity.get("is_home") is True:
+        return {
+            "success": True,
+            "skipped": True,
+            "blocked": True,
+            "home_guard": True,
+            "windows": identity,
+            "message": "Windows Home اورجینال است؛ آرشیو Office استخراج نمی‌شود.",
+        }
+
     if not packages_dir or not os.path.isdir(packages_dir):
         return {
             "success": True,
@@ -142,6 +153,18 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
     Finds and extracts any archive starting with 'kms', 'KMS', or 'KMS v6' (.rar, .zip, .7z)
     inside the PROGRAM / packages folder directly (extract here).
     """
+    identity = get_windows_identity()
+    if identity.get("is_home") is True:
+        return {
+            "success": True,
+            "skipped": True,
+            "blocked": True,
+            "home_guard": True,
+            "found": False,
+            "windows": identity,
+            "message": "Windows Home اورجینال است؛ آرشیو KMS استخراج نشد.",
+        }
+
     if not packages_dir or not os.path.isdir(packages_dir):
         return {
             "success": True,
@@ -160,6 +183,25 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"[Orchestrator] Error scanning for KMS archives: {e}")
 
+    # Avoid re-extracting KMS v6, while still allowing a v6 archive to replace
+    # an older extracted KMS folder that happens to be present in PROGRAM.
+    existing_cmd = find_windows_cmd(packages_dir, allow_bundled=False)
+    if existing_cmd:
+        relative = os.path.relpath(existing_cmd, packages_dir).replace("\\", "/").lower()
+        normalized = relative.replace("_", " ").replace("-", " ")
+        has_v6_archive = any(
+            "kms v6" in os.path.basename(path).lower().replace("_", " ").replace("-", " ")
+            for path in kms_archives
+        )
+        if "kms v6" in normalized or ("kms" in normalized and not has_v6_archive):
+            return {
+                "success": True,
+                "found": True,
+                "already_extracted": True,
+                "command_path": existing_cmd,
+                "message": "KMS v6 قبلاً در پوشه PROGRAM استخراج شده است.",
+            }
+
     if not kms_archives:
         logger.info("[Orchestrator] No KMS archive found in packages directory.")
         return {
@@ -168,6 +210,12 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
             "message": "آرشیو KMS در پوشه نرم‌افزارها یافت نشد.",
         }
 
+    # Prefer the explicitly requested KMS v6 archive over older KMS bundles.
+    def archive_priority(path: str) -> tuple[int, int, str]:
+        name = os.path.basename(path).lower().replace("_", " ").replace("-", " ")
+        return (0 if "kms v6" in name else 1, len(name), name)
+
+    kms_archives.sort(key=archive_priority)
     # Extract the KMS archive directly into packages_dir ("extract here")
     target_archive = kms_archives[0]
     archive_name = os.path.basename(target_archive)
@@ -191,7 +239,7 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
         }
 
 
-def find_windows_cmd(packages_dir: Optional[str] = None) -> Optional[str]:
+def find_windows_cmd(packages_dir: Optional[str] = None, allow_bundled: bool = True) -> Optional[str]:
     """
     Finds WINDOWS.cmd (or windows.cmd) in the packages directory and subfolders,
     falling back to Tools/WINDOWS.cmd in the repo root.
@@ -206,17 +254,22 @@ def find_windows_cmd(packages_dir: Optional[str] = None) -> Optional[str]:
                 if f_lower in ("windows.cmd", "windows.bat", "window.cmd", "window.bat", "win.cmd", "activate.cmd"):
                     candidates.append(os.path.join(root, f))
 
-    # Priority sort: exact "windows.cmd" first
-    for c in candidates:
-        if os.path.basename(c).lower() == "windows.cmd":
-            return os.path.abspath(c)
-
+    # Prefer KMS v6, then an exact WINDOWS.cmd name, then shorter paths.  This
+    # makes PROGRAM deterministic when it contains older activator folders too.
     if candidates:
+        candidates.sort(
+            key=lambda c: (
+                0 if "kms v6" in c.lower().replace("_", " ").replace("-", " ") else 1,
+                0 if os.path.basename(c).lower() == "windows.cmd" else 1,
+                len(c),
+                c.lower(),
+            )
+        )
         return os.path.abspath(candidates[0])
 
     # 2. Fallback to bundled Tools/WINDOWS.cmd
     bundled_cmd = os.path.abspath(os.path.join(DEFAULT_TOOLS_DIR, "WINDOWS.cmd"))
-    if os.path.isfile(bundled_cmd):
+    if allow_bundled and os.path.isfile(bundled_cmd):
         return bundled_cmd
 
     return None
@@ -227,6 +280,17 @@ def run_windows_cmd_activation(packages_dir: Optional[str] = None, timeout_secon
     Executes WINDOWS.cmd with Administrator privileges, then waits and polls
     until Windows licensing verifies active status.
     """
+    identity = get_windows_identity()
+    if identity.get("is_home") is True:
+        return {
+            "success": True,
+            "skipped": True,
+            "blocked": True,
+            "home_guard": True,
+            "windows": identity,
+            "message": "Windows Home اورجینال است؛ KMS اجرا نشد.",
+        }
+
     # 1. Check if already activated
     try:
         current_lic = _query_wmi_licensing()
@@ -241,11 +305,11 @@ def run_windows_cmd_activation(packages_dir: Optional[str] = None, timeout_secon
         pass
 
     # 2. Find WINDOWS.cmd
-    cmd_path = find_windows_cmd(packages_dir)
+    cmd_path = find_windows_cmd(packages_dir, allow_bundled=packages_dir is None)
     if not cmd_path or not os.path.isfile(cmd_path):
         return {
             "success": False,
-            "message": "اسکریپت فعال‌سازی WINDOWS.cmd در پوشه نرم‌افزارها یا Tools یافت نشد.",
+            "message": "اسکریپت فعال‌سازی WINDOWS.cmd مربوط به KMS v6 در پوشه PROGRAM یافت نشد.",
         }
 
     logger.info(f"[Orchestrator] Found WINDOWS.cmd at: {cmd_path}")
@@ -364,12 +428,51 @@ def run_windows_cmd_activation(packages_dir: Optional[str] = None, timeout_secon
         }
 
 
+def activate_windows_from_packages(
+    packages_dir: Optional[str], timeout_seconds: int = 90
+) -> Dict[str, Any]:
+    """Prepare KMS v6 from the selected PROGRAM folder, then run WINDOWS.cmd."""
+    identity = get_windows_identity()
+    if identity.get("is_home") is True:
+        return {
+            "success": True,
+            "skipped": True,
+            "blocked": True,
+            "home_guard": True,
+            "windows": identity,
+            "message": "Windows Home اورجینال است؛ KMS استخراج یا اجرا نشد.",
+        }
+
+    extraction = extract_kms_archive(packages_dir or "")
+    if not extraction.get("success", False):
+        return {
+            "success": False,
+            "extraction": extraction,
+            "message": extraction.get("message", "استخراج KMS v6 ناموفق بود."),
+        }
+
+    activation = run_windows_cmd_activation(packages_dir, timeout_seconds=timeout_seconds)
+    activation["extraction"] = extraction
+    return activation
+
+
 def apply_desktop_icons() -> Dict[str, Any]:
     """
     Adds This PC, Recycle Bin, and Control Panel icons to the desktop.
     """
     try:
+        from activation.windows_activation import get_windows_activation_info
+
+        activation = get_windows_activation_info()
+        if activation.get("activated") is not True:
+            return {
+                "success": False,
+                "blocked": True,
+                "message": "ابتدا فعال‌بودن ویندوز را تأیید کنید؛ آیکن‌های دسکتاپ تغییری نکردند.",
+                "activation": activation,
+            }
         res = show_desktop_icons(force=True)
+        res["activation"] = activation
         return res
     except Exception as e:
         logger.error(f"[Orchestrator] Error applying desktop icons: {e}")

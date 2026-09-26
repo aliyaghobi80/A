@@ -44,10 +44,14 @@ class TestOfficeAutomation(unittest.TestCase):
         self.assertTrue(office_pkg["install_allowed"])
 
     def test_office_reordered_to_end_of_queue(self):
-        result = start_batch_install(
-            package_ids=["office_2024_pro_plus", "Google Chrome/Setup.msi"],
-            custom_dir=self.temp_dir,
-        )
+        with patch(
+            "packages.batch_installer.get_windows_identity",
+            return_value={"is_home": False, "generation": "Windows 11", "label": "Windows 11 Pro"},
+        ), patch("packages.batch_installer.has_battery", return_value=False):
+            result = start_batch_install(
+                package_ids=["office_2024_pro_plus", "Google Chrome/Setup.msi"],
+                custom_dir=self.temp_dir,
+            )
         self.assertTrue(result.get("success"))
         items = result.get("items", [])
         self.assertGreaterEqual(len(items), 2)
@@ -56,6 +60,7 @@ class TestOfficeAutomation(unittest.TestCase):
         office_index = next(i for i, item in enumerate(items) if item["installer_type"] == "office_cmd")
         chrome_index = next(i for i, item in enumerate(items) if item.get("relative_path") == "Google Chrome/Setup.msi")
         self.assertGreater(office_index, chrome_index)
+        self.assertIn("kms_activate", [item.get("orchestrator_action") for item in items])
 
 
 if __name__ == "__main__":

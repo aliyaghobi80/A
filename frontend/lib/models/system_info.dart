@@ -2116,6 +2116,7 @@ class BatchInstallItem {
   /// Returns stage index: 1 = Prerequisites & Activation, 2 = Software, 3 = Device Settings
   int get stage {
     if (orchestratorAction == 'office_extract' ||
+        orchestratorAction == 'office_shortcuts' ||
         orchestratorAction == 'kms_activate' ||
         orchestratorAction == 'desktop_icons') {
       return 1;
@@ -2147,6 +2148,8 @@ class BatchInstallItem {
     switch (orchestratorAction) {
       case 'office_extract':
         return 'بررسی و استخراج آفیس';
+      case 'office_shortcuts':
+        return 'ساخت میانبرهای Word، Excel و PowerPoint بدون نصب Office';
       case 'kms_activate':
         return 'استخراج KMS و فعال‌سازی ویندوز';
       case 'desktop_icons':

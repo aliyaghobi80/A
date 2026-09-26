@@ -179,4 +179,21 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'Home Office shortcut-only queue step is presented as a prerequisite',
+    () {
+      final item = BatchInstallItem.fromJson({
+        'id': 'step_office_shortcuts',
+        'name': 'Office shortcuts',
+        'filename': 'Microsoft Office',
+        'orchestrator_action': 'office_shortcuts',
+        'status': 'queued',
+      });
+
+      expect(item.isOrchestrator, isTrue);
+      expect(item.stage, 1);
+      expect(item.friendlyDescription, contains('بدون نصب Office'));
+    },
+  );
 }

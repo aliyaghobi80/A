@@ -131,7 +131,7 @@ class DeviceActionSafetyTests(unittest.TestCase):
         }
         batch_installer._reset_state()
         self.addCleanup(batch_installer._reset_state)
-        with patch.object(batch_installer, "scan_packages", return_value={"directory_exists": True, "packages": [app, wub]}), patch.object(batch_installer.threading, "Thread"):
+        with patch.object(batch_installer, "scan_packages", return_value={"directory_exists": True, "packages": [app, wub]}), patch.object(batch_installer, "get_windows_identity", return_value={"is_home": False, "generation": "Windows 11", "label": "Windows 11 Pro"}), patch.object(batch_installer.threading, "Thread"):
             result = batch_installer.start_batch_install(package_ids=["app"])
         self.assertTrue(result["success"])
         self.assertEqual([item["id"] for item in result["items"]], ["app", "wub"])

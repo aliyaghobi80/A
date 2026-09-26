@@ -1700,6 +1700,43 @@ def _find_package(data: Dict[str, Any], target_identifier: str) -> Optional[Dict
     return None
 
 
+def _is_microsoft_office_package(package: Dict[str, Any]) -> bool:
+    """Return True only for the Microsoft Office deployment package we manage."""
+    installer_type = str(package.get("installer_type") or "").lower()
+    package_id = str(package.get("id") or "").lower()
+    filename = os.path.basename(str(package.get("full_path") or package.get("filename") or "")).lower()
+    name = str(package.get("name") or "").lower()
+    return (
+        installer_type == "office_cmd"
+        or filename.startswith("setup_office")
+        or package_id.startswith("office_")
+        or ("microsoft" in name and "office" in name)
+    )
+
+
+def _home_office_policy_result(package: Dict[str, Any]) -> Dict[str, Any]:
+    """Block Office deployment on Home and create the existing apps' shortcuts."""
+    identity = get_windows_identity()
+    shortcuts = ensure_office_desktop_shortcuts()
+    label = str(identity.get("label") or "Windows Home")
+    shortcut_message = str(shortcuts.get("message") or "")
+    return {
+        "success": bool(shortcuts.get("success")),
+        "skipped": True,
+        "blocked": True,
+        "home_guard": True,
+        "verified_installed": bool(shortcuts.get("created")),
+        "desktop_shortcuts": shortcuts,
+        "package_id": package.get("id"),
+        "name": package.get("name"),
+        "exit_code": 0,
+        "message": (
+            f"{label} اورجینال شناسایی شد؛ نصب و فعال‌سازی Office اجرا نشد. "
+            f"{shortcut_message}"
+        ).strip(),
+    }
+
+
 def _manual_install_command(package: Dict[str, Any]) -> tuple[str, str]:
     path = os.path.abspath(package["full_path"])
     extension = os.path.splitext(path)[1].lower()
@@ -1764,6 +1801,11 @@ def install_package(target_identifier: str, custom_dir: Optional[str] = None) ->
             "message": f"Installer '{target_identifier}' was not found in the selected folder.",
             "exit_code": -1,
         }
+
+    # Defense in depth: Windows Home never launches an Office deployment
+    # script, even when this backend endpoint is called directly.
+    if _is_microsoft_office_package(target_pkg) and get_windows_identity().get("is_home") is True:
+        return _home_office_policy_result(target_pkg)
 
     if not target_pkg.get("is_valid") or not target_pkg.get("manual_install_supported"):
         return {
@@ -2412,6 +2454,12 @@ def silent_install_package(target_identifier: str, custom_dir: Optional[str] = N
             "exit_code": -1,
             "verified_installed": False,
         }
+
+    # This check intentionally precedes every installer path.  The frontend
+    # also disables Office on Home, but the backend must remain safe when a
+    # stale client or a crafted request calls the install API directly.
+    if _is_microsoft_office_package(target_pkg) and get_windows_identity().get("is_home") is True:
+        return _home_office_policy_result(target_pkg)
 
     if _is_windows_update_blocker(target_pkg):
         return _disable_windows_update_with_wub(target_pkg, automatic=True)

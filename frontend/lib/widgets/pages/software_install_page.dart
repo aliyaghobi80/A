@@ -636,7 +636,8 @@ class _SoftwareInstallPageState extends State<SoftwareInstallPage> {
 
           const SizedBox(width: 10),
 
-          if (isInstalled && pkg.isMicrosoftOfficePackage) ...[
+          if ((isInstalled || isOfficeBlocked) &&
+              pkg.isMicrosoftOfficePackage) ...[
             OutlinedButton.icon(
               onPressed: ctrl.officeShortcutPackageId.value == pkg.id
                   ? null

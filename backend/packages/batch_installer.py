@@ -13,7 +13,14 @@ import threading
 import time
 from typing import Dict, Any, List, Optional
 
-from packages.manager import scan_packages, silent_install_package, _is_windows_update_blocker, get_packages_directory
+from packages.manager import (
+    scan_packages,
+    silent_install_package,
+    _is_microsoft_office_package,
+    _is_windows_update_blocker,
+    get_packages_directory,
+)
+from windows.device_settings import get_windows_identity, has_battery
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +43,28 @@ _batch_state: Dict[str, Any] = {
     "summary_message": "",
 }
 _batch_thread: Optional[threading.Thread] = None
+
+
+def _home_office_shortcuts_result() -> Dict[str, Any]:
+    """Create Office shortcuts without installing or activating anything."""
+    from packages.office_shortcuts import ensure_office_desktop_shortcuts
+
+    identity = get_windows_identity()
+    shortcuts = ensure_office_desktop_shortcuts()
+    label = str(identity.get("label") or "Windows Home")
+    created = list(shortcuts.get("created") or [])
+    return {
+        "success": bool(shortcuts.get("success")),
+        "skipped": not bool(shortcuts.get("success")),
+        "home_guard": True,
+        "desktop_shortcuts": shortcuts,
+        "exit_code": 0,
+        "message": (
+            f"{label} اورجینال شناسایی شد؛ KMS و نصب Office اجرا نشد. "
+            f"{shortcuts.get('message', '')}"
+            + (f" ({len(created)} میانبر)" if created else "")
+        ).strip(),
+    }
 
 
 def _reset_state():
@@ -95,24 +124,43 @@ def _run_batch_install(items_to_run: List[Dict[str, Any]], custom_dir: Optional[
 
         try:
             if action == "office_extract":
-                from packages.orchestrator import ensure_office_extracted
-                res = ensure_office_extracted(resolved_pkg_dir)
-                result = {
-                    "success": res.get("success", True),
-                    "message": res.get("message", "بررسی استخراج آفیس پایان یافت."),
-                    "exit_code": 0 if res.get("success") else 1,
-                }
+                if get_windows_identity().get("is_home") is True:
+                    result = {
+                        "success": True,
+                        "skipped": True,
+                        "home_guard": True,
+                        "message": "Windows Home شناسایی شد؛ آرشیو Office استخراج نمی‌شود.",
+                        "exit_code": 0,
+                    }
+                else:
+                    from packages.orchestrator import ensure_office_extracted
+                    res = ensure_office_extracted(resolved_pkg_dir)
+                    result = {
+                        "success": res.get("success", True),
+                        "skipped": res.get("skipped", False),
+                        "message": res.get("message", "بررسی استخراج آفیس پایان یافت."),
+                        "exit_code": 0 if res.get("success") else 1,
+                    }
             elif action == "kms_activate":
-                from packages.orchestrator import extract_kms_archive, run_windows_cmd_activation
-                # 1. Extract KMS archive if present
-                extract_kms_archive(resolved_pkg_dir)
-                # 2. Run WINDOWS.cmd and wait for activation
-                res = run_windows_cmd_activation(resolved_pkg_dir, timeout_seconds=90)
-                result = {
-                    "success": res.get("success", False),
-                    "message": res.get("message", "فعال‌سازی ویندوز انجام شد."),
-                    "exit_code": 0 if res.get("success") else 1,
-                }
+                if get_windows_identity().get("is_home") is True:
+                    result = {
+                        "success": True,
+                        "skipped": True,
+                        "home_guard": True,
+                        "message": "Windows Home اورجینال است؛ KMS استخراج یا اجرا نشد.",
+                        "exit_code": 0,
+                    }
+                else:
+                    from packages.orchestrator import activate_windows_from_packages
+                    res = activate_windows_from_packages(resolved_pkg_dir, timeout_seconds=90)
+                    result = {
+                        "success": res.get("success", False),
+                        "skipped": res.get("skipped", False),
+                        "message": res.get("message", "فعال‌سازی ویندوز انجام شد."),
+                        "exit_code": 0 if res.get("success") else 1,
+                    }
+            elif action == "office_shortcuts":
+                result = _home_office_shortcuts_result()
             elif action == "desktop_icons":
                 from packages.orchestrator import apply_desktop_icons
                 res = apply_desktop_icons()
@@ -163,17 +211,16 @@ def _run_batch_install(items_to_run: List[Dict[str, Any]], custom_dir: Optional[
                 }
             else:
                 # Regular Software Package Installer
-                is_office = (
-                    pkg_id.lower().startswith("office")
-                    or "office" in pkg_id.lower()
-                    or item_info.get("installer_type") == "office_cmd"
-                )
-                timeout = 900 if is_office else 300
-                result = silent_install_package(
-                    item_info.get("relative_path") or pkg_id or item_info.get("filename"),
-                    custom_dir=custom_dir,
-                    timeout_seconds=timeout,
-                )
+                is_office = _is_microsoft_office_package(item_info)
+                if is_office and get_windows_identity().get("is_home") is True:
+                    result = _home_office_shortcuts_result()
+                else:
+                    timeout = 900 if is_office else 300
+                    result = silent_install_package(
+                        item_info.get("relative_path") or pkg_id or item_info.get("filename"),
+                        custom_dir=custom_dir,
+                        timeout_seconds=timeout,
+                    )
 
         except Exception as e:
             logger.error(f"[BatchInstall] Error processing {pkg_id}: {e}")
@@ -280,15 +327,16 @@ def start_batch_install(
     if include_system_setup is None:
         include_system_setup = (package_ids is None or len(package_ids) > 1)
 
+    windows_identity = get_windows_identity()
+    is_home = windows_identity.get("is_home") is True
+
     # Windows Update Blocker is a portable action rather than an installer, so
     # it is normally excluded from selected package IDs.  Append the matching
     # architecture automatically on non-Home editions as required by the
     # deployment workflow; Home editions intentionally keep Windows Update on.
     if target_packages and not any(_is_windows_update_blocker(p) for p in target_packages):
         try:
-            from windows.device_settings import get_windows_identity
-            edition = str(get_windows_identity().get("edition") or "")
-            if "home" not in edition.lower():
+            if not is_home:
                 blockers = [p for p in all_packages if _is_windows_update_blocker(p)]
                 blockers.sort(
                     key=lambda p: "x64" in str(p.get("filename", "")).lower(),
@@ -300,19 +348,35 @@ def start_batch_install(
             logger.debug("Could not determine Windows edition for WUB queue", exc_info=True)
 
     # Reorder software packages: regular apps, Office, then WUB
-    normal_pkgs = [p for p in target_packages if p.get("installer_type") != "office_cmd" and "office" not in p.get("id", "").lower() and not _is_windows_update_blocker(p)]
-    office_pkgs = [p for p in target_packages if p.get("installer_type") == "office_cmd" or "office" in p.get("id", "").lower()]
+    normal_pkgs = [p for p in target_packages if not _is_microsoft_office_package(p) and not _is_windows_update_blocker(p)]
+    office_pkgs = [p for p in target_packages if _is_microsoft_office_package(p)]
     update_blockers = [p for p in target_packages if _is_windows_update_blocker(p)]
     if update_blockers:
         update_blockers.sort(key=lambda p: "x64" in str(p.get("filename", "")).lower(), reverse=True)
         update_blockers = update_blockers[:1]
 
-    ordered_software = normal_pkgs + office_pkgs + update_blockers
+    # Home systems use the preinstalled Office only. Never place its setup
+    # script in the queue; a dedicated shortcut-only step is used instead.
+    ordered_software = normal_pkgs + ([] if is_home else office_pkgs) + update_blockers
 
     # Construct complete queue items list
     queue_items: List[Dict[str, Any]] = []
 
-    if include_system_setup:
+    if is_home and (include_system_setup or bool(office_pkgs)):
+        queue_items.append({
+            "id": "step_office_shortcuts",
+            "name": "ساخت میانبرهای Word، Excel و PowerPoint (بدون نصب)",
+            "filename": "Microsoft Office",
+            "relative_path": "",
+            "installer_type": "orchestrator",
+            "orchestrator_action": "office_shortcuts",
+            "status": "queued",
+            "message": "Windows Home: فقط میانبرهای Office ساخته می‌شوند.",
+            "installed_version": "",
+            "exit_code": None,
+        })
+
+    if include_system_setup and not is_home:
         # 1. Office extraction check
         from packages.orchestrator import is_office_already_extracted
         has_office_archive = False
@@ -339,10 +403,10 @@ def start_batch_install(
                 "exit_code": None,
             })
 
-        # 2. KMS Extraction & Windows Activation
+        # 2. KMS v6 Extraction & Windows Activation (never queued on Home)
         queue_items.append({
             "id": "step_kms_activate",
-            "name": "استخراج KMS و فعال‌سازی ویندوز",
+            "name": "استخراج KMS v6 از PROGRAM و فعال‌سازی ویندوز",
             "filename": "WINDOWS.cmd",
             "relative_path": "",
             "installer_type": "orchestrator",
@@ -353,7 +417,9 @@ def start_batch_install(
             "exit_code": None,
         })
 
-        # 3. Desktop Icons
+    if include_system_setup:
+        # Desktop icons are attempted on every edition, but the action itself
+        # verifies consolidated Windows activation before changing the desktop.
         queue_items.append({
             "id": "step_desktop_icons",
             "name": "تنظیم ۳ آیکن اصلی دسکتاپ (This PC، کنترل پنل، سطل آشغال)",
@@ -397,7 +463,6 @@ def start_batch_install(
             "exit_code": None,
         })
 
-        from windows.device_settings import has_battery, get_windows_identity
         if has_battery():
             queue_items.append({
                 "id": "step_power_modes",
