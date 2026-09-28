@@ -110,6 +110,40 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
         self.assertEqual(len(result["items"]), 1)
         self.assertEqual(result["items"][0]["orchestrator_action"], "office_shortcuts")
 
+    def test_non_home_queue_installs_winrar_before_kms(self):
+        winrar = {
+            "id": "winrar",
+            "name": "WinRAR 7.13 (64-bit)",
+            "filename": "WinRAR.exe",
+            "relative_path": "WinRAR.exe",
+            "full_path": r"H:\PROGRAM\WinRAR.exe",
+            "installer_type": "winrar",
+            "is_valid": True,
+            "auto_install_supported": True,
+            "is_installed": False,
+        }
+        scanned = {
+            "directory_exists": True,
+            "packages_directory": r"H:\PROGRAM",
+            "packages": [regular_package(), winrar],
+        }
+        with (
+            patch.object(batch_installer, "scan_packages", return_value=scanned),
+            patch.object(batch_installer, "get_windows_identity", return_value=PRO),
+            patch.object(batch_installer, "has_battery", return_value=False),
+            patch.object(batch_installer.threading, "Thread"),
+        ):
+            result = batch_installer.start_batch_install(
+                package_ids=["chrome", "winrar"],
+                custom_dir=r"H:\PROGRAM",
+                include_system_setup=True,
+            )
+
+        ids = [item.get("id") for item in result["items"]]
+        actions = [item.get("orchestrator_action") for item in result["items"]]
+        self.assertLess(ids.index("winrar"), actions.index("kms_activate"))
+        self.assertEqual(ids.count("winrar"), 1)
+
     def test_forged_home_kms_queue_item_is_skipped_without_extraction_or_execution(self):
         item = {
             "id": "step_kms_activate",
@@ -225,16 +259,20 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
         with (
             patch.object(orchestrator, "get_windows_identity", return_value=HOME),
             patch.object(orchestrator, "extract_driver_archive") as archive_runner,
+            patch.object(orchestrator, "_consolidated_windows_license") as consolidated_license,
             patch.object(orchestrator, "_query_wmi_licensing") as license_query,
         ):
             office_extraction = orchestrator.ensure_office_extracted(r"H:\PROGRAM")
             extraction = orchestrator.extract_kms_archive(r"H:\PROGRAM")
             activation = orchestrator.run_windows_cmd_activation(r"H:\PROGRAM")
+            full_flow = orchestrator.activate_windows_from_packages(r"H:\PROGRAM")
 
         self.assertTrue(office_extraction["home_guard"])
         self.assertTrue(extraction["home_guard"])
         self.assertTrue(activation["home_guard"])
+        self.assertTrue(full_flow["home_guard"])
         archive_runner.assert_not_called()
+        consolidated_license.assert_not_called()
         license_query.assert_not_called()
 
     def test_non_home_extraction_prefers_kms_v6_archive(self):
@@ -243,21 +281,37 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
             v6_archive = Path(temp_dir) / "KMS v6.rar"
             old_archive.write_bytes(b"old")
             v6_archive.write_bytes(b"v6")
+
+            def fake_extract(_archive, destination):
+                Path(destination, "WINDOWS.cmd").write_text("@echo off", encoding="ascii")
+                return True
+
             with (
                 patch.object(orchestrator, "get_windows_identity", return_value=PRO),
-                patch.object(orchestrator, "extract_driver_archive", return_value=True) as extractor,
+                patch.object(orchestrator, "has_rar_extractor", return_value=True),
+                patch.object(orchestrator, "extract_driver_archive", side_effect=fake_extract) as extractor,
             ):
                 result = orchestrator.extract_kms_archive(temp_dir)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["archive_name"], "KMS v6.rar")
         self.assertEqual(extractor.call_args.args[0], str(v6_archive))
+        self.assertTrue(result["command_path"].lower().endswith("windows.cmd"))
 
     def test_non_home_package_activation_extracts_then_runs_selected_program_folder(self):
-        extraction = {"success": True, "archive_name": "KMS v6.rar"}
+        extraction = {
+            "success": True,
+            "archive_name": "KMS v6.rar",
+            "command_path": r"H:\PROGRAM\KMS v6\WINDOWS.cmd",
+        }
         activation = {"success": True, "activated": True, "message": "activated"}
         with (
             patch.object(orchestrator, "get_windows_identity", return_value=PRO),
+            patch.object(
+                orchestrator,
+                "_consolidated_windows_license",
+                return_value={"activated": False},
+            ),
             patch.object(orchestrator, "extract_kms_archive", return_value=extraction) as extractor,
             patch.object(orchestrator, "run_windows_cmd_activation", return_value=activation) as runner,
         ):
@@ -268,7 +322,97 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["extraction"], extraction)
         extractor.assert_called_once_with(r"H:\PROGRAM")
-        runner.assert_called_once_with(r"H:\PROGRAM", timeout_seconds=90)
+        runner.assert_called_once_with(
+            r"H:\PROGRAM",
+            timeout_seconds=90,
+            command_path=r"H:\PROGRAM\KMS v6\WINDOWS.cmd",
+        )
+
+    def test_active_non_home_windows_skips_kms_before_archive_scan(self):
+        with (
+            patch.object(orchestrator, "get_windows_identity", return_value=PRO),
+            patch.object(
+                orchestrator,
+                "_consolidated_windows_license",
+                return_value={"activated": True, "channel": "Retail"},
+            ),
+            patch.object(orchestrator, "extract_kms_archive") as extractor,
+            patch.object(orchestrator, "run_windows_cmd_activation") as runner,
+        ):
+            result = orchestrator.activate_windows_from_packages(r"H:\PROGRAM")
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["skipped"])
+        self.assertTrue(result["already_activated"])
+        self.assertTrue(result["extraction_skipped"])
+        extractor.assert_not_called()
+        runner.assert_not_called()
+
+    def test_kms_name_variants_are_case_insensitive(self):
+        for archive_name in ("kms.zip", "kms v6.zip", "KMS v6.zip", "KMS V6.zip", "KMS_V6.zip"):
+            with self.subTest(archive_name=archive_name), tempfile.TemporaryDirectory() as temp_dir:
+                archive = Path(temp_dir) / archive_name
+                import zipfile
+
+                with zipfile.ZipFile(archive, "w") as bundle:
+                    bundle.writestr("KMS v6/WINDOWS.cmd", "@echo off")
+                with patch.object(orchestrator, "get_windows_identity", return_value=PRO):
+                    result = orchestrator.extract_kms_archive(temp_dir)
+
+                self.assertTrue(result["success"])
+                self.assertTrue(Path(result["command_path"]).is_file())
+
+    def test_nested_kms_v6_archive_is_discovered(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            nested = Path(temp_dir, "Activation Tools", "Current")
+            nested.mkdir(parents=True)
+            archive = nested / "kMs-v6.ZIP"
+            import zipfile
+
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("payload/WINDOWS.cmd", "@echo off")
+            with patch.object(orchestrator, "get_windows_identity", return_value=PRO):
+                result = orchestrator.extract_kms_archive(temp_dir)
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["archive_name"], "kMs-v6.ZIP")
+        self.assertTrue(result["command_path"].lower().endswith("windows.cmd"))
+
+    def test_rar_kms_installs_winrar_before_extraction(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive = Path(temp_dir) / "KMS V6.rar"
+            archive.write_bytes(b"fixture")
+            winrar = {
+                "id": "winrar",
+                "name": "WinRAR 7.13 (64-bit)",
+                "filename": "WinRAR.exe",
+                "relative_path": "WinRAR.exe",
+                "is_valid": True,
+                "is_installed": False,
+                "auto_install_supported": True,
+            }
+
+            def fake_extract(_archive, destination):
+                Path(destination, "WINDOWS.cmd").write_text("@echo off", encoding="ascii")
+                return True
+
+            with (
+                patch.object(orchestrator, "get_windows_identity", return_value=PRO),
+                patch.object(orchestrator, "has_rar_extractor", side_effect=[False, True]),
+                patch("packages.manager.scan_packages", return_value={"packages": [winrar]}),
+                patch("packages.manager.silent_install_package", return_value={"success": True}) as installer,
+                patch.object(orchestrator, "extract_driver_archive", side_effect=fake_extract) as extractor,
+            ):
+                result = orchestrator.extract_kms_archive(temp_dir)
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["prerequisite"]["installed"])
+        installer.assert_called_once_with(
+            "WinRAR.exe",
+            custom_dir=temp_dir,
+            timeout_seconds=300,
+        )
+        extractor.assert_called_once()
 
 
 if __name__ == "__main__":

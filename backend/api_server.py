@@ -131,7 +131,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.32",
+                "version": "1.1.33",
                 "phase": 4,
                 "api_contract_version": 2,
             }
@@ -725,7 +725,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                     'windows',
                     activate_windows_from_packages(
                         get_current_packages_directory(),
-                        timeout_seconds=90,
+                        timeout_seconds=300,
                     ),
                 )
             

@@ -12,7 +12,9 @@ from ctypes import wintypes
 import subprocess
 import logging
 import re
-from typing import Dict, Any, Optional, List
+import tempfile
+import time
+from typing import Dict, Any, Optional, List, Callable
 import sys
 
 logger = logging.getLogger(__name__)
@@ -104,6 +106,253 @@ class SHELLEXECUTEINFOW(ctypes.Structure):
         ("hIcon", wintypes.HANDLE),
         ("hProcess", wintypes.HANDLE),
     ]
+
+
+def _read_activation_log(log_file: str) -> str:
+    if not log_file or not os.path.isfile(log_file):
+        return ""
+    try:
+        with open(log_file, "r", encoding="utf-8", errors="replace") as stream:
+            return stream.read().strip()
+    except OSError:
+        return ""
+
+
+def _build_batch_input(values: List[str]) -> bytes:
+    """Build deterministic stdin for a menu script and its final ``pause``.
+
+    KMS v6 consumes the first line as its menu choice and later waits at
+    ``Press any key to continue``.  A second, harmless line is queued on the
+    same stdin stream so the owned hidden console can finish by itself.
+    """
+    safe_values = [
+        str(value)
+        for value in values
+        if re.fullmatch(r"[A-Za-z0-9_.-]+", str(value))
+    ]
+    if not safe_values:
+        safe_values = ["1"]
+    safe_values.append("x")
+    return ("\r\n".join(safe_values) + "\r\n").encode("ascii")
+
+
+def _build_batch_command_parameters(
+    script_path: str,
+    input_path: str,
+    log_path: str,
+) -> str:
+    return (
+        f'/d /s /c call "{os.path.abspath(script_path)}" '
+        f'< "{os.path.abspath(input_path)}" '
+        f'> "{os.path.abspath(log_path)}" 2>&1'
+    )
+
+
+def execute_elevated_batch_script(
+    script_path: str,
+    *,
+    input_values: Optional[List[str]] = None,
+    timeout_seconds: int = 180,
+    log_file: Optional[str] = None,
+    status_probe: Optional[Callable[[], bool]] = None,
+) -> Dict[str, Any]:
+    """Run one trusted CMD/BAT with UAC, deterministic stdin and a hard wait.
+
+    The function does not claim success merely because a licensing probe turns
+    positive: it keeps ownership of the process until the script consumes its
+    final ``pause`` input and exits.  This prevents an invisible command window
+    from being left behind after activation.
+    """
+    abs_script = os.path.abspath(script_path or "")
+    if not os.path.isfile(abs_script):
+        return {
+            "success": False,
+            "cancelled": False,
+            "timed_out": False,
+            "exit_code": -1,
+            "output": "",
+            "error": "Activation script was not found.",
+            "message": "اسکریپت فعال‌سازی پیدا نشد.",
+        }
+
+    work_dir = os.path.dirname(abs_script)
+    log_path = os.path.abspath(
+        log_file
+        or os.path.join(
+            tempfile.gettempdir(),
+            f"markazi_activation_{os.getpid()}_{int(time.time() * 1000)}.log",
+        )
+    )
+    input_path = ""
+    process_handle = None
+    kernel32 = None
+    observed_status = False
+    prompt_seen = False
+
+    try:
+        fd, input_path = tempfile.mkstemp(
+            prefix="markazi_activation_input_",
+            suffix=".txt",
+        )
+        with os.fdopen(fd, "wb") as input_stream:
+            input_stream.write(_build_batch_input(input_values or ["1"]))
+
+        # /c consumes the rest of the command line. Keeping the script, input,
+        # and log paths individually quoted avoids the fragile nested quoting
+        # used by the older ``(echo 1) | call ...`` implementation.
+        parameters = _build_batch_command_parameters(
+            abs_script,
+            input_path,
+            log_path,
+        )
+
+        sei = SHELLEXECUTEINFOW()
+        sei.cbSize = ctypes.sizeof(SHELLEXECUTEINFOW)
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS
+        sei.hwnd = None
+        sei.lpVerb = "runas"
+        sei.lpFile = "cmd.exe"
+        sei.lpParameters = parameters
+        sei.lpDirectory = work_dir
+        sei.nShow = SW_HIDE
+
+        shell32 = ctypes.windll.shell32
+        kernel32 = ctypes.windll.kernel32
+        shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(SHELLEXECUTEINFOW)]
+        shell32.ShellExecuteExW.restype = wintypes.BOOL
+        kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel32.WaitForSingleObject.restype = wintypes.DWORD
+        kernel32.GetExitCodeProcess.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+        kernel32.TerminateProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        if not shell32.ShellExecuteExW(ctypes.byref(sei)):
+            error_code = ctypes.GetLastError()
+            cancelled = error_code == ERROR_CANCELLED
+            return {
+                "success": False,
+                "cancelled": cancelled,
+                "timed_out": False,
+                "exit_code": error_code,
+                "output": _read_activation_log(log_path),
+                "error": (
+                    "User cancelled UAC elevation."
+                    if cancelled
+                    else f"Failed to launch elevated process (error {error_code})."
+                ),
+                "message": (
+                    "فعال‌سازی لغو شد."
+                    if cancelled
+                    else "اجرای اسکریپت با دسترسی مدیر انجام نشد."
+                ),
+            }
+
+        process_handle = sei.hProcess
+        if not process_handle:
+            return {
+                "success": False,
+                "cancelled": False,
+                "timed_out": False,
+                "exit_code": -1,
+                "output": _read_activation_log(log_path),
+                "error": "ShellExecuteEx did not return a process handle.",
+                "message": "پردازش فعال‌سازی قابل پیگیری نیست.",
+            }
+
+        deadline = time.monotonic() + max(1, timeout_seconds)
+        process_exited = False
+        while time.monotonic() < deadline:
+            wait_result = kernel32.WaitForSingleObject(process_handle, 750)
+            output = _read_activation_log(log_path)
+            output_lower = output.lower()
+            prompt_seen = prompt_seen or any(
+                marker in output_lower
+                for marker in (
+                    "press any key",
+                    "any key to continue",
+                    "برای ادامه",
+                )
+            )
+            if status_probe is not None and not observed_status:
+                try:
+                    observed_status = bool(status_probe())
+                except Exception:
+                    pass
+            if wait_result == 0:  # WAIT_OBJECT_0
+                process_exited = True
+                break
+
+        if not process_exited:
+            logger.warning(
+                "Elevated activation script timed out after %s seconds: %s",
+                timeout_seconds,
+                abs_script,
+            )
+            kernel32.TerminateProcess(process_handle, 1)
+            kernel32.WaitForSingleObject(process_handle, 3000)
+            return {
+                "success": False,
+                "cancelled": False,
+                "timed_out": True,
+                "exit_code": -2,
+                "output": _read_activation_log(log_path),
+                "status_observed": observed_status,
+                "completion_prompt_seen": prompt_seen,
+                "error": "Activation script timed out.",
+                "message": "اسکریپت فعال‌سازی در زمان تعیین‌شده بسته نشد.",
+            }
+
+        exit_code_buffer = wintypes.DWORD()
+        kernel32.GetExitCodeProcess(
+            process_handle,
+            ctypes.byref(exit_code_buffer),
+        )
+        exit_code = int(exit_code_buffer.value)
+        return {
+            "success": exit_code == 0,
+            "cancelled": False,
+            "timed_out": False,
+            "exit_code": exit_code,
+            "output": _read_activation_log(log_path),
+            "status_observed": observed_status,
+            "completion_prompt_seen": prompt_seen,
+            "error": None if exit_code == 0 else f"Script exited with code {exit_code}.",
+            "message": (
+                "اسکریپت فعال‌سازی کامل شد."
+                if exit_code == 0
+                else "اسکریپت فعال‌سازی با خطا بسته شد."
+            ),
+        }
+    except Exception as exc:
+        logger.exception("Elevated activation script failed: %s", exc)
+        return {
+            "success": False,
+            "cancelled": False,
+            "timed_out": False,
+            "exit_code": -1,
+            "output": _read_activation_log(log_path),
+            "status_observed": observed_status,
+            "completion_prompt_seen": prompt_seen,
+            "error": str(exc),
+            "message": f"خطا در اجرای اسکریپت فعال‌سازی: {exc}",
+        }
+    finally:
+        if process_handle and kernel32 is not None:
+            try:
+                kernel32.CloseHandle(process_handle)
+            except Exception:
+                pass
+        if input_path:
+            try:
+                os.remove(input_path)
+            except OSError:
+                pass
 
 
 def get_activation_config() -> Dict[str, Any]:
@@ -386,13 +635,19 @@ def execute_activation_tool(target: str, timeout_seconds: int = 180) -> Dict[str
 
     ext = os.path.splitext(abs_tool_path)[1].lower()
     if ext in [".cmd", ".bat"]:
-        executable = "cmd.exe"
-        log_redirect = f' > "{log_file}" 2>&1'
-        # Menu-driven activation scripts expect keyboard input, not argv.
-        # Feed the configured selection (normally 1), then close cmd when done.
-        safe_inputs = [str(value) for value in args_list if re.fullmatch(r"[A-Za-z0-9_.-]+", str(value))]
-        input_commands = " & ".join(f"echo {value}" for value in safe_inputs) or "echo 1"
-        parameters = f'/d /s /c "({input_commands}) | call "{abs_tool_path}"{log_redirect}"'
+        result = execute_elevated_batch_script(
+            abs_tool_path,
+            input_values=[str(value) for value in args_list],
+            timeout_seconds=timeout_seconds,
+            log_file=log_file,
+        )
+        result["message"] = (
+            f"عملیات فعال‌سازی {target} انجام شد."
+            if result.get("success")
+            else result.get("message")
+            or f"خطا در اجرای اسکریپت فعال‌سازی {target}."
+        )
+        return result
     elif ext == ".ps1":
         executable = "powershell.exe"
         log_redirect = f' *>&1 | Out-File -FilePath "{log_file}" -Encoding UTF8'

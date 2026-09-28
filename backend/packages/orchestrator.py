@@ -15,15 +15,20 @@ Automates pre-installation and post-installation workflows:
 """
 
 import os
-import sys
+import re
+import shutil
+import tempfile
 import time
 import logging
-import subprocess
 from typing import Dict, Any, Optional, List
 
-from drivers.archive_extractor import extract_driver_archive
+from drivers.archive_extractor import extract_driver_archive, has_rar_extractor
 from activation.windows_activation import _query_wmi_licensing
-from activation.activation_tools import execute_activation_tool, DEFAULT_TOOLS_DIR, is_safe_tool_path
+from activation.activation_tools import (
+    DEFAULT_TOOLS_DIR,
+    execute_elevated_batch_script,
+    is_safe_tool_path,
+)
 from windows.desktop_time import show_desktop_icons, set_tehran_automatic_timezone
 from windows.device_settings import (
     set_sleep_never,
@@ -35,6 +40,148 @@ from windows.device_settings import (
 from windows.power_settings import set_laptop_power_modes
 
 logger = logging.getLogger(__name__)
+
+_ARCHIVE_EXTENSIONS = {".zip", ".rar", ".7z"}
+_KMS_SCAN_MAX_DEPTH = 3
+
+
+def _normalized_kms_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value).lower()).strip()
+
+
+def _looks_like_kms_archive(path: str, packages_dir: str) -> bool:
+    try:
+        relative = os.path.relpath(path, packages_dir)
+    except ValueError:
+        relative = os.path.basename(path)
+    normalized = _normalized_kms_name(os.path.splitext(relative)[0])
+    tokens = normalized.split()
+    return "kms" in tokens or "kmsauto" in normalized.replace(" ", "")
+
+
+def _find_kms_archives(packages_dir: str) -> List[str]:
+    """Find KMS/kms v6 archives case-insensitively up to a safe depth."""
+    if not packages_dir or not os.path.isdir(packages_dir):
+        return []
+
+    root_dir = os.path.realpath(os.path.abspath(packages_dir))
+    ignored = {"backend", "build", "dist", ".git", "node_modules", "logs"}
+    candidates: List[str] = []
+    for current_root, directories, files in os.walk(root_dir, followlinks=False):
+        try:
+            relative_root = os.path.relpath(current_root, root_dir)
+            depth = 0 if relative_root == "." else len(relative_root.split(os.sep))
+        except ValueError:
+            directories[:] = []
+            continue
+
+        directories[:] = [
+            directory
+            for directory in directories
+            if directory.lower() not in ignored
+            and not directory.startswith(".markazi_kms_")
+            and not os.path.islink(os.path.join(current_root, directory))
+            and not os.path.isjunction(os.path.join(current_root, directory))
+        ]
+        if depth >= _KMS_SCAN_MAX_DEPTH:
+            directories[:] = []
+
+        for filename in files:
+            archive_path = os.path.join(current_root, filename)
+            extension = os.path.splitext(filename)[1].lower()
+            if extension in _ARCHIVE_EXTENSIONS and _looks_like_kms_archive(
+                archive_path,
+                root_dir,
+            ):
+                candidates.append(os.path.abspath(archive_path))
+
+    def priority(path: str) -> tuple[int, int, str]:
+        normalized = _normalized_kms_name(os.path.relpath(path, root_dir))
+        is_v6 = "kms v6" in normalized or "kms 6" in normalized
+        return (0 if is_v6 else 1, len(normalized), normalized)
+
+    return sorted(set(candidates), key=priority)
+
+
+def _is_winrar_package(package: Dict[str, Any]) -> bool:
+    identity = " ".join(
+        str(package.get(field) or "")
+        for field in ("id", "name", "filename", "relative_path", "publisher")
+    ).lower()
+    compact = re.sub(r"[^a-z0-9]+", "", identity)
+    return "winrar" in compact or "winrargmbh" in compact
+
+
+def _ensure_rar_extractor_available(packages_dir: str) -> Dict[str, Any]:
+    """Install the validated WinRAR package before a RAR-based KMS bundle."""
+    if has_rar_extractor():
+        return {
+            "success": True,
+            "already_available": True,
+            "message": "استخراج‌کننده RAR از قبل نصب است.",
+        }
+
+    try:
+        from packages.manager import scan_packages, silent_install_package
+
+        scanned = scan_packages(packages_dir)
+        candidates = [
+            package
+            for package in scanned.get("packages", [])
+            if _is_winrar_package(package)
+            and package.get("is_valid", True)
+            and package.get("auto_install_supported", True)
+        ]
+        candidates.sort(
+            key=lambda package: (
+                package.get("is_installed") is True,
+                "x64" not in str(package.get("filename") or "").lower(),
+                len(str(package.get("relative_path") or "")),
+            )
+        )
+        if not candidates:
+            return {
+                "success": False,
+                "message": (
+                    "برای استخراج KMS با فرمت RAR، نصاب معتبر WinRAR در پوشه "
+                    "نرم‌افزارها پیدا نشد."
+                ),
+            }
+
+        winrar = candidates[0]
+        target = (
+            winrar.get("relative_path")
+            or winrar.get("id")
+            or winrar.get("filename")
+        )
+        install_result = silent_install_package(
+            target,
+            custom_dir=packages_dir,
+            timeout_seconds=300,
+        )
+        for _ in range(10):
+            if has_rar_extractor():
+                return {
+                    "success": True,
+                    "installed": True,
+                    "package": winrar.get("name") or "WinRAR",
+                    "install_result": install_result,
+                    "message": "WinRAR نصب شد و استخراج RAR آماده است.",
+                }
+            time.sleep(0.5)
+
+        return {
+            "success": False,
+            "package": winrar.get("name") or "WinRAR",
+            "install_result": install_result,
+            "message": "نصب WinRAR پایان یافت اما استخراج‌کننده RAR تأیید نشد.",
+        }
+    except Exception as exc:
+        logger.exception("[Orchestrator] WinRAR prerequisite failed: %s", exc)
+        return {
+            "success": False,
+            "message": f"نصب پیش‌نیاز WinRAR انجام نشد: {exc}",
+        }
 
 
 def is_office_already_extracted(packages_dir: str) -> bool:
@@ -122,6 +269,23 @@ def ensure_office_extracted(packages_dir: str) -> Dict[str, Any]:
     archive_candidates.sort(key=lambda p: len(os.path.basename(p)))
     target_archive = archive_candidates[0]
     archive_name = os.path.basename(target_archive)
+    prerequisite: Dict[str, Any] = {
+        "success": True,
+        "skipped": True,
+        "message": "برای این آرشیو پیش‌نیاز جداگانه لازم نیست.",
+    }
+    if os.path.splitext(target_archive)[1].lower() == ".rar":
+        prerequisite = _ensure_rar_extractor_available(packages_dir)
+        if not prerequisite.get("success"):
+            return {
+                "success": False,
+                "archive_name": archive_name,
+                "prerequisite": prerequisite,
+                "message": prerequisite.get(
+                    "message",
+                    "پیش‌نیاز استخراج RAR آماده نشد.",
+                ),
+            }
 
     logger.info(f"[Orchestrator] Extracting Office archive: {target_archive} into {packages_dir}")
     try:
@@ -131,12 +295,14 @@ def ensure_office_extracted(packages_dir: str) -> Dict[str, Any]:
                 "success": True,
                 "already_extracted": False,
                 "archive_name": archive_name,
+                "prerequisite": prerequisite,
                 "message": f"آرشیو آفیس ({archive_name}) با موفقیت استخراج شد.",
             }
         else:
             return {
                 "success": False,
                 "archive_name": archive_name,
+                "prerequisite": prerequisite,
                 "message": f"استخراج خودکار آرشیو آفیس ({archive_name}) ناموفق بود.",
             }
     except Exception as e:
@@ -150,8 +316,11 @@ def ensure_office_extracted(packages_dir: str) -> Dict[str, Any]:
 
 def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
     """
-    Finds and extracts any archive starting with 'kms', 'KMS', or 'KMS v6' (.rar, .zip, .7z)
-    inside the PROGRAM / packages folder directly (extract here).
+    Find and safely extract KMS/KMS v6 archives from PROGRAM.
+
+    Matching is case-insensitive and accepts separators such as spaces,
+    underscores, and hyphens. Extraction is isolated beside the archive and is
+    considered successful only when a supported WINDOWS.cmd is found.
     """
     identity = get_windows_identity()
     if identity.get("is_home") is True:
@@ -172,25 +341,18 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
             "message": "پوشه پکیج‌ها یافت نشد.",
         }
 
-    kms_archives = []
-    try:
-        for entry in os.listdir(packages_dir):
-            entry_lower = entry.lower()
-            if entry_lower.startswith("kms") or "kms v" in entry_lower or "kms_" in entry_lower or "kmsauto" in entry_lower:
-                _, ext = os.path.splitext(entry_lower)
-                if ext in (".rar", ".zip", ".7z"):
-                    kms_archives.append(os.path.join(packages_dir, entry))
-    except Exception as e:
-        logger.warning(f"[Orchestrator] Error scanning for KMS archives: {e}")
+    packages_dir = os.path.abspath(packages_dir)
+    kms_archives = _find_kms_archives(packages_dir)
 
     # Avoid re-extracting KMS v6, while still allowing a v6 archive to replace
     # an older extracted KMS folder that happens to be present in PROGRAM.
     existing_cmd = find_windows_cmd(packages_dir, allow_bundled=False)
     if existing_cmd:
         relative = os.path.relpath(existing_cmd, packages_dir).replace("\\", "/").lower()
-        normalized = relative.replace("_", " ").replace("-", " ")
+        normalized = _normalized_kms_name(relative)
         has_v6_archive = any(
-            "kms v6" in os.path.basename(path).lower().replace("_", " ").replace("-", " ")
+            "kms v6" in _normalized_kms_name(os.path.relpath(path, packages_dir))
+            or "kms 6" in _normalized_kms_name(os.path.relpath(path, packages_dir))
             for path in kms_archives
         )
         if "kms v6" in normalized or ("kms" in normalized and not has_v6_archive):
@@ -205,29 +367,106 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
     if not kms_archives:
         logger.info("[Orchestrator] No KMS archive found in packages directory.")
         return {
-            "success": True,
+            "success": False,
             "found": False,
-            "message": "آرشیو KMS در پوشه نرم‌افزارها یافت نشد.",
+            "message": (
+                "آرشیو KMS در پوشه نرم‌افزارها یافت نشد؛ نام‌هایی مانند "
+                "KMS، KMS v6 و KMS_V6 پشتیبانی می‌شوند."
+            ),
         }
 
-    # Prefer the explicitly requested KMS v6 archive over older KMS bundles.
-    def archive_priority(path: str) -> tuple[int, int, str]:
-        name = os.path.basename(path).lower().replace("_", " ").replace("-", " ")
-        return (0 if "kms v6" in name else 1, len(name), name)
-
-    kms_archives.sort(key=archive_priority)
-    # Extract the KMS archive directly into packages_dir ("extract here")
+    # _find_kms_archives already prioritizes v6 and deterministic short names.
     target_archive = kms_archives[0]
     archive_name = os.path.basename(target_archive)
-    logger.info(f"[Orchestrator] Extracting KMS archive: {target_archive} directly into {packages_dir}")
+    archive_extension = os.path.splitext(target_archive)[1].lower()
+    prerequisite: Dict[str, Any] = {
+        "success": True,
+        "skipped": True,
+        "message": "برای این آرشیو پیش‌نیاز جداگانه لازم نیست.",
+    }
+    if archive_extension == ".rar":
+        prerequisite = _ensure_rar_extractor_available(packages_dir)
+        if not prerequisite.get("success"):
+            return {
+                "success": False,
+                "found": True,
+                "archive_name": archive_name,
+                "archive_path": target_archive,
+                "prerequisite": prerequisite,
+                "message": prerequisite.get(
+                    "message",
+                    "پیش‌نیاز استخراج RAR آماده نشد.",
+                ),
+            }
+
+    archive_parent = os.path.dirname(target_archive)
+    archive_stem = os.path.splitext(archive_name)[0].strip() or "KMS v6"
+    preferred_destination = os.path.join(archive_parent, archive_stem)
+
+    # An exact sibling folder is the expected result for KMS v6.rar/.zip.
+    if os.path.isdir(preferred_destination):
+        sibling_cmd = find_windows_cmd(
+            preferred_destination,
+            allow_bundled=False,
+        )
+        if sibling_cmd:
+            return {
+                "success": True,
+                "found": True,
+                "already_extracted": True,
+                "archive_name": archive_name,
+                "archive_path": target_archive,
+                "extract_dir": preferred_destination,
+                "command_path": sibling_cmd,
+                "prerequisite": prerequisite,
+                "message": "KMS v6 قبلاً استخراج شده و WINDOWS.cmd آماده است.",
+            }
+
+    staging_dir = tempfile.mkdtemp(prefix=".markazi_kms_extract_", dir=archive_parent)
+    logger.info(
+        "[Orchestrator] Extracting KMS archive in isolation: %s -> %s",
+        target_archive,
+        staging_dir,
+    )
 
     try:
-        ok = extract_driver_archive(target_archive, packages_dir)
+        ok = extract_driver_archive(target_archive, staging_dir)
+        staged_cmd = (
+            find_windows_cmd(staging_dir, allow_bundled=False) if ok else None
+        )
+        if not ok or not staged_cmd:
+            return {
+                "success": False,
+                "found": True,
+                "archive_name": archive_name,
+                "archive_path": target_archive,
+                "prerequisite": prerequisite,
+                "message": (
+                    f"آرشیو {archive_name} استخراج نشد یا فایل WINDOWS.cmd "
+                    "داخل آن پیدا نشد."
+                ),
+            }
+
+        destination = preferred_destination
+        if os.path.exists(destination):
+            suffix = 1
+            destination = f"{preferred_destination}_extracted"
+            while os.path.exists(destination):
+                suffix += 1
+                destination = f"{preferred_destination}_extracted_{suffix}"
+
+        command_relative = os.path.relpath(staged_cmd, staging_dir)
+        os.replace(staging_dir, destination)
+        command_path = os.path.abspath(os.path.join(destination, command_relative))
         return {
-            "success": ok,
+            "success": True,
             "found": True,
             "archive_name": archive_name,
-            "message": f"آرشیو {archive_name} با موفقیت در پوشه استخراج شد." if ok else f"خطا در استخراج آرشیو {archive_name}.",
+            "archive_path": target_archive,
+            "extract_dir": destination,
+            "command_path": command_path,
+            "prerequisite": prerequisite,
+            "message": f"آرشیو {archive_name} با موفقیت استخراج و بررسی شد.",
         }
     except Exception as e:
         logger.error(f"[Orchestrator] KMS extraction error: {e}")
@@ -237,6 +476,11 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
             "archive_name": archive_name,
             "message": f"خطا در استخراج KMS: {e}",
         }
+    finally:
+        # Only remove our own isolated staging directory. Existing user folders
+        # and archives are never deleted or overwritten.
+        if os.path.isdir(staging_dir):
+            shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 def find_windows_cmd(packages_dir: Optional[str] = None, allow_bundled: bool = True) -> Optional[str]:
@@ -246,13 +490,36 @@ def find_windows_cmd(packages_dir: Optional[str] = None, allow_bundled: bool = T
     """
     candidates = []
 
-    # 1. Look in packages_dir
+    # 1. Look in packages_dir without following links/junctions out of the
+    # technician-selected repository.  Keep the search bounded so an
+    # accidentally selected drive root cannot block the activation workflow.
     if packages_dir and os.path.isdir(packages_dir):
-        for root, _, files in os.walk(packages_dir):
+        search_root = os.path.realpath(os.path.abspath(packages_dir))
+        ignored = {"backend", "build", "dist", ".git", "node_modules", "logs"}
+        for root, directories, files in os.walk(search_root, followlinks=False):
+            try:
+                relative_root = os.path.relpath(root, search_root)
+                depth = 0 if relative_root == "." else len(relative_root.split(os.sep))
+            except ValueError:
+                directories[:] = []
+                continue
+
+            directories[:] = [
+                directory
+                for directory in directories
+                if directory.lower() not in ignored
+                and not os.path.islink(os.path.join(root, directory))
+                and not os.path.isjunction(os.path.join(root, directory))
+            ]
+            if depth >= 6:
+                directories[:] = []
+
             for f in files:
                 f_lower = f.lower()
                 if f_lower in ("windows.cmd", "windows.bat", "window.cmd", "window.bat", "win.cmd", "activate.cmd"):
-                    candidates.append(os.path.join(root, f))
+                    candidate = os.path.abspath(os.path.join(root, f))
+                    if _path_is_inside(candidate, search_root):
+                        candidates.append(candidate)
 
     # Prefer KMS v6, then an exact WINDOWS.cmd name, then shorter paths.  This
     # makes PROGRAM deterministic when it contains older activator folders too.
@@ -275,7 +542,36 @@ def find_windows_cmd(packages_dir: Optional[str] = None, allow_bundled: bool = T
     return None
 
 
-def run_windows_cmd_activation(packages_dir: Optional[str] = None, timeout_seconds: int = 90) -> Dict[str, Any]:
+def _consolidated_windows_license() -> Dict[str, Any]:
+    """Read the public consolidated status, falling back to the WMI signal."""
+    try:
+        from activation.windows_activation import get_windows_activation_info
+
+        result = get_windows_activation_info()
+        if isinstance(result, dict):
+            return result
+    except Exception:
+        logger.debug("Consolidated Windows license query failed", exc_info=True)
+    try:
+        return _query_wmi_licensing()
+    except Exception:
+        return {"activated": False}
+
+
+def _path_is_inside(candidate: str, root: str) -> bool:
+    try:
+        candidate_real = os.path.normcase(os.path.realpath(candidate))
+        root_real = os.path.normcase(os.path.realpath(root))
+        return os.path.commonpath([candidate_real, root_real]) == root_real
+    except (OSError, ValueError):
+        return False
+
+
+def run_windows_cmd_activation(
+    packages_dir: Optional[str] = None,
+    timeout_seconds: int = 300,
+    command_path: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Executes WINDOWS.cmd with Administrator privileges, then waits and polls
     until Windows licensing verifies active status.
@@ -291,145 +587,98 @@ def run_windows_cmd_activation(packages_dir: Optional[str] = None, timeout_secon
             "message": "Windows Home اورجینال است؛ KMS اجرا نشد.",
         }
 
-    # 1. Check if already activated
-    try:
-        current_lic = _query_wmi_licensing()
-        if current_lic.get("activated") is True:
-            logger.info("[Orchestrator] Windows is already fully licensed and activated.")
-            return {
-                "success": True,
-                "already_activated": True,
-                "message": "ویندوز قبلاً فعال و دارای لایسنس قانونی است.",
-            }
-    except Exception:
-        pass
+    # 1. Never unpack or execute anything for an already licensed system.
+    current_lic = _consolidated_windows_license()
+    if current_lic.get("activated") is True:
+        logger.info("[Orchestrator] Windows is already fully licensed and activated.")
+        return {
+            "success": True,
+            "skipped": True,
+            "already_activated": True,
+            "license": current_lic,
+            "message": "ویندوز قبلاً فعال و دارای لایسنس قانونی است.",
+        }
 
     # 2. Find WINDOWS.cmd
-    cmd_path = find_windows_cmd(packages_dir, allow_bundled=packages_dir is None)
+    cmd_path = command_path or find_windows_cmd(
+        packages_dir,
+        allow_bundled=packages_dir is None,
+    )
     if not cmd_path or not os.path.isfile(cmd_path):
         return {
             "success": False,
             "message": "اسکریپت فعال‌سازی WINDOWS.cmd مربوط به KMS v6 در پوشه PROGRAM یافت نشد.",
         }
+    cmd_path = os.path.abspath(cmd_path)
+    if packages_dir:
+        if not _path_is_inside(cmd_path, packages_dir):
+            return {
+                "success": False,
+                "message": "مسیر WINDOWS.cmd خارج از پوشه نرم‌افزارهای انتخاب‌شده است.",
+            }
+    elif not is_safe_tool_path(cmd_path):
+        return {
+            "success": False,
+            "message": "مسیر ابزار فعال‌سازی مجاز نیست.",
+        }
 
     logger.info(f"[Orchestrator] Found WINDOWS.cmd at: {cmd_path}")
 
-    # 3. Execute WINDOWS.cmd with Administrator privileges
-    try:
-        from activation.activation_tools import execute_activation_tool, set_tools_directory, get_activation_config
+    # 3. Feed menu option 1 and a queued completion key. The shared runner
+    # waits for the owned process to exit even if WMI becomes licensed early.
+    def license_probe() -> bool:
+        return _query_wmi_licensing().get("activated") is True
 
-        # Temporarily configure or run
-        work_dir = os.path.dirname(cmd_path)
-        log_file = os.path.join(work_dir, "windows_activation_run.log")
-
-        # Win32 ShellExecuteEx elevated
-        import ctypes
-        from ctypes import wintypes
-
-        SEE_MASK_NOCLOSEPROCESS = 0x00000040
-        SW_HIDE = 0
-
-        class SHELLEXECUTEINFOW(ctypes.Structure):
-            _fields_ = [
-                ("cbSize", wintypes.DWORD),
-                ("fMask", wintypes.ULONG),
-                ("hwnd", wintypes.HWND),
-                ("lpVerb", wintypes.LPCWSTR),
-                ("lpFile", wintypes.LPCWSTR),
-                ("lpParameters", wintypes.LPCWSTR),
-                ("lpDirectory", wintypes.LPCWSTR),
-                ("nShow", ctypes.c_int),
-                ("hInstApp", wintypes.HINSTANCE),
-                ("lpIDList", ctypes.c_void_p),
-                ("lpClass", wintypes.LPCWSTR),
-                ("hkeyClass", wintypes.HKEY),
-                ("dwHotKey", wintypes.DWORD),
-                ("hIcon", wintypes.HANDLE),
-                ("hProcess", wintypes.HANDLE),
-            ]
-
-        sei = SHELLEXECUTEINFOW()
-        sei.cbSize = ctypes.sizeof(SHELLEXECUTEINFOW)
-        sei.fMask = SEE_MASK_NOCLOSEPROCESS
-        sei.hwnd = None
-        sei.lpVerb = "runas"
-        sei.lpFile = "cmd.exe"
-        sei.lpParameters = f'/d /s /c "(echo 1) | call "{cmd_path}" > "{log_file}" 2>&1"'
-        sei.lpDirectory = work_dir
-        sei.nShow = SW_HIDE
-
-        shell32 = ctypes.windll.shell32
-        kernel32 = ctypes.windll.kernel32
-        shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(SHELLEXECUTEINFOW)]
-        shell32.ShellExecuteExW.restype = wintypes.BOOL
-        kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
-        kernel32.WaitForSingleObject.restype = wintypes.DWORD
-        kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
-        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-
-        if not shell32.ShellExecuteExW(ctypes.byref(sei)):
-            err = ctypes.GetLastError()
-            return {
-                "success": False,
-                "message": f"اجرای WINDOWS.cmd با دسترسی مدیر انجام نشد (کد: {err}).",
-            }
-
-        h_process = sei.hProcess
-
-        # 4. Monitor & poll until activated or process completes
-        poll_start = time.time()
-        activated = False
-
-        while time.time() - poll_start < timeout_seconds:
-            # Check WMI licensing
-            try:
-                lic = _query_wmi_licensing()
-                if lic.get("activated") is True:
-                    activated = True
-                    logger.info("[Orchestrator] Windows activation verified successfully via WMI!")
-                    break
-            except Exception:
-                pass
-
-            # Check if process finished
-            if h_process:
-                wait_res = kernel32.WaitForSingleObject(h_process, 2000)
-                if wait_res == 0:
-                    logger.info("[Orchestrator] WINDOWS.cmd process finished.")
-                    # Check one more time
-                    time.sleep(1)
-                    lic = _query_wmi_licensing()
-                    activated = lic.get("activated") is True
-                    break
-            else:
-                time.sleep(2)
-
-        if h_process:
-            kernel32.CloseHandle(h_process)
-
-        if activated:
-            return {
-                "success": True,
-                "activated": True,
-                "message": "ویندوز با موفقیت فعال و لایسنس تأیید شد.",
-            }
-        else:
-            return {
-                "success": False,
-                "activated": False,
-                "message": "اسکریپت اجرا شد اما فعال‌سازی ویندوز هنوز تأیید نشده است.",
-            }
-
-    except Exception as e:
-        logger.error(f"[Orchestrator] Error executing WINDOWS.cmd: {e}")
+    run_result = execute_elevated_batch_script(
+        cmd_path,
+        input_values=["1"],
+        timeout_seconds=timeout_seconds,
+        log_file=os.path.join(os.path.dirname(cmd_path), "windows_activation_run.log"),
+        status_probe=license_probe,
+    )
+    if run_result.get("cancelled"):
         return {
-            "success": False,
-            "message": f"خطا در اجرای فعال‌سازی ویندوز: {e}",
+            **run_result,
+            "activated": False,
+            "message": "فعال‌سازی در پنجره دسترسی مدیر لغو شد.",
         }
+
+    # Licensing services may update just after the batch file exits. Retry a
+    # bounded number of times and accept any positive official signal.
+    activated = bool(run_result.get("status_observed"))
+    verified_license: Dict[str, Any] = {}
+    for attempt in range(8):
+        verified_license = _consolidated_windows_license()
+        if verified_license.get("activated") is True:
+            activated = True
+            break
+        if attempt < 7:
+            time.sleep(1.5)
+
+    if activated:
+        return {
+            **run_result,
+            "success": True,
+            "activated": True,
+            "license": verified_license,
+            "message": "ویندوز با موفقیت فعال شد و وضعیت لایسنس تأیید شد.",
+        }
+
+    return {
+        **run_result,
+        "success": False,
+        "activated": False,
+        "license": verified_license,
+        "message": (
+            run_result.get("message")
+            if run_result.get("timed_out")
+            else "اسکریپت کامل شد اما فعال‌سازی ویندوز هنوز تأیید نشده است."
+        ),
+    }
 
 
 def activate_windows_from_packages(
-    packages_dir: Optional[str], timeout_seconds: int = 90
+    packages_dir: Optional[str], timeout_seconds: int = 300
 ) -> Dict[str, Any]:
     """Prepare KMS v6 from the selected PROGRAM folder, then run WINDOWS.cmd."""
     identity = get_windows_identity()
@@ -443,6 +692,20 @@ def activate_windows_from_packages(
             "message": "Windows Home اورجینال است؛ KMS استخراج یا اجرا نشد.",
         }
 
+    current_license = _consolidated_windows_license()
+    if current_license.get("activated") is True:
+        return {
+            "success": True,
+            "skipped": True,
+            "already_activated": True,
+            "extraction_skipped": True,
+            "license": current_license,
+            "message": (
+                "ویندوز از قبل فعال است؛ آرشیو KMS بررسی یا استخراج نشد و "
+                "هیچ ابزار فعال‌سازی اجرا نشد."
+            ),
+        }
+
     extraction = extract_kms_archive(packages_dir or "")
     if not extraction.get("success", False):
         return {
@@ -451,7 +714,11 @@ def activate_windows_from_packages(
             "message": extraction.get("message", "استخراج KMS v6 ناموفق بود."),
         }
 
-    activation = run_windows_cmd_activation(packages_dir, timeout_seconds=timeout_seconds)
+    activation = run_windows_cmd_activation(
+        packages_dir,
+        timeout_seconds=timeout_seconds,
+        command_path=extraction.get("command_path"),
+    )
     activation["extraction"] = extraction
     return activation
 

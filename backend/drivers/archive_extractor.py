@@ -27,11 +27,24 @@ SUPPORTED_ARCHIVE_EXTS = {".zip", ".rar", ".7z"}
 
 def _find_winrar_or_rar_exe() -> Optional[str]:
     """Finds WinRAR or Rar.exe CLI binary on the host system."""
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
     candidates = [
+        r"C:\Program Files\WinRAR\UnRAR.exe",
         r"C:\Program Files\WinRAR\Rar.exe",
         r"C:\Program Files\WinRAR\WinRAR.exe",
+        r"C:\Program Files (x86)\WinRAR\UnRAR.exe",
         r"C:\Program Files (x86)\WinRAR\Rar.exe",
         r"C:\Program Files (x86)\WinRAR\WinRAR.exe",
+        os.path.join(local_app_data, "Programs", "WinRAR", "UnRAR.exe")
+        if local_app_data
+        else None,
+        os.path.join(local_app_data, "Programs", "WinRAR", "Rar.exe")
+        if local_app_data
+        else None,
+        os.path.join(local_app_data, "Programs", "WinRAR", "WinRAR.exe")
+        if local_app_data
+        else None,
+        shutil.which("unrar"),
         shutil.which("rar"),
         shutil.which("winrar"),
     ]
@@ -39,6 +52,17 @@ def _find_winrar_or_rar_exe() -> Optional[str]:
         if c and os.path.isfile(c):
             return c
     return None
+
+
+def has_rar_extractor() -> bool:
+    """Return whether a *reliable* RAR-capable extractor is available.
+
+    Windows ships ``tar.exe`` on many builds, but its RAR support varies with
+    the bundled libarchive version.  It remains a last-resort extraction
+    fallback below, but it must not make the KMS prerequisite check skip the
+    known WinRAR/UnRAR installer on a freshly installed Windows machine.
+    """
+    return bool(_find_winrar_or_rar_exe() or _find_7z_exe())
 
 
 def _find_7z_exe() -> Optional[str]:
@@ -90,7 +114,7 @@ def _extract_with_rar(rar_bin: str, archive_path: str, dest_dir: str) -> bool:
         if not dest_slash.endswith("\\"):
             dest_slash += "\\"
 
-        is_gui = "winrar.exe" in rar_bin.lower()
+        is_gui = "winrar.exe" in os.path.basename(rar_bin).lower()
         if is_gui:
             cmd = [rar_bin, "x", "-ibck", "-inul", "-y", archive_path, dest_slash]
         else:

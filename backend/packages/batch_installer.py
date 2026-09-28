@@ -24,6 +24,14 @@ from windows.device_settings import get_windows_identity, has_battery
 
 logger = logging.getLogger(__name__)
 
+
+def _is_winrar_package(package: Dict[str, Any]) -> bool:
+    combined = " ".join(
+        str(package.get(field) or "")
+        for field in ("id", "name", "filename", "relative_path", "publisher")
+    ).lower()
+    return "winrar" in "".join(char for char in combined if char.isalnum())
+
 # Global batch install state
 _batch_lock = threading.Lock()
 _batch_state: Dict[str, Any] = {
@@ -211,7 +219,7 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
                     }
                 else:
                     from packages.orchestrator import activate_windows_from_packages
-                    res = activate_windows_from_packages(resolved_pkg_dir, timeout_seconds=90)
+                    res = activate_windows_from_packages(resolved_pkg_dir, timeout_seconds=300)
                     result = {
                         "success": res.get("success", False),
                         "skipped": res.get("skipped", False),
@@ -417,13 +425,27 @@ def start_batch_install(
         except Exception:
             logger.debug("Could not determine Windows edition for WUB queue", exc_info=True)
 
-    # Reorder software packages: regular apps, Office, then WUB
+    # Reorder software packages. WinRAR must complete before archive-driven
+    # provisioning (Office/KMS), otherwise a fresh Windows installation has no
+    # reliable RAR extractor yet.
     normal_pkgs = [p for p in target_packages if not _is_microsoft_office_package(p) and not _is_windows_update_blocker(p)]
     office_pkgs = [p for p in target_packages if _is_microsoft_office_package(p)]
     update_blockers = [p for p in target_packages if _is_windows_update_blocker(p)]
     if update_blockers:
         update_blockers.sort(key=lambda p: "x64" in str(p.get("filename", "")).lower(), reverse=True)
         update_blockers = update_blockers[:1]
+
+    archive_prerequisites = (
+        [package for package in normal_pkgs if _is_winrar_package(package)]
+        if include_system_setup and not is_home
+        else []
+    )
+    if archive_prerequisites:
+        normal_pkgs = [
+            package
+            for package in normal_pkgs
+            if not _is_winrar_package(package)
+        ]
 
     # Home systems use the preinstalled Office only. Never place its setup
     # script in the queue; a dedicated shortcut-only step is used instead.
@@ -442,6 +464,20 @@ def start_batch_install(
             "orchestrator_action": "office_shortcuts",
             "status": "queued",
             "message": "Windows Home: فقط میانبرهای Office ساخته می‌شوند.",
+            "installed_version": "",
+            "exit_code": None,
+        })
+
+    for package in archive_prerequisites:
+        queue_items.append({
+            "id": package.get("id", ""),
+            "name": f"{package.get('name', 'WinRAR')} (پیش‌نیاز استخراج)",
+            "filename": package.get("filename", ""),
+            "relative_path": package.get("relative_path", ""),
+            "installer_type": package.get("installer_type", ""),
+            "orchestrator_action": None,
+            "status": "queued",
+            "message": "WinRAR پیش از استخراج Office/KMS نصب می‌شود.",
             "installed_version": "",
             "exit_code": None,
         })
