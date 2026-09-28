@@ -73,6 +73,10 @@ Use fixtures and mocked process runners for every state-changing workflow.
   all” must toggle every currently scanned package on and off.
 - Use stable item IDs/keys for stateful queues and poll active operations for
   real-time status instead of requiring a manual rescan.
+- The backend owns `system_info_cache.json`; the Flutter UI uses separately
+  named cache files. Persist JSON with serialized/atomic replacement so startup
+  scans, force refreshes, and renderer recovery cannot corrupt or overwrite a
+  newer snapshot.
 - Prefer Flutter's low-power graphics adapter on hybrid systems so installing a
   dedicated GPU driver does not invalidate the UI renderer. After a Windows
   display reset, the native runner must verify that a new frame is produced and
@@ -96,6 +100,11 @@ Use fixtures and mocked process runners for every state-changing workflow.
   instead of waiting for a full hardware rescan.
 - Windows 10/11 Home follows the product's original-Windows policy: activation
   and Office deployment actions are disabled and the reason stays visible.
+- For the technician-provided KMS v6 bundle on non-Home Windows, prefer its
+  documented elevated unattended arguments (`/u /w` for Windows and `/u /o`
+  for Office) over redirected menu input. Verify success through official
+  license probes, not the script exit code, and remove only the generated
+  activation log after verification.
 - Desktop icons may only be enabled after consolidated Windows activation has
   been confirmed.
 - Removable USB media is never listed as an internal disk. Internal capacity

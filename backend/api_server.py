@@ -77,25 +77,72 @@ def _load_cached_system_info() -> Optional[dict]:
     return None
 
 def _save_cached_system_info(data: dict):
+    temp_path = ""
     try:
         p = _get_cache_filepath()
-        with open(p, "w", encoding="utf-8") as f:
+        temp_path = f"{p}.{os.getpid()}.{threading.get_ident()}.tmp"
+        with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, p)
     except Exception as e:
         logger.debug(f"Failed to save cached system info: {e}")
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
 
 _cache_lock = threading.Lock()
 _cached_data: Optional[dict] = _load_cached_system_info()
+_cache_generation = 0
+
+
+def _refresh_system_cache(*, force: bool, reason: str) -> dict:
+    """Collect without holding the cache lock and reject stale scan results.
+
+    ``ThreadingHTTPServer`` can receive a manual refresh while the startup scan
+    is still running.  A generation token prevents the older startup result
+    from overwriting the newer technician-requested snapshot.
+    """
+    global _cached_data, _cache_generation
+    with _cache_lock:
+        if _cached_data is not None and not force:
+            return _cached_data
+        _cache_generation += 1
+        generation = _cache_generation
+
+    logger.info("Collecting system information (%s, generation %s)...", reason, generation)
+    fresh = collect_all_system_info()
+
+    with _cache_lock:
+        if generation == _cache_generation:
+            _cached_data = fresh
+            _save_cached_system_info(fresh)
+            return fresh
+
+        logger.info(
+            "Discarded stale system scan generation %s; current generation is %s.",
+            generation,
+            _cache_generation,
+        )
+        return _cached_data if _cached_data is not None else fresh
+
+
+def _invalidate_system_cache() -> None:
+    """Invalidate cached hardware data and supersede every in-flight scan."""
+    global _cached_data, _cache_generation
+    with _cache_lock:
+        _cache_generation += 1
+        _cached_data = None
 
 
 def _trigger_background_scan():
     """Refreshes hardware and system info in background on startup to replace stale disk cache."""
-    global _cached_data
     try:
-        fresh = collect_all_system_info()
-        with _cache_lock:
-            _cached_data = fresh
-            _save_cached_system_info(_cached_data)
+        _refresh_system_cache(force=True, reason="startup")
         logger.info("Background system scan completed; hardware cache is now fresh.")
     except Exception as e:
         logger.error(f"Error in background system scan: {e}")
@@ -131,7 +178,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.34",
+                "version": "1.1.35",
                 "phase": 4,
                 "api_contract_version": 2,
             }
@@ -155,12 +202,10 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/system-info" or path == "/api/refresh":
             # Serve fresh or cached data
             force = ("refresh" in query_params and query_params["refresh"][0].lower() == "true") or path == "/api/refresh"
-            with _cache_lock:
-                if _cached_data is None or force:
-                    logger.info("Collecting system, hardware, software, and driver information...")
-                    _cached_data = collect_all_system_info()
-                    _save_cached_system_info(_cached_data)
-                data = _cached_data
+            data = _refresh_system_cache(
+                force=force,
+                reason="GET force refresh" if force else "GET cache miss",
+            )
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -170,10 +215,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/qc/status" or path == "/api/qc":
-            with _cache_lock:
-                if _cached_data is None:
-                    _cached_data = collect_all_system_info()
-                data = _cached_data
+            data = _refresh_system_cache(force=False, reason="QC cache miss")
             pkgs = scan_packages()
             qc_report = evaluate_system_qc(data, pkgs, get_device_settings_status())
 
@@ -389,10 +431,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/refresh" or path == "/api/system-info":
             logger.info("Force refresh requested via POST...")
-            with _cache_lock:
-                _cached_data = collect_all_system_info()
-                _save_cached_system_info(_cached_data)
-                data = _cached_data
+            data = _refresh_system_cache(force=True, reason="POST force refresh")
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -403,10 +442,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
 
         elif path == "/api/qc/run" or path == "/api/qc/check":
             logger.info("Full system QC check requested via POST...")
-            with _cache_lock:
-                _cached_data = collect_all_system_info()
-                _save_cached_system_info(_cached_data)
-                data = _cached_data
+            data = _refresh_system_cache(force=True, reason="QC run")
             pkgs = scan_packages()
             qc_report = evaluate_system_qc(data, pkgs, get_device_settings_status())
 
@@ -469,8 +505,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             result = install_package(pkg_id)
 
             # Invalidate cached system info so next fetch gets updated install status
-            with _cache_lock:
-                _cached_data = None
+            _invalidate_system_cache()
 
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -694,8 +729,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             result = uninstall_package(pkg_id)
 
             # Invalidate cached system info
-            with _cache_lock:
-                _cached_data = None
+            _invalidate_system_cache()
 
             status_http = 200 if (result.get("success") or result.get("cancelled")) else 400
             self.send_response(status_http)
@@ -730,8 +764,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                 )
             
             # Invalidate cached system info so next fetch gets updated activation status
-            with _cache_lock:
-                _cached_data = None
+            _invalidate_system_cache()
 
             # 200 for completed/cancelled, 400 only for hard server errors
             status_http = 200 if (result.get("success") or result.get("cancelled")) else 400
@@ -752,8 +785,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             )
             
             # Invalidate cached system info so next fetch gets updated activation status
-            with _cache_lock:
-                _cached_data = None
+            _invalidate_system_cache()
 
             status_http = 200 if (result.get("success") or result.get("cancelled")) else 400
             self.send_response(status_http)
@@ -769,8 +801,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             result = disable_proxy()
 
             # Invalidate cached system info so next fetch gets updated proxy status
-            with _cache_lock:
-                _cached_data = None
+            _invalidate_system_cache()
 
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -817,8 +848,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             drive_letter = str(payload.get("drive_letter") or "").strip()
             logger.info(f"Safely ejecting drive {drive_letter}...")
             result = safe_eject_drive(drive_letter)
-            with _cache_lock:
-                _cached_data = None
+            _invalidate_system_cache()
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
@@ -1001,8 +1031,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
 
             res = set_tools_directory(custom_dir)
             if res.get("success"):
-                with _cache_lock:
-                    _cached_data = None
+                _invalidate_system_cache()
                 res["windows_tool_status"] = get_tool_status("windows")
                 res["office_tool_status"] = get_tool_status("office")
                 self.send_response(200)
@@ -1034,8 +1063,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             res = set_file_requirement_path(req_id, new_path)
-            with _cache_lock:
-                _cached_data = None
+            _invalidate_system_cache()
             res["files_status"] = check_required_files()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")

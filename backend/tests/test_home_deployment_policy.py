@@ -464,6 +464,53 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
         self.assertEqual(runner.call_args.kwargs["input_values"], ["1"])
         self.assertEqual(runner.call_args.kwargs["timeout_seconds"], 300)
 
+    def test_kms_v6_uses_documented_unattended_target_and_removes_verified_log(self):
+        kms_header = """@echo off
+for %%a in (%*) do if /i "%%a"=="/u" set Unattend=1
+if defined Unattend goto :DoActivate
+"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            windows_cmd = Path(temp_dir) / "Window.cmd"
+            windows_cmd.write_text(kms_header, encoding="ascii")
+            office_cmd = Path(temp_dir) / "Office.cmd"
+            office_cmd.write_text(kms_header, encoding="ascii")
+            log_path = Path(temp_dir) / "windows_activation_run.log"
+
+            def fake_runner(*_args, **kwargs):
+                Path(kwargs["log_file"]).write_text("fixture", encoding="ascii")
+                return {"success": False, "exit_code": 1}
+
+            with (
+                patch.object(orchestrator, "get_windows_identity", return_value=PRO),
+                patch.object(
+                    orchestrator,
+                    "_consolidated_windows_license",
+                    side_effect=[
+                        {"activated": False},
+                        {"activated": True, "status_text": "Licensed"},
+                    ],
+                ),
+                patch.object(
+                    orchestrator,
+                    "execute_elevated_batch_script",
+                    side_effect=fake_runner,
+                ) as runner,
+            ):
+                result = orchestrator.run_windows_cmd_activation(
+                    temp_dir,
+                    command_path=str(windows_cmd),
+                )
+
+            self.assertTrue(result["success"])
+            self.assertTrue(result["activated"])
+            self.assertTrue(result["activation_log_removed"])
+            self.assertFalse(log_path.exists())
+            self.assertEqual(runner.call_args.kwargs["script_args"], ["/u", "/w"])
+            self.assertEqual(
+                orchestrator._kms_v6_unattended_args(str(office_cmd), "office"),
+                ["/u", "/o"],
+            )
+
     def test_combined_flow_runs_windows_then_office_from_same_bundle(self):
         extraction = {
             "success": True,

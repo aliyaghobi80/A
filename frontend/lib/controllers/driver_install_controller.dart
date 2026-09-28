@@ -75,10 +75,19 @@ class DriverInstallController extends GetxController {
     try {
       final status = await _apiService.getDriverBatchStatus();
       if (isClosed) return false;
-      batchStatus.value = status;
+      final preserveLastCompleted =
+          !status.isRunning &&
+          status.total == 0 &&
+          batchStatus.value.total > 0 &&
+          !batchStatus.value.isRunning;
+      if (!preserveLastCompleted) {
+        batchStatus.value = status;
+      }
       if (status.isRunning) {
         isBatchInstalling.value = true;
-        driverFolder.value = status.folderPath;
+        if (status.folderPath.isNotEmpty) {
+          driverFolder.value = status.folderPath;
+        }
         if (_pollTimer?.isActive != true) {
           _startDriverBatchPolling(null);
         }
@@ -186,8 +195,6 @@ class DriverInstallController extends GetxController {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     isScanning.value = true;
-    _replaceSelection(const <String>{});
-
     try {
       final result = await _apiService.intelligentScanDrivers(
         folderPath: targetPath,
@@ -680,6 +687,10 @@ class DriverInstallController extends GetxController {
           generation == _scanGeneration &&
           folder == driverFolder.value) {
         scanResult.value = result;
+        final validIds = result.packages
+            .map((package) => package.packageId)
+            .toSet();
+        _replaceSelection(selectedPackageIds.where(validIds.contains));
       }
     } catch (error) {
       debugPrint('[DriverInstallController] Rescan failed: $error');

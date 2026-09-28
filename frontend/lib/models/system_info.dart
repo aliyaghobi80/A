@@ -1513,6 +1513,8 @@ class SystemMetaInfo {
   final String computerName;
   final String manufacturer;
   final String model;
+  final String displayName;
+  final String modelCode;
   final String serial;
   final String uuid;
   final String sku;
@@ -1523,6 +1525,8 @@ class SystemMetaInfo {
     required this.computerName,
     required this.manufacturer,
     required this.model,
+    this.displayName = 'Not available',
+    this.modelCode = 'Not available',
     this.serial = 'Not available',
     this.uuid = 'Not available',
     this.sku = 'Not available',
@@ -1535,12 +1539,38 @@ class SystemMetaInfo {
       computerName: json['computer_name'] ?? 'Not available',
       manufacturer: json['manufacturer'] ?? 'Not available',
       model: json['model'] ?? 'Not available',
+      displayName: json['display_name'] ?? 'Not available',
+      modelCode: json['model_code'] ?? 'Not available',
       serial: json['serial'] ?? 'Not available',
       uuid: json['uuid'] ?? 'Not available',
       sku: json['sku'] ?? 'Not available',
       assetTag: json['asset_tag'] ?? 'Not available',
       chassisType: json['chassis_type'] ?? 'Unknown',
     );
+  }
+
+  String get deviceDisplayName {
+    bool usable(String value) {
+      final normalized = value.trim().toLowerCase();
+      return normalized.isNotEmpty &&
+          normalized != 'not available' &&
+          normalized != 'none' &&
+          normalized != 'unknown' &&
+          normalized != 'default string' &&
+          normalized != 'system product name';
+    }
+
+    if (usable(displayName)) return displayName.trim();
+    if (usable(model)) {
+      if (usable(manufacturer) &&
+          !model.toLowerCase().contains(manufacturer.toLowerCase())) {
+        return '${manufacturer.trim()} ${model.trim()}';
+      }
+      return model.trim();
+    }
+    if (usable(modelCode)) return modelCode.trim();
+    if (usable(sku)) return sku.trim().replaceAll('_', ' ');
+    return computerName;
   }
 }
 

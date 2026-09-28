@@ -24,6 +24,7 @@ class SystemInfoController extends GetxController {
   final RxBool isEjecting = false.obs;
   Timer? _usbPollTimer;
   Future<void>? _activeFetch;
+  bool _pendingForceRefresh = false;
 
   // Session-based installation & restart suggestion tracking
   final RxInt sessionInstalledSoftwareCount = 0.obs;
@@ -132,14 +133,38 @@ class SystemInfoController extends GetxController {
 
   Future<void> fetchSystemInfo({bool forceRefresh = false}) async {
     final active = _activeFetch;
-    if (active != null) return active;
+    if (active != null) {
+      if (forceRefresh) _pendingForceRefresh = true;
+      await active;
+      if (forceRefresh) {
+        // The owner of the active request may adopt the pending refresh. Wait
+        // for that replacement request as well so callers never observe stale
+        // hardware immediately after awaiting a forced refresh.
+        while (!isClosed) {
+          final replacement = _activeFetch;
+          if (replacement == null) break;
+          await replacement;
+        }
+        if (_pendingForceRefresh && !isClosed) {
+          _pendingForceRefresh = false;
+          await fetchSystemInfo(forceRefresh: true);
+        }
+      }
+      return;
+    }
 
-    final operation = _fetchSystemInfo(forceRefresh: forceRefresh);
+    final effectiveForce = forceRefresh || _pendingForceRefresh;
+    _pendingForceRefresh = false;
+    final operation = _fetchSystemInfo(forceRefresh: effectiveForce);
     _activeFetch = operation;
     try {
       await operation;
     } finally {
       if (identical(_activeFetch, operation)) _activeFetch = null;
+    }
+    if (_pendingForceRefresh && !isClosed) {
+      _pendingForceRefresh = false;
+      await fetchSystemInfo(forceRefresh: true);
     }
   }
 

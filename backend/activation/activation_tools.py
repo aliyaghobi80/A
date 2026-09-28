@@ -108,12 +108,17 @@ class SHELLEXECUTEINFOW(ctypes.Structure):
     ]
 
 
-def _read_activation_log(log_file: str) -> str:
+def _read_activation_log(log_file: str, max_bytes: int = 65536) -> str:
+    """Read only the useful tail of a potentially very large activation log."""
     if not log_file or not os.path.isfile(log_file):
         return ""
     try:
-        with open(log_file, "r", encoding="utf-8", errors="replace") as stream:
-            return stream.read().strip()
+        with open(log_file, "rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            size = stream.tell()
+            stream.seek(max(0, size - max(1024, max_bytes)))
+            raw = stream.read()
+        return raw.decode("utf-8", errors="replace").strip()
     except OSError:
         return ""
 
@@ -136,15 +141,45 @@ def _build_batch_input(values: List[str]) -> bytes:
     return ("\r\n".join(safe_values) + "\r\n").encode("ascii")
 
 
+def _build_batch_wrapper(values: List[str]) -> bytes:
+    """Build a trusted wrapper that pipes keys to choice.exe and pause."""
+    input_lines = _build_batch_input(values).decode("ascii").splitlines()
+    echoes = "\r\n".join(f"  echo {value}" for value in input_lines)
+    return (
+        "@echo off\r\n"
+        "(\r\n"
+        f"{echoes}\r\n"
+        ") | call \"%~1\"\r\n"
+        "exit /b %errorlevel%\r\n"
+    ).encode("ascii")
+
+
 def _build_batch_command_parameters(
     script_path: str,
-    input_path: str,
+    wrapper_path: str,
     log_path: str,
 ) -> str:
     return (
-        f'/d /s /c call "{os.path.abspath(script_path)}" '
-        f'< "{os.path.abspath(input_path)}" '
+        f'/d /s /c call "{os.path.abspath(wrapper_path)}" '
+        f'"{os.path.abspath(script_path)}" '
         f'> "{os.path.abspath(log_path)}" 2>&1'
+    )
+
+
+def _build_direct_batch_command_parameters(
+    script_path: str,
+    script_args: List[str],
+    log_path: str,
+) -> str:
+    safe_args = [
+        arg
+        for arg in (str(value).strip() for value in script_args)
+        if re.fullmatch(r"[/\-][A-Za-z0-9]+", arg)
+    ]
+    args_text = " ".join(safe_args)
+    return (
+        f'/d /s /c call "{os.path.abspath(script_path)}" '
+        f'{args_text} > "{os.path.abspath(log_path)}" 2>&1'
     )
 
 
@@ -152,16 +187,18 @@ def execute_elevated_batch_script(
     script_path: str,
     *,
     input_values: Optional[List[str]] = None,
+    script_args: Optional[List[str]] = None,
     timeout_seconds: int = 180,
     log_file: Optional[str] = None,
     status_probe: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
-    """Run one trusted CMD/BAT with UAC, deterministic stdin and a hard wait.
+    """Run one trusted CMD/BAT with UAC elevation and a bounded wait.
 
-    The function does not claim success merely because a licensing probe turns
-    positive: it keeps ownership of the process until the script consumes its
-    final ``pause`` input and exits.  This prevents an invisible command window
-    from being left behind after activation.
+    Known scripts should use their documented unattended arguments.  The
+    generated pipe wrapper is retained only for simple menu scripts because
+    ``choice.exe`` rejects ordinary file redirection.  In either mode the
+    owned process is followed until it exits so no hidden console is left
+    behind after activation.
     """
     abs_script = os.path.abspath(script_path or "")
     if not os.path.isfile(abs_script):
@@ -183,28 +220,57 @@ def execute_elevated_batch_script(
             f"markazi_activation_{os.getpid()}_{int(time.time() * 1000)}.log",
         )
     )
-    input_path = ""
+    wrapper_path = ""
     process_handle = None
     kernel32 = None
     observed_status = False
     prompt_seen = False
+    invalid_menu_input = False
 
     try:
-        fd, input_path = tempfile.mkstemp(
-            prefix="markazi_activation_input_",
-            suffix=".txt",
-        )
-        with os.fdopen(fd, "wb") as input_stream:
-            input_stream.write(_build_batch_input(input_values or ["1"]))
+        try:
+            with open(abs_script, "rb") as script_stream:
+                script_stream.read(1)
+        except OSError as exc:
+            return {
+                "success": False,
+                "cancelled": False,
+                "timed_out": False,
+                "exit_code": -1,
+                "output": "",
+                "security_blocked": True,
+                "error": str(exc),
+                "message": (
+                    "فایل فعال‌سازی توسط Windows Security مسدود یا قرنطینه شده است؛ "
+                    "گزارش Protection history را بررسی کنید."
+                ),
+            }
 
-        # /c consumes the rest of the command line. Keeping the script, input,
-        # and log paths individually quoted avoids the fragile nested quoting
-        # used by the older ``(echo 1) | call ...`` implementation.
-        parameters = _build_batch_command_parameters(
-            abs_script,
-            input_path,
-            log_path,
-        )
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, "wb"):
+            pass
+
+        if script_args:
+            parameters = _build_direct_batch_command_parameters(
+                abs_script,
+                script_args,
+                log_path,
+            )
+        else:
+            fd, wrapper_path = tempfile.mkstemp(
+                prefix="markazi_activation_wrapper_",
+                suffix=".cmd",
+            )
+            with os.fdopen(fd, "wb") as wrapper_stream:
+                wrapper_stream.write(_build_batch_wrapper(input_values or ["1"]))
+
+        # Prefer the script's own unattended mode. The generated pipe wrapper
+        # remains a compatibility fallback for simpler menu scripts.
+            parameters = _build_batch_command_parameters(
+                abs_script,
+                wrapper_path,
+                log_path,
+            )
 
         sei = SHELLEXECUTEINFOW()
         sei.cbSize = ctypes.sizeof(SHELLEXECUTEINFOW)
@@ -279,6 +345,29 @@ def execute_elevated_batch_script(
                     "برای ادامه",
                 )
             )
+            invalid_menu_input = (
+                "file is either empty or does not contain the valid choices"
+                in output_lower
+            )
+            if invalid_menu_input:
+                logger.error(
+                    "Activation menu rejected automated input; stopping owned process: %s",
+                    abs_script,
+                )
+                kernel32.TerminateProcess(process_handle, 2)
+                kernel32.WaitForSingleObject(process_handle, 3000)
+                return {
+                    "success": False,
+                    "cancelled": False,
+                    "timed_out": False,
+                    "invalid_menu_input": True,
+                    "exit_code": -3,
+                    "output": output,
+                    "status_observed": observed_status,
+                    "completion_prompt_seen": prompt_seen,
+                    "error": "Activation menu rejected automated input.",
+                    "message": "منوی فعال‌ساز ورودی خودکار را نپذیرفت و اجرا متوقف شد.",
+                }
             if status_probe is not None and not observed_status:
                 try:
                     observed_status = bool(status_probe())
@@ -348,9 +437,9 @@ def execute_elevated_batch_script(
                 kernel32.CloseHandle(process_handle)
             except Exception:
                 pass
-        if input_path:
+        if wrapper_path:
             try:
-                os.remove(input_path)
+                os.remove(wrapper_path)
             except OSError:
                 pass
 

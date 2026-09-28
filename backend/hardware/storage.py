@@ -42,8 +42,9 @@ def check_physical_drive_is_removable_or_usb(drive_idx: int) -> bool:
         if res and bytes_returned.value >= 28:
             data = out_buf.raw[:bytes_returned.value]
             version, size, dev_type, dev_type_mod, removable, cmd_q, v_off, p_off, r_off, s_off, bus_type = struct.unpack_from('<LLBBBBLLLLL', data, 0)
-            # bus_type 7 = Usb, 4 = 1394, 12 = Sd, 13 = Mmc
-            if bus_type in (7, 4, 12, 13) or removable == 1:
+            # BusType 13 is also used by soldered eMMC storage. Treat it as
+            # removable only when the device descriptor says it is removable.
+            if bus_type in (7, 4, 12) or removable == 1:
                 return True
     except Exception:
         pass
@@ -76,7 +77,8 @@ def is_removable_or_usb_physical_disk(disk: Dict[str, Any]) -> bool:
     combined_model = f"{model} {raw_model} {friendly} {pnp_id}".upper()
 
     # Direct bus type / interface signals
-    if bus_type in {"USB", "SD", "MMC", "1394"}:
+    # MMC can be an internal soldered eMMC device, especially in all-in-ones.
+    if bus_type in {"USB", "SD", "1394"}:
         return True
     if interface == "USB":
         return True
@@ -268,9 +270,11 @@ def get_storage_info() -> List[Dict[str, Any]]:
                     "smart_status": health_data["smart_status"],
                     "diagnostic_error": health_data["diagnostic_error"]
                 })
-            return drives
+            if drives:
+                return drives
 
-        # Fallback: Query MSFT_PhysicalDisk if Win32_DiskDrive was empty
+        # Fallback: also query MSFT_PhysicalDisk when WMI returned only an
+        # external USB disk. This is common with VMD/eMMC/AIO storage stacks.
         script_msft = (
             "Get-PhysicalDisk | "
             "Select-Object DeviceId, FriendlyName, MediaType, BusType, Size, SerialNumber, HealthStatus, OperationalStatus, Model, PartNumber | "
@@ -300,6 +304,29 @@ def get_storage_info() -> List[Dict[str, Any]]:
 
             if check_physical_drive_is_removable_or_usb(dev_idx):
                 logger.debug("Excluded removable disk via IOCTL: %s (PhysicalDrive%d)", disk.get("FriendlyName"), dev_idx)
+                continue
+
+            candidate_serial = clean_serial_number(
+                disk.get("SerialNumber"),
+                default="-",
+            )
+            candidate_name = clean_string(
+                disk.get("Model"),
+                default=clean_string(disk.get("FriendlyName")),
+            )
+            if any(
+                str(existing.get("device_id")) == str(dev_idx)
+                or (
+                    candidate_serial != "-"
+                    and str(existing.get("serial")) == candidate_serial
+                )
+                or (
+                    candidate_name
+                    and str(existing.get("raw_model", "")).strip().lower()
+                    == candidate_name.strip().lower()
+                )
+                for existing in drives
+            ):
                 continue
 
             friendly_name = clean_string(disk.get("FriendlyName"))

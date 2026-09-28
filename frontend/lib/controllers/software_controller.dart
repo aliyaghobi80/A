@@ -1259,7 +1259,14 @@ class SoftwareController extends GetxController {
     BatchInstallStatus status, {
     bool startPolling = true,
   }) {
-    batchStatus.value = status;
+    final preserveLastCompleted =
+        !status.isRunning &&
+        status.total == 0 &&
+        batchStatus.value.total > 0 &&
+        !batchStatus.value.isRunning;
+    if (!preserveLastCompleted) {
+      batchStatus.value = status;
+    }
     isBatchInstalling.value = status.isRunning;
     if (status.isRunning && startPolling && _batchPollTimer?.isActive != true) {
       _startBatchStatusPolling(null);

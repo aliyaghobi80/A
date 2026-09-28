@@ -2,6 +2,7 @@ import logging
 import platform
 import socket
 import os
+import re
 import winreg
 from typing import Dict, Any
 
@@ -9,6 +10,98 @@ from utils.powershell import run_powershell_json
 from utils.formatters import clean_serial_number, clean_string
 
 logger = logging.getLogger(__name__)
+
+
+_GENERIC_SYSTEM_VALUES = {
+    "",
+    "not available",
+    "none",
+    "default string",
+    "system product name",
+    "to be filled by o.e.m.",
+    "to be filled by oem",
+    "unknown",
+}
+
+
+def _meaningful_system_value(value: Any) -> str:
+    cleaned = clean_string(value, default="")
+    return "" if cleaned.strip().lower() in _GENERIC_SYSTEM_VALUES else cleaned.strip()
+
+
+def build_device_display_name(
+    manufacturer: Any,
+    model: Any,
+    sku: Any,
+    product_name: Any = "",
+    product_version: Any = "",
+) -> Dict[str, str]:
+    """Build a customer-facing device model instead of the Windows hostname."""
+    maker = _meaningful_system_value(manufacturer)
+    candidates = [
+        _meaningful_system_value(model),
+        _meaningful_system_value(product_version),
+        _meaningful_system_value(product_name),
+    ]
+    base = next(
+        (
+            value
+            for value in candidates
+            if value
+            and value.lower() != maker.lower()
+            and not value.lower().endswith("computer")
+        ),
+        "",
+    )
+    raw_sku = _meaningful_system_value(sku)
+    sku_text = re.sub(
+        r"(?i)^(asus|lenovo|hp|dell|acer|msi)[_\s-]+"
+        r"(notebook|desktop|aio|mb|mt)?[_\s-]*",
+        "",
+        raw_sku,
+    ).replace("_", " ").strip()
+    model_code = ""
+    for source in (sku_text, base):
+        matches = re.findall(
+            r"\b(?=[A-Z0-9-]*\d)(?=[A-Z0-9-]*[A-Z])[A-Z][A-Z0-9-]{2,15}\b",
+            source.upper(),
+        )
+        matches = [
+            value
+            for value in matches
+            if not re.fullmatch(r"(?:LP)?DDR\d+", value)
+        ]
+        if matches:
+            model_code = matches[0]
+            break
+    if not base:
+        base = sku_text or model_code
+    elif model_code and model_code.lower() not in base.lower():
+        base = f"{base} {model_code}".strip()
+
+    maker_alias = maker
+    maker_upper = maker.upper()
+    if "ASUSTEK" in maker_upper:
+        maker_alias = "ASUS"
+    elif "GIGABYTE" in maker_upper:
+        maker_alias = "GIGABYTE"
+    elif "MICRO-STAR" in maker_upper:
+        maker_alias = "MSI"
+    elif maker_upper.startswith("HP") or "HEWLETT" in maker_upper:
+        maker_alias = "HP"
+
+    display_name = base or maker_alias or "Not available"
+    if (
+        maker_alias
+        and display_name != "Not available"
+        and maker_alias.lower() not in display_name.lower()
+    ):
+        display_name = f"{maker_alias} {display_name}"
+    return {
+        "display_name": display_name,
+        "model_code": model_code or "Not available",
+    }
+
 
 def _get_registry_windows_version() -> Dict[str, str]:
     """Reads accurate Windows 10/11 version and build metadata from CurrentVersion registry key."""
@@ -58,6 +151,8 @@ def get_windows_and_system_info() -> Dict[str, Any]:
         "sku": "Not available",
         "asset_tag": "Not available",
         "chassis_type": "Unknown",
+        "display_name": "Not available",
+        "model_code": "Not available",
     }
     os_data: Dict[str, Any] = {}
 
@@ -149,6 +244,15 @@ def get_windows_and_system_info() -> Dict[str, Any]:
         pass
     if system_res['model'] == 'Not available' and system_res['sku'] != 'Not available':
         system_res['model'] = system_res['sku']
+
+    display_identity = build_device_display_name(
+        system_res["manufacturer"],
+        system_res["model"],
+        system_res["sku"],
+        csp_data.get("Name") if "csp_data" in locals() else "",
+        csp_data.get("Version") if "csp_data" in locals() else "",
+    )
+    system_res.update(display_identity)
 
     # Fallback / Enrich Version & Build from Registry
     disp_ver = reg_info.get("DisplayVersion") or reg_info.get("ReleaseId")

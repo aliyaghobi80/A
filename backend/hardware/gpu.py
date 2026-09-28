@@ -47,6 +47,53 @@ def _get_registry_gpu_memory() -> Dict[str, int]:
     return gpu_mem
 
 
+def _get_registry_gpu_devices() -> List[Dict[str, Any]]:
+    """Fallback inventory for systems where one CIM provider is unavailable."""
+    devices: List[Dict[str, Any]] = []
+    path = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as key:
+            index = 0
+            while True:
+                try:
+                    subkey_name = winreg.EnumKey(key, index)
+                    index += 1
+                except OSError:
+                    break
+                if not subkey_name.isdigit():
+                    continue
+                try:
+                    with winreg.OpenKey(key, subkey_name) as subkey:
+                        values: Dict[str, Any] = {}
+                        for name in (
+                            "DriverDesc",
+                            "ProviderName",
+                            "MatchingDeviceId",
+                            "DriverVersion",
+                        ):
+                            try:
+                                values[name], _ = winreg.QueryValueEx(subkey, name)
+                            except OSError:
+                                pass
+                        name = clean_string(values.get("DriverDesc"), default="")
+                        if not name:
+                            continue
+                        devices.append(
+                            {
+                                "Name": name,
+                                "Manufacturer": values.get("ProviderName") or "",
+                                "PNPDeviceID": values.get("MatchingDeviceId") or "",
+                                "DriverVersion": values.get("DriverVersion") or "",
+                                "ConfigManagerErrorCode": 0,
+                            }
+                        )
+                except OSError:
+                    continue
+    except OSError as exc:
+        logger.debug("Registry GPU device lookup error: %s", exc)
+    return devices
+
+
 def _records(value: Any) -> List[Dict[str, Any]]:
     if isinstance(value, dict):
         return [value]
@@ -247,24 +294,42 @@ def merge_gpu_records(
 
 
 def get_gpu_info() -> List[Dict[str, Any]]:
+    controllers: List[Dict[str, Any]] = []
+    displays: List[Dict[str, Any]] = []
     try:
         controller_data = run_powershell_json(
             "Get-CimInstance Win32_VideoController | "
             "Select-Object Name, AdapterRAM, DriverVersion, VideoProcessor, PNPDeviceID | ConvertTo-Json",
             timeout=8,
         )
+        controllers = _records(controller_data)
+    except Exception as exc:
+        logger.warning("Win32_VideoController query failed: %s", exc)
+
+    try:
         display_data = run_powershell_json(
-            "Get-CimInstance Win32_PnPEntity | Where-Object { "
-            "$_.PNPClass -eq 'Display' -or "
-            "$_.Name -like '*3D Video*' -or "
-            "$_.Name -like '*Video Controller*' -or "
-            "($_.CompatibleID -and ($_.CompatibleID -contains 'PCI\\CC_0300' -or $_.CompatibleID -contains 'PCI\\CC_0302' -or $_.CompatibleID -like '*CC_03*')) "
-            "} | Select-Object Name, Manufacturer, PNPDeviceID, ConfigManagerErrorCode, Status, HardwareID | ConvertTo-Json",
+            "Get-CimInstance Win32_PnPEntity -Filter \"PNPClass='Display'\" | "
+            "Select-Object Name, Manufacturer, PNPDeviceID, ConfigManagerErrorCode, Status, HardwareID | ConvertTo-Json",
             timeout=8,
         )
-        return merge_gpu_records(
-            _records(controller_data), _records(display_data), _get_registry_gpu_memory()
-        )
+        displays = _records(display_data)
     except Exception as exc:
-        logger.error("Failed to detect GPU: %s", exc)
-        return []
+        logger.warning("Display-class PnP query failed: %s", exc)
+
+    if not controllers and not displays:
+        displays = _get_registry_gpu_devices()
+    elif not displays:
+        # Controller data is already enough to render Intel/AMD/NVIDIA, but the
+        # registry can restore vendor names on a Basic Display installation.
+        registry_devices = _get_registry_gpu_devices()
+        if any(_is_basic_display_name(item.get("Name")) for item in controllers):
+            displays = registry_devices
+
+    result = merge_gpu_records(
+        controllers,
+        displays,
+        _get_registry_gpu_memory(),
+    )
+    if not result:
+        logger.warning("No display adapter was returned by CIM or registry.")
+    return result

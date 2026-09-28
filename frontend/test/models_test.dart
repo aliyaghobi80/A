@@ -2,6 +2,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:markazi_system_checker/models/system_info.dart';
 
 void main() {
+  test(
+    'System device title prefers exact product model over Windows hostname',
+    () {
+      final system = SystemMetaInfo.fromJson({
+        'computer_name': 'DESKTOP-H4S6RIG',
+        'manufacturer': 'ASUSTeK COMPUTER INC.',
+        'model': 'ASUS All-in-One',
+        'display_name': 'ASUS All-in-One P440VA',
+        'model_code': 'P440VA',
+        'sku': 'ASUS_AIO_P440VA',
+      });
+
+      expect(system.deviceDisplayName, 'ASUS All-in-One P440VA');
+    },
+  );
+
+  test('System device title falls back to manufacturer and model', () {
+    final system = SystemMetaInfo(
+      computerName: 'DESKTOP-TEST',
+      manufacturer: 'Lenovo',
+      model: 'V15 G3 IAP',
+    );
+
+    expect(system.deviceDisplayName, 'Lenovo V15 G3 IAP');
+  });
+
   test('Windows Update Blocker package is recognized case-insensitively', () {
     final package = SoftwarePackage(
       id: 'tools/wub',

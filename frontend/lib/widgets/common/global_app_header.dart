@@ -75,8 +75,8 @@ class _GlobalAppHeaderState extends State<GlobalAppHeader> {
               Expanded(
                 child: Obx(() {
                   final info = systemCtrl.systemInfo.value;
-                  final host = info?.system.computerName.isNotEmpty == true
-                      ? info!.system.computerName
+                  final host = info?.system.deviceDisplayName.isNotEmpty == true
+                      ? info!.system.deviceDisplayName
                       : 'WINDOWS-PC';
                   final rawTimestamp = info?.timestamp ?? '';
                   final timestamp = GlobalAppHeader.formatTimestamp(
@@ -93,19 +93,24 @@ class _GlobalAppHeaderState extends State<GlobalAppHeader> {
                       ),
                       const SizedBox(width: 8),
                       Flexible(
-                        child: Directionality(
-                          textDirection: TextDirection.ltr,
-                          child: Text(
-                            host,
-                            style: TextStyle(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w800,
-                              color: isDark
-                                  ? AppTheme.darkTextPrimary
-                                  : AppTheme.lightTextPrimary,
+                        child: Tooltip(
+                          message: info == null
+                              ? host
+                              : '$host • ${info.system.computerName}',
+                          child: Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text(
+                              host,
+                              style: TextStyle(
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w800,
+                                color: isDark
+                                    ? AppTheme.darkTextPrimary
+                                    : AppTheme.lightTextPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),

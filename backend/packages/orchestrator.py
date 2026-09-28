@@ -650,6 +650,35 @@ def _path_is_inside(candidate: str, root: str) -> bool:
         return False
 
 
+def _remove_verified_activation_log(command_path: str, filename: str) -> bool:
+    """Remove only a generated log beside a successfully verified command."""
+    if filename not in {"windows_activation_run.log", "office_activation_run.log"}:
+        return False
+    log_path = os.path.abspath(os.path.join(os.path.dirname(command_path), filename))
+    if os.path.basename(log_path).lower() != filename.lower():
+        return False
+    try:
+        if os.path.isfile(log_path):
+            os.remove(log_path)
+        return not os.path.exists(log_path)
+    except OSError as exc:
+        logger.warning("Could not remove verified activation log %s: %s", log_path, exc)
+        return False
+
+
+def _kms_v6_unattended_args(command_path: str, target: str) -> Optional[List[str]]:
+    """Use KMS v6's own unattended equivalent of menu option 1."""
+    try:
+        with open(command_path, "r", encoding="utf-8", errors="ignore") as stream:
+            header = stream.read(32768).lower()
+    except OSError:
+        return None
+    required = ('"%%a"=="/u"', "set unattend=", "goto :doactivate")
+    if not all(marker in header for marker in required):
+        return None
+    return ["/u", "/o" if target == "office" else "/w"]
+
+
 def run_windows_cmd_activation(
     packages_dir: Optional[str] = None,
     timeout_seconds: int = 300,
@@ -707,14 +736,15 @@ def run_windows_cmd_activation(
 
     logger.info(f"[Orchestrator] Found WINDOWS.cmd at: {cmd_path}")
 
-    # 3. Feed menu option 1 and a queued completion key. The shared runner
-    # waits for the owned process to exit even if WMI becomes licensed early.
+    # 3. KMS v6's documented /u target is the unattended equivalent of menu
+    # option 1. Simpler owned scripts retain the safe pipe-wrapper fallback.
     def license_probe() -> bool:
         return _query_wmi_licensing().get("activated") is True
 
     run_result = execute_elevated_batch_script(
         cmd_path,
         input_values=["1"],
+        script_args=_kms_v6_unattended_args(cmd_path, "windows"),
         timeout_seconds=timeout_seconds,
         log_file=os.path.join(os.path.dirname(cmd_path), "windows_activation_run.log"),
         status_probe=license_probe,
@@ -739,11 +769,16 @@ def run_windows_cmd_activation(
             time.sleep(1.5)
 
     if activated:
+        log_removed = _remove_verified_activation_log(
+            cmd_path,
+            "windows_activation_run.log",
+        )
         return {
             **run_result,
             "success": True,
             "activated": True,
             "license": verified_license,
+            "activation_log_removed": log_removed,
             "message": "ویندوز با موفقیت فعال شد و وضعیت لایسنس تأیید شد.",
         }
 
@@ -840,6 +875,7 @@ def run_office_cmd_activation(
     run_result = execute_elevated_batch_script(
         cmd_path,
         input_values=["1"],
+        script_args=_kms_v6_unattended_args(cmd_path, "office"),
         timeout_seconds=timeout_seconds,
         log_file=os.path.join(os.path.dirname(cmd_path), "office_activation_run.log"),
     )
@@ -854,11 +890,16 @@ def run_office_cmd_activation(
     for attempt in range(6):
         verified_office = _office_license_status()
         if verified_office.get("activated") is True:
+            log_removed = _remove_verified_activation_log(
+                cmd_path,
+                "office_activation_run.log",
+            )
             return {
                 **run_result,
                 "success": True,
                 "activated": True,
                 "office": verified_office,
+                "activation_log_removed": log_removed,
                 "message": "Microsoft Office با موفقیت فعال و وضعیت لایسنس تأیید شد.",
             }
         if attempt < 5:
