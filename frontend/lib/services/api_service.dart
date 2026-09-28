@@ -453,7 +453,7 @@ class ApiService {
             uri,
             headers: {'Content-Type': 'application/json; charset=utf-8'},
           )
-          .timeout(const Duration(minutes: 4));
+          .timeout(const Duration(minutes: 6));
 
       final Map<String, dynamic> data = json.decode(
         utf8.decode(response.bodyBytes),

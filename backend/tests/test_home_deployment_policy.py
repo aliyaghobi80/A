@@ -167,7 +167,7 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
         with (
             patch.object(batch_installer, "get_windows_identity", return_value=HOME),
             patch.object(batch_installer.time, "sleep"),
-            patch.object(orchestrator, "activate_windows_from_packages") as activator,
+            patch.object(orchestrator, "activate_windows_and_office_from_packages") as activator,
         ):
             batch_installer._run_batch_install([item], custom_dir=r"H:\PROGRAM")
 
@@ -175,6 +175,42 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
         status = batch_installer.get_batch_status()
         self.assertEqual(status["items"][0]["status"], "skipped")
         self.assertEqual(status["failed"], 0)
+
+    def test_non_home_kms_queue_runs_combined_windows_and_office_flow(self):
+        item = {
+            "id": "step_kms_activate",
+            "name": "Activation",
+            "filename": "WINDOWS.cmd + OFFICE.cmd",
+            "relative_path": "",
+            "installer_type": "orchestrator",
+            "orchestrator_action": "kms_activate",
+            "status": "queued",
+            "message": "",
+            "installed_version": "",
+            "exit_code": None,
+        }
+        batch_installer._batch_state.update(
+            {"is_running": True, "total": 1, "items": [copy.deepcopy(item)]}
+        )
+        combined = {
+            "success": True,
+            "message": "Windows: active | Office: active",
+        }
+        with (
+            patch.object(batch_installer, "get_windows_identity", return_value=PRO),
+            patch.object(batch_installer.time, "sleep"),
+            patch.object(
+                orchestrator,
+                "activate_windows_and_office_from_packages",
+                return_value=combined,
+            ) as activator,
+        ):
+            batch_installer._run_batch_install([item], custom_dir=r"H:\PROGRAM")
+
+        activator.assert_called_once_with(r"H:\PROGRAM", timeout_seconds=300)
+        status = batch_installer.get_batch_status()
+        self.assertEqual(status["items"][0]["status"], "completed")
+        self.assertIn("Office: active", status["items"][0]["message"])
 
     def test_direct_office_install_paths_are_blocked_on_home_and_only_make_shortcuts(self):
         scanned = {
@@ -260,19 +296,29 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
             patch.object(orchestrator, "get_windows_identity", return_value=HOME),
             patch.object(orchestrator, "extract_driver_archive") as archive_runner,
             patch.object(orchestrator, "_consolidated_windows_license") as consolidated_license,
+            patch.object(orchestrator, "_office_license_status") as office_license,
             patch.object(orchestrator, "_query_wmi_licensing") as license_query,
         ):
             office_extraction = orchestrator.ensure_office_extracted(r"H:\PROGRAM")
             extraction = orchestrator.extract_kms_archive(r"H:\PROGRAM")
             activation = orchestrator.run_windows_cmd_activation(r"H:\PROGRAM")
+            office_activation = orchestrator.run_office_cmd_activation(r"H:\PROGRAM")
             full_flow = orchestrator.activate_windows_from_packages(r"H:\PROGRAM")
+            office_flow = orchestrator.activate_office_from_packages(r"H:\PROGRAM")
+            combined_flow = orchestrator.activate_windows_and_office_from_packages(
+                r"H:\PROGRAM"
+            )
 
         self.assertTrue(office_extraction["home_guard"])
         self.assertTrue(extraction["home_guard"])
         self.assertTrue(activation["home_guard"])
+        self.assertTrue(office_activation["home_guard"])
         self.assertTrue(full_flow["home_guard"])
+        self.assertTrue(office_flow["home_guard"])
+        self.assertTrue(combined_flow["home_guard"])
         archive_runner.assert_not_called()
         consolidated_license.assert_not_called()
+        office_license.assert_not_called()
         license_query.assert_not_called()
 
     def test_non_home_extraction_prefers_kms_v6_archive(self):
@@ -284,6 +330,7 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
 
             def fake_extract(_archive, destination):
                 Path(destination, "WINDOWS.cmd").write_text("@echo off", encoding="ascii")
+                Path(destination, "office.CMD").write_text("@echo off", encoding="ascii")
                 return True
 
             with (
@@ -297,6 +344,7 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
         self.assertEqual(result["archive_name"], "KMS v6.rar")
         self.assertEqual(extractor.call_args.args[0], str(v6_archive))
         self.assertTrue(result["command_path"].lower().endswith("windows.cmd"))
+        self.assertTrue(result["office_command_path"].lower().endswith("office.cmd"))
 
     def test_non_home_package_activation_extracts_then_runs_selected_program_folder(self):
         extraction = {
@@ -347,6 +395,122 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
         self.assertTrue(result["extraction_skipped"])
         extractor.assert_not_called()
         runner.assert_not_called()
+
+    def test_active_office_skips_kms_before_archive_scan(self):
+        with (
+            patch.object(orchestrator, "get_windows_identity", return_value=PRO),
+            patch.object(
+                orchestrator,
+                "_office_license_status",
+                return_value={"installed": True, "activated": True},
+            ),
+            patch.object(orchestrator, "extract_kms_archive") as extractor,
+            patch.object(orchestrator, "run_office_cmd_activation") as runner,
+        ):
+            result = orchestrator.activate_office_from_packages(r"H:\PROGRAM")
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["already_activated"])
+        self.assertTrue(result["extraction_skipped"])
+        extractor.assert_not_called()
+        runner.assert_not_called()
+
+    def test_missing_office_does_not_extract_or_run_office_cmd(self):
+        with (
+            patch.object(orchestrator, "get_windows_identity", return_value=PRO),
+            patch.object(
+                orchestrator,
+                "_office_license_status",
+                return_value={"installed": False, "activated": False},
+            ),
+            patch.object(orchestrator, "extract_kms_archive") as extractor,
+            patch.object(orchestrator, "run_office_cmd_activation") as runner,
+        ):
+            result = orchestrator.activate_office_from_packages(r"H:\PROGRAM")
+
+        self.assertFalse(result["success"])
+        self.assertTrue(result["not_installed"])
+        self.assertTrue(result["extraction_skipped"])
+        extractor.assert_not_called()
+        runner.assert_not_called()
+
+    def test_office_cmd_receives_choice_one_and_is_verified_after_exit(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            office_cmd = Path(temp_dir) / "OFFICE.cmd"
+            office_cmd.write_text("@echo off", encoding="ascii")
+            with (
+                patch.object(orchestrator, "get_windows_identity", return_value=PRO),
+                patch.object(
+                    orchestrator,
+                    "_office_license_status",
+                    side_effect=[
+                        {"installed": True, "activated": False},
+                        {"installed": True, "activated": True, "status_text": "Licensed"},
+                    ],
+                ),
+                patch.object(
+                    orchestrator,
+                    "execute_elevated_batch_script",
+                    return_value={"success": True, "exit_code": 0},
+                ) as runner,
+            ):
+                result = orchestrator.run_office_cmd_activation(
+                    temp_dir,
+                    command_path=str(office_cmd),
+                )
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["activated"])
+        self.assertEqual(runner.call_args.kwargs["input_values"], ["1"])
+        self.assertEqual(runner.call_args.kwargs["timeout_seconds"], 300)
+
+    def test_combined_flow_runs_windows_then_office_from_same_bundle(self):
+        extraction = {
+            "success": True,
+            "extract_dir": r"H:\PROGRAM\KMS v6",
+            "windows_command_path": r"H:\PROGRAM\KMS v6\WINDOWS.cmd",
+            "office_command_path": r"H:\PROGRAM\KMS v6\office.cmd",
+        }
+        with (
+            patch.object(orchestrator, "get_windows_identity", return_value=PRO),
+            patch.object(
+                orchestrator,
+                "_consolidated_windows_license",
+                return_value={"activated": False},
+            ),
+            patch.object(
+                orchestrator,
+                "_office_license_status",
+                return_value={"installed": True, "activated": False},
+            ),
+            patch.object(orchestrator, "extract_kms_archive", return_value=extraction) as extractor,
+            patch.object(
+                orchestrator,
+                "run_windows_cmd_activation",
+                return_value={"success": True, "activated": True, "message": "Windows OK"},
+            ) as windows_runner,
+            patch.object(
+                orchestrator,
+                "run_office_cmd_activation",
+                return_value={"success": True, "activated": True, "message": "Office OK"},
+            ) as office_runner,
+        ):
+            result = orchestrator.activate_windows_and_office_from_packages(
+                r"H:\PROGRAM"
+            )
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["activated"])
+        self.assertTrue(result["office_activated"])
+        extractor.assert_called_once_with(r"H:\PROGRAM")
+        self.assertEqual(
+            windows_runner.call_args.kwargs["command_path"],
+            r"H:\PROGRAM\KMS v6\WINDOWS.cmd",
+        )
+        self.assertEqual(
+            office_runner.call_args.kwargs["command_path"],
+            r"H:\PROGRAM\KMS v6\office.cmd",
+        )
 
     def test_kms_name_variants_are_case_insensitive(self):
         for archive_name in ("kms.zip", "kms v6.zip", "KMS v6.zip", "KMS V6.zip", "KMS_V6.zip"):

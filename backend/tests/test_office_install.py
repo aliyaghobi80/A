@@ -43,7 +43,7 @@ class TestOfficeAutomation(unittest.TestCase):
         self.assertTrue(office_pkg["auto_install_supported"])
         self.assertTrue(office_pkg["install_allowed"])
 
-    def test_office_reordered_to_end_of_queue(self):
+    def test_office_runs_after_regular_apps_but_before_activation(self):
         with patch(
             "packages.batch_installer.get_windows_identity",
             return_value={"is_home": False, "generation": "Windows 11", "label": "Windows 11 Pro"},
@@ -59,8 +59,9 @@ class TestOfficeAutomation(unittest.TestCase):
         # preparation steps added by the deployment orchestrator.
         office_index = next(i for i, item in enumerate(items) if item["installer_type"] == "office_cmd")
         chrome_index = next(i for i, item in enumerate(items) if item.get("relative_path") == "Google Chrome/Setup.msi")
+        activation_index = next(i for i, item in enumerate(items) if item.get("orchestrator_action") == "kms_activate")
         self.assertGreater(office_index, chrome_index)
-        self.assertIn("kms_activate", [item.get("orchestrator_action") for item in items])
+        self.assertLess(office_index, activation_index)
 
 
 if __name__ == "__main__":

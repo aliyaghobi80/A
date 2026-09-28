@@ -218,12 +218,18 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
                         "exit_code": 0,
                     }
                 else:
-                    from packages.orchestrator import activate_windows_from_packages
-                    res = activate_windows_from_packages(resolved_pkg_dir, timeout_seconds=300)
+                    from packages.orchestrator import activate_windows_and_office_from_packages
+                    res = activate_windows_and_office_from_packages(
+                        resolved_pkg_dir,
+                        timeout_seconds=300,
+                    )
                     result = {
                         "success": res.get("success", False),
                         "skipped": res.get("skipped", False),
-                        "message": res.get("message", "فعال‌سازی ویندوز انجام شد."),
+                        "message": res.get(
+                            "message",
+                            "فعال‌سازی Windows و Office بررسی شد.",
+                        ),
                         "exit_code": 0 if res.get("success") else 1,
                     }
             elif action == "office_shortcuts":
@@ -509,37 +515,9 @@ def start_batch_install(
                 "exit_code": None,
             })
 
-        # 2. KMS v6 Extraction & Windows Activation (never queued on Home)
-        queue_items.append({
-            "id": "step_kms_activate",
-            "name": "استخراج KMS v6 از PROGRAM و فعال‌سازی ویندوز",
-            "filename": "WINDOWS.cmd",
-            "relative_path": "",
-            "installer_type": "orchestrator",
-            "orchestrator_action": "kms_activate",
-            "status": "queued",
-            "message": "",
-            "installed_version": "",
-            "exit_code": None,
-        })
-
-    if include_system_setup:
-        # Desktop icons are attempted on every edition, but the action itself
-        # verifies consolidated Windows activation before changing the desktop.
-        queue_items.append({
-            "id": "step_desktop_icons",
-            "name": "تنظیم ۳ آیکن اصلی دسکتاپ (This PC، کنترل پنل، سطل آشغال)",
-            "filename": "Desktop Icons",
-            "relative_path": "",
-            "installer_type": "orchestrator",
-            "orchestrator_action": "desktop_icons",
-            "status": "queued",
-            "message": "",
-            "installed_version": "",
-            "exit_code": None,
-        })
-
-    # 4. Software packages
+    # Install software (including Office) before product activation. This
+    # guarantees OFFICE.cmd never runs against an Office package that is still
+    # waiting later in the same queue.
     for pkg in ordered_software:
         queue_items.append({
             "id": pkg.get("id", ""),
@@ -554,8 +532,38 @@ def start_batch_install(
             "exit_code": None,
         })
 
+    if include_system_setup and not is_home:
+        queue_items.append({
+            "id": "step_kms_activate",
+            "name": "استخراج KMS v6 و فعال‌سازی Windows و Office",
+            "filename": "WINDOWS.cmd + OFFICE.cmd",
+            "relative_path": "",
+            "installer_type": "orchestrator",
+            "orchestrator_action": "kms_activate",
+            "status": "queued",
+            "message": "پس از نصب Office، وضعیت هر دو لایسنس بررسی می‌شود.",
+            "installed_version": "",
+            "exit_code": None,
+        })
+
     if include_system_setup:
-        # 5. Device Settings
+        # Desktop icons are attempted after activation; the action itself also
+        # verifies consolidated Windows activation before changing the desktop.
+        queue_items.append({
+            "id": "step_desktop_icons",
+            "name": "تنظیم ۳ آیکن اصلی دسکتاپ (This PC، کنترل پنل، سطل آشغال)",
+            "filename": "Desktop Icons",
+            "relative_path": "",
+            "installer_type": "orchestrator",
+            "orchestrator_action": "desktop_icons",
+            "status": "queued",
+            "message": "",
+            "installed_version": "",
+            "exit_code": None,
+        })
+
+    if include_system_setup:
+        # Device settings
         queue_items.append({
             "id": "step_sleep_never",
             "name": "تنظیم Sleep و خاموشی صفحه روی Never",

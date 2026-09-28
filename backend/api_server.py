@@ -41,7 +41,7 @@ from drivers.driver_installer import (
 )
 from activation.windows_activation import get_windows_activation_info
 from activation.office_activation import get_office_activation_info
-from activation.activation_tools import execute_activation_tool, set_tools_directory, get_tool_status, get_tools_directory_status
+from activation.activation_tools import set_tools_directory, get_tool_status, get_tools_directory_status
 from files.checker import set_file_requirement_path, check_required_files
 from hardware.battery import get_battery_info
 from hardware.storage import get_connected_usb_drives, safe_eject_drive
@@ -131,7 +131,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.33",
+                "version": "1.1.34",
                 "phase": 4,
                 "api_contract_version": 2,
             }
@@ -743,23 +743,13 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/activation/office":
-            logger.info("Executing configured Office activation tool...")
-            from activation.verification import verify_activation_result
-            from windows.device_settings import get_windows_identity
-            identity = get_windows_identity()
-            if identity.get('is_home'):
-                result = {
-                    'success': False,
-                    'skipped': True,
-                    'blocked': True,
-                    'home_guard': True,
-                    'windows': identity,
-                    'message': f"{identity.get('label') or 'Windows Home'} اورجینال است؛ فعال‌سازی Office اجرا نشد.",
-                }
-            elif not get_office_activation_info().get('installed'):
-                result = {'success': False, 'message': 'ابتدا آفیس را نصب کنید.'}
-            else:
-                result = verify_activation_result('office', execute_activation_tool("office"))
+            logger.info("Preparing KMS bundle and executing owned OFFICE.cmd...")
+            from packages.orchestrator import activate_office_from_packages
+
+            result = activate_office_from_packages(
+                get_current_packages_directory(),
+                timeout_seconds=300,
+            )
             
             # Invalidate cached system info so next fetch gets updated activation status
             with _cache_lock:

@@ -2151,7 +2151,7 @@ class BatchInstallItem {
       case 'office_shortcuts':
         return 'ساخت میانبرهای Word، Excel و PowerPoint بدون نصب Office';
       case 'kms_activate':
-        return 'استخراج KMS و فعال‌سازی ویندوز';
+        return 'استخراج KMS و فعال‌سازی Windows و Office';
       case 'desktop_icons':
         return 'تنظیم ۳ آیکن دسکتاپ (This PC، سطل آشغال، کنترل پنل)';
       case 'sleep_never':

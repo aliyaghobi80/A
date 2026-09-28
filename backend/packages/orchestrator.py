@@ -4,7 +4,8 @@ Setup & Deployment Orchestrator for Markazi System Checker.
 Automates pre-installation and post-installation workflows:
 1. Intelligent Office archive detection and extraction (extract here if not yet extracted).
 2. KMS archive detection and extraction into the PROGRAM directory.
-3. Windows activation execution via elevated WINDOWS.cmd and live licensing verification.
+3. Windows/Office activation via owned WINDOWS.cmd and OFFICE.cmd scripts with
+   live licensing verification.
 4. Essential desktop icons configuration (This PC, Recycle Bin, Control Panel).
 5. Essential device settings application:
    - Display & Sleep timeouts to Never (powercfg)
@@ -356,11 +357,18 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
             for path in kms_archives
         )
         if "kms v6" in normalized or ("kms" in normalized and not has_v6_archive):
+            bundle_root = _activation_bundle_root(existing_cmd, packages_dir)
             return {
                 "success": True,
                 "found": True,
                 "already_extracted": True,
+                "extract_dir": bundle_root,
                 "command_path": existing_cmd,
+                "windows_command_path": existing_cmd,
+                "office_command_path": find_office_cmd(
+                    bundle_root,
+                    allow_bundled=False,
+                ),
                 "message": "KMS v6 قبلاً در پوشه PROGRAM استخراج شده است.",
             }
 
@@ -418,6 +426,11 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
                 "archive_path": target_archive,
                 "extract_dir": preferred_destination,
                 "command_path": sibling_cmd,
+                "windows_command_path": sibling_cmd,
+                "office_command_path": find_office_cmd(
+                    preferred_destination,
+                    allow_bundled=False,
+                ),
                 "prerequisite": prerequisite,
                 "message": "KMS v6 قبلاً استخراج شده و WINDOWS.cmd آماده است.",
             }
@@ -433,6 +446,9 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
         ok = extract_driver_archive(target_archive, staging_dir)
         staged_cmd = (
             find_windows_cmd(staging_dir, allow_bundled=False) if ok else None
+        )
+        staged_office_cmd = (
+            find_office_cmd(staging_dir, allow_bundled=False) if ok else None
         )
         if not ok or not staged_cmd:
             return {
@@ -456,8 +472,18 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
                 destination = f"{preferred_destination}_extracted_{suffix}"
 
         command_relative = os.path.relpath(staged_cmd, staging_dir)
+        office_command_relative = (
+            os.path.relpath(staged_office_cmd, staging_dir)
+            if staged_office_cmd
+            else None
+        )
         os.replace(staging_dir, destination)
         command_path = os.path.abspath(os.path.join(destination, command_relative))
+        office_command_path = (
+            os.path.abspath(os.path.join(destination, office_command_relative))
+            if office_command_relative
+            else None
+        )
         return {
             "success": True,
             "found": True,
@@ -465,6 +491,8 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
             "archive_path": target_archive,
             "extract_dir": destination,
             "command_path": command_path,
+            "windows_command_path": command_path,
+            "office_command_path": office_command_path,
             "prerequisite": prerequisite,
             "message": f"آرشیو {archive_name} با موفقیت استخراج و بررسی شد.",
         }
@@ -483,63 +511,118 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
             shutil.rmtree(staging_dir, ignore_errors=True)
 
 
-def find_windows_cmd(packages_dir: Optional[str] = None, allow_bundled: bool = True) -> Optional[str]:
-    """
-    Finds WINDOWS.cmd (or windows.cmd) in the packages directory and subfolders,
-    falling back to Tools/WINDOWS.cmd in the repo root.
-    """
-    candidates = []
+def _find_activation_commands(
+    search_dir: Optional[str],
+    accepted_names: set[str],
+) -> List[str]:
+    """Collect owned activation commands without leaving the selected tree."""
+    if not search_dir or not os.path.isdir(search_dir):
+        return []
 
-    # 1. Look in packages_dir without following links/junctions out of the
-    # technician-selected repository.  Keep the search bounded so an
-    # accidentally selected drive root cannot block the activation workflow.
-    if packages_dir and os.path.isdir(packages_dir):
-        search_root = os.path.realpath(os.path.abspath(packages_dir))
-        ignored = {"backend", "build", "dist", ".git", "node_modules", "logs"}
-        for root, directories, files in os.walk(search_root, followlinks=False):
-            try:
-                relative_root = os.path.relpath(root, search_root)
-                depth = 0 if relative_root == "." else len(relative_root.split(os.sep))
-            except ValueError:
-                directories[:] = []
+    search_root = os.path.realpath(os.path.abspath(search_dir))
+    ignored = {"backend", "build", "dist", ".git", "node_modules", "logs"}
+    candidates: List[str] = []
+    for root, directories, files in os.walk(search_root, followlinks=False):
+        try:
+            relative_root = os.path.relpath(root, search_root)
+            depth = 0 if relative_root == "." else len(relative_root.split(os.sep))
+        except ValueError:
+            directories[:] = []
+            continue
+
+        directories[:] = [
+            directory
+            for directory in directories
+            if directory.lower() not in ignored
+            and not os.path.islink(os.path.join(root, directory))
+            and not os.path.isjunction(os.path.join(root, directory))
+        ]
+        if depth >= 6:
+            directories[:] = []
+
+        for filename in files:
+            if filename.lower() not in accepted_names:
                 continue
+            candidate = os.path.abspath(os.path.join(root, filename))
+            if _path_is_inside(candidate, search_root):
+                candidates.append(candidate)
+    return candidates
 
-            directories[:] = [
-                directory
-                for directory in directories
-                if directory.lower() not in ignored
-                and not os.path.islink(os.path.join(root, directory))
-                and not os.path.isjunction(os.path.join(root, directory))
-            ]
-            if depth >= 6:
-                directories[:] = []
 
-            for f in files:
-                f_lower = f.lower()
-                if f_lower in ("windows.cmd", "windows.bat", "window.cmd", "window.bat", "win.cmd", "activate.cmd"):
-                    candidate = os.path.abspath(os.path.join(root, f))
-                    if _path_is_inside(candidate, search_root):
-                        candidates.append(candidate)
+def _activation_command_priority(path: str, exact_name: str) -> tuple[int, int, int, str]:
+    normalized = _normalized_kms_name(path)
+    return (
+        0 if "kms v6" in normalized or "kms 6" in normalized else 1,
+        0 if os.path.basename(path).lower() == exact_name else 1,
+        len(path),
+        path.lower(),
+    )
 
-    # Prefer KMS v6, then an exact WINDOWS.cmd name, then shorter paths.  This
-    # makes PROGRAM deterministic when it contains older activator folders too.
+
+def find_windows_cmd(
+    packages_dir: Optional[str] = None,
+    allow_bundled: bool = True,
+) -> Optional[str]:
+    """Find WINDOWS.cmd case-insensitively inside the selected repository."""
+    candidates = _find_activation_commands(
+        packages_dir,
+        {
+            "windows.cmd",
+            "windows.bat",
+            "window.cmd",
+            "window.bat",
+            "win.cmd",
+            "activate.cmd",
+        },
+    )
     if candidates:
-        candidates.sort(
-            key=lambda c: (
-                0 if "kms v6" in c.lower().replace("_", " ").replace("-", " ") else 1,
-                0 if os.path.basename(c).lower() == "windows.cmd" else 1,
-                len(c),
-                c.lower(),
-            )
-        )
-        return os.path.abspath(candidates[0])
+        candidates.sort(key=lambda path: _activation_command_priority(path, "windows.cmd"))
+        return candidates[0]
 
-    # 2. Fallback to bundled Tools/WINDOWS.cmd
     bundled_cmd = os.path.abspath(os.path.join(DEFAULT_TOOLS_DIR, "WINDOWS.cmd"))
     if allow_bundled and os.path.isfile(bundled_cmd):
         return bundled_cmd
-
     return None
+
+
+def find_office_cmd(
+    packages_dir: Optional[str] = None,
+    allow_bundled: bool = True,
+) -> Optional[str]:
+    """Find the dedicated OFFICE.cmd without falling back to WINDOWS.cmd."""
+    candidates = _find_activation_commands(
+        packages_dir,
+        {
+            "office.cmd",
+            "office.bat",
+            "office_activation.cmd",
+            "activate_office.cmd",
+        },
+    )
+    if candidates:
+        candidates.sort(key=lambda path: _activation_command_priority(path, "office.cmd"))
+        return candidates[0]
+
+    bundled_cmd = os.path.abspath(os.path.join(DEFAULT_TOOLS_DIR, "OFFICE.cmd"))
+    if allow_bundled and os.path.isfile(bundled_cmd):
+        return bundled_cmd
+    return None
+
+
+def _activation_bundle_root(command_path: str, packages_dir: str) -> str:
+    """Return the KMS bundle ancestor that owns one discovered command."""
+    repository = os.path.realpath(os.path.abspath(packages_dir))
+    current = os.path.realpath(os.path.dirname(os.path.abspath(command_path)))
+    fallback = current
+    while _path_is_inside(current, repository) and current != repository:
+        normalized = _normalized_kms_name(os.path.basename(current))
+        if "kms" in normalized.split() or "kmsauto" in normalized.replace(" ", ""):
+            return current
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
+    return fallback
 
 
 def _consolidated_windows_license() -> Dict[str, Any]:
@@ -677,6 +760,123 @@ def run_windows_cmd_activation(
     }
 
 
+def _office_license_status() -> Dict[str, Any]:
+    """Read the consolidated Office installation and licensing state."""
+    try:
+        from activation.office_activation import get_office_activation_info
+
+        result = get_office_activation_info()
+        if isinstance(result, dict):
+            return result
+    except Exception as exc:
+        logger.warning("Office license query failed: %s", exc)
+        return {"installed": None, "activated": False, "error": str(exc)}
+    return {"installed": None, "activated": False}
+
+
+def run_office_cmd_activation(
+    packages_dir: Optional[str] = None,
+    timeout_seconds: int = 300,
+    command_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Run the owned OFFICE.cmd with option 1 and verify Office licensing."""
+    identity = get_windows_identity()
+    if identity.get("is_home") is True:
+        return {
+            "success": True,
+            "skipped": True,
+            "blocked": True,
+            "home_guard": True,
+            "windows": identity,
+            "message": "Windows Home اورجینال است؛ فعال‌سازی Office اجرا نشد.",
+        }
+
+    current_office = _office_license_status()
+    if current_office.get("installed") is not True:
+        return {
+            "success": False,
+            "skipped": True,
+            "blocked": True,
+            "not_installed": True,
+            "office": current_office,
+            "message": "ابتدا Microsoft Office را نصب کنید؛ OFFICE.cmd اجرا نشد.",
+        }
+    if current_office.get("activated") is True:
+        return {
+            "success": True,
+            "skipped": True,
+            "already_activated": True,
+            "office": current_office,
+            "message": "Microsoft Office قبلاً فعال است؛ OFFICE.cmd اجرا نشد.",
+        }
+
+    cmd_path = command_path or find_office_cmd(
+        packages_dir,
+        allow_bundled=packages_dir is None,
+    )
+    if not cmd_path or not os.path.isfile(cmd_path):
+        return {
+            "success": False,
+            "activated": False,
+            "message": "فایل OFFICE.cmd در بسته KMS انتخاب‌شده پیدا نشد.",
+        }
+
+    cmd_path = os.path.abspath(cmd_path)
+    if packages_dir:
+        if not _path_is_inside(cmd_path, packages_dir):
+            return {
+                "success": False,
+                "activated": False,
+                "message": "مسیر OFFICE.cmd خارج از پوشه نرم‌افزارهای انتخاب‌شده است.",
+            }
+    elif not is_safe_tool_path(cmd_path):
+        return {
+            "success": False,
+            "activated": False,
+            "message": "مسیر ابزار فعال‌سازی Office مجاز نیست.",
+        }
+
+    logger.info("[Orchestrator] Found OFFICE.cmd at: %s", cmd_path)
+    run_result = execute_elevated_batch_script(
+        cmd_path,
+        input_values=["1"],
+        timeout_seconds=timeout_seconds,
+        log_file=os.path.join(os.path.dirname(cmd_path), "office_activation_run.log"),
+    )
+    if run_result.get("cancelled"):
+        return {
+            **run_result,
+            "activated": False,
+            "message": "فعال‌سازی Office در پنجره دسترسی مدیر لغو شد.",
+        }
+
+    verified_office: Dict[str, Any] = {}
+    for attempt in range(6):
+        verified_office = _office_license_status()
+        if verified_office.get("activated") is True:
+            return {
+                **run_result,
+                "success": True,
+                "activated": True,
+                "office": verified_office,
+                "message": "Microsoft Office با موفقیت فعال و وضعیت لایسنس تأیید شد.",
+            }
+        if attempt < 5:
+            time.sleep(2)
+
+    return {
+        **run_result,
+        "success": False,
+        "activated": False,
+        "office": verified_office,
+        "message": (
+            run_result.get("message")
+            if run_result.get("timed_out")
+            else "OFFICE.cmd کامل شد اما فعال‌سازی Office هنوز تأیید نشده است."
+        ),
+    }
+
+
 def activate_windows_from_packages(
     packages_dir: Optional[str], timeout_seconds: int = 300
 ) -> Dict[str, Any]:
@@ -717,10 +917,210 @@ def activate_windows_from_packages(
     activation = run_windows_cmd_activation(
         packages_dir,
         timeout_seconds=timeout_seconds,
-        command_path=extraction.get("command_path"),
+        command_path=(
+            extraction.get("windows_command_path")
+            or extraction.get("command_path")
+        ),
     )
     activation["extraction"] = extraction
     return activation
+
+
+def activate_office_from_packages(
+    packages_dir: Optional[str], timeout_seconds: int = 300
+) -> Dict[str, Any]:
+    """Prepare the selected KMS bundle, run OFFICE.cmd and verify Office."""
+    identity = get_windows_identity()
+    if identity.get("is_home") is True:
+        return {
+            "success": True,
+            "skipped": True,
+            "blocked": True,
+            "home_guard": True,
+            "windows": identity,
+            "message": "Windows Home اورجینال است؛ KMS یا OFFICE.cmd اجرا نشد.",
+        }
+
+    current_office = _office_license_status()
+    if current_office.get("installed") is not True:
+        return {
+            "success": False,
+            "skipped": True,
+            "blocked": True,
+            "not_installed": True,
+            "extraction_skipped": True,
+            "office": current_office,
+            "message": "ابتدا Microsoft Office را نصب کنید؛ KMS استخراج یا اجرا نشد.",
+        }
+    if current_office.get("activated") is True:
+        return {
+            "success": True,
+            "skipped": True,
+            "already_activated": True,
+            "extraction_skipped": True,
+            "office": current_office,
+            "message": "Microsoft Office قبلاً فعال است؛ KMS استخراج یا اجرا نشد.",
+        }
+
+    extraction = extract_kms_archive(packages_dir or "")
+    if not extraction.get("success", False):
+        return {
+            "success": False,
+            "extraction": extraction,
+            "message": extraction.get("message", "استخراج KMS v6 ناموفق بود."),
+        }
+
+    office_command = extraction.get("office_command_path")
+    if not office_command and extraction.get("extract_dir"):
+        office_command = find_office_cmd(
+            extraction["extract_dir"],
+            allow_bundled=False,
+        )
+    activation = run_office_cmd_activation(
+        packages_dir,
+        timeout_seconds=timeout_seconds,
+        command_path=office_command,
+    )
+    activation["extraction"] = extraction
+    return activation
+
+
+def activate_windows_and_office_from_packages(
+    packages_dir: Optional[str], timeout_seconds: int = 300
+) -> Dict[str, Any]:
+    """Run the non-Home deployment activation flow from one extracted bundle."""
+    identity = get_windows_identity()
+    if identity.get("is_home") is True:
+        return {
+            "success": True,
+            "skipped": True,
+            "blocked": True,
+            "home_guard": True,
+            "windows": identity,
+            "message": "Windows Home اورجینال است؛ KMS، WINDOWS.cmd و OFFICE.cmd اجرا نشدند.",
+        }
+
+    windows_before = _consolidated_windows_license()
+    office_before = _office_license_status()
+    windows_ready = windows_before.get("activated") is True
+    office_installed = office_before.get("installed") is True
+    office_ready = office_before.get("activated") is True
+
+    if windows_ready and office_ready:
+        return {
+            "success": True,
+            "skipped": True,
+            "already_activated": True,
+            "extraction_skipped": True,
+            "windows_activation": {
+                "success": True,
+                "skipped": True,
+                "already_activated": True,
+                "license": windows_before,
+            },
+            "office_activation": {
+                "success": True,
+                "skipped": True,
+                "already_activated": True,
+                "office": office_before,
+            },
+            "message": "Windows و Microsoft Office از قبل فعال هستند؛ KMS اجرا نشد.",
+        }
+
+    if windows_ready and not office_installed:
+        return {
+            "success": False,
+            "skipped": True,
+            "blocked": True,
+            "not_installed": True,
+            "extraction_skipped": True,
+            "windows_activation": {
+                "success": True,
+                "skipped": True,
+                "already_activated": True,
+                "license": windows_before,
+            },
+            "office_activation": {
+                "success": False,
+                "skipped": True,
+                "not_installed": True,
+                "office": office_before,
+            },
+            "message": "Windows فعال است، اما ابتدا Microsoft Office را نصب کنید.",
+        }
+
+    extraction = extract_kms_archive(packages_dir or "")
+    if not extraction.get("success", False):
+        return {
+            "success": False,
+            "extraction": extraction,
+            "message": extraction.get("message", "استخراج KMS v6 ناموفق بود."),
+        }
+
+    if windows_ready:
+        windows_result: Dict[str, Any] = {
+            "success": True,
+            "skipped": True,
+            "already_activated": True,
+            "license": windows_before,
+            "message": "Windows قبلاً فعال است؛ WINDOWS.cmd اجرا نشد.",
+        }
+    else:
+        windows_result = run_windows_cmd_activation(
+            packages_dir,
+            timeout_seconds=timeout_seconds,
+            command_path=(
+                extraction.get("windows_command_path")
+                or extraction.get("command_path")
+            ),
+        )
+
+    if not office_installed:
+        office_result: Dict[str, Any] = {
+            "success": False,
+            "skipped": True,
+            "blocked": True,
+            "not_installed": True,
+            "office": office_before,
+            "message": "ابتدا Microsoft Office را نصب کنید؛ OFFICE.cmd اجرا نشد.",
+        }
+    elif office_ready:
+        office_result = {
+            "success": True,
+            "skipped": True,
+            "already_activated": True,
+            "office": office_before,
+            "message": "Microsoft Office قبلاً فعال است؛ OFFICE.cmd اجرا نشد.",
+        }
+    else:
+        office_command = extraction.get("office_command_path")
+        if not office_command and extraction.get("extract_dir"):
+            office_command = find_office_cmd(
+                extraction["extract_dir"],
+                allow_bundled=False,
+            )
+        office_result = run_office_cmd_activation(
+            packages_dir,
+            timeout_seconds=timeout_seconds,
+            command_path=office_command,
+        )
+
+    success = bool(windows_result.get("success") and office_result.get("success"))
+    return {
+        "success": success,
+        "skipped": bool(
+            windows_result.get("skipped") and office_result.get("skipped")
+        ),
+        "activated": bool(windows_result.get("activated") or windows_ready),
+        "office_activated": bool(office_result.get("activated") or office_ready),
+        "windows_activation": windows_result,
+        "office_activation": office_result,
+        "extraction": extraction,
+        "message": (
+            f"Windows: {windows_result.get('message', '')} | "
+            f"Office: {office_result.get('message', '')}"
+        ),
+    }
 
 
 def apply_desktop_icons() -> Dict[str, Any]:
