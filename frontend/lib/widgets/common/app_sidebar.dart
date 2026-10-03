@@ -248,14 +248,6 @@ class AppSidebar extends StatelessWidget {
                     themeCtrl: themeCtrl,
                     isCompact: isCompact,
                   ),
-                  _buildNavItem(
-                    index: 7,
-                    icon: Icons.calculate_rounded,
-                    title: l10n.isPersian ? 'محاسبات' : 'Calculations',
-                    isDark: isDark,
-                    themeCtrl: themeCtrl,
-                    isCompact: isCompact,
-                  ),
                 ],
               );
             }),

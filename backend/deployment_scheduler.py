@@ -8,15 +8,63 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import hashlib
 import json
+import os
 from pathlib import Path
 import threading
 import sys
+import time
 
 
 POLICY_FILE = ((Path(sys.executable).resolve().parent.parent if getattr(sys, "frozen", False)
                 else Path(__file__).resolve().parent.parent) / "config" / "parallel_installers.json")
 _condition = threading.Condition()
 _active = []
+
+
+class ExternalInstallerBusyError(RuntimeError):
+    pass
+
+
+def windows_installer_busy():
+    """Return True only when Windows Installer's documented execute mutex is held."""
+    if os.name != "nt":
+        return False
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenMutexW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
+    kernel.OpenMutexW.restype = wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel.WaitForSingleObject.restype = wintypes.DWORD
+    kernel.ReleaseMutex.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    synchronize = 0x00100000
+    modify_state = 0x0001
+    handle = kernel.OpenMutexW(synchronize | modify_state, False, "Global\\_MSIExecute")
+    if not handle:
+        return False
+    try:
+        result = kernel.WaitForSingleObject(handle, 0)
+        if result in (0x00000000, 0x00000080):
+            kernel.ReleaseMutex(handle)
+            return False
+        return result == 0x00000102
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def wait_for_windows_installer_idle(timeout_seconds=900, poll_seconds=1.0, on_wait=None):
+    """Wait for an external MSI transaction without touching its process/UI."""
+    deadline = time.monotonic() + max(0, timeout_seconds)
+    announced = False
+    while windows_installer_busy():
+        if not announced and on_wait:
+            on_wait()
+            announced = True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(max(0.05, poll_seconds))
+    return True
 
 
 def approved_resources(item, *, driver=False, root=None):
@@ -71,9 +119,15 @@ def deployment_slot(resources):
             _condition.notify_all()
 
 
-def run_deployment(items, run_one, *, double_speed=False, resources_for=lambda item: None):
+def run_deployment(items, run_one, *, double_speed=False,
+                   resources_for=lambda item: None, on_external_wait=None):
     """Preserve barriers/order; join both jobs before the next pair or stage."""
     def execute(index, item, resources):
+        if not wait_for_windows_installer_idle(
+                on_wait=(lambda: on_external_wait(index, item)) if on_external_wait else None):
+            raise ExternalInstallerBusyError(
+                "Windows Installer remained busy for 15 minutes; queue stopped safely."
+            )
         with deployment_slot(resources):
             run_one(index, item)
 

@@ -450,7 +450,7 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                       : (value) => ctrl.doubleSpeed.value = value == true,
                   title: const Text('2X — حداکثر دو نصب هم‌زمان'),
                   subtitle: const Text(
-                    'فقط پروفایل‌های تأییدشده؛ گرافیک و MSI همیشه نوبتی. تغییر برای صف بعدی است.',
+                    'فقط پروفایل‌های تأییدشده؛ گرافیک و MSI نوبتی‌اند. MSI خارجی صف را منتظر می‌گذارد؛ EXE دستی را بعد از صف اجرا کنید.',
                   ),
                 ),
               ),
@@ -585,6 +585,7 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
     }
 
     return Container(
+      key: ValueKey('driver-package-${pkg.packageId}'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(

@@ -71,6 +71,36 @@ class DeploymentSchedulerTests(unittest.TestCase):
         with patch.object(scheduler, "POLICY_FILE", Path("nonexistent-profile-fixture.json")):
             self.assertIsNone(scheduler.approved_resources({"filename": "app.exe"}))
 
+    def test_external_windows_installer_is_waited_for_without_process_control(self):
+        notices = []
+        with (
+            patch.object(scheduler, "windows_installer_busy", side_effect=[True, True, False]),
+            patch.object(scheduler.time, "sleep") as sleep,
+        ):
+            result = scheduler.wait_for_windows_installer_idle(
+                timeout_seconds=30,
+                poll_seconds=0.1,
+                on_wait=lambda: notices.append("waiting"),
+            )
+        self.assertTrue(result)
+        self.assertEqual(notices, ["waiting"])
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_external_installer_timeout_stops_before_launch(self):
+        launched = []
+        with patch.object(
+            scheduler,
+            "wait_for_windows_installer_idle",
+            return_value=False,
+        ):
+            with self.assertRaises(scheduler.ExternalInstallerBusyError):
+                scheduler.run_deployment(
+                    ["package"],
+                    lambda index, item: launched.append(item),
+                    on_external_wait=lambda index, item: None,
+                )
+        self.assertEqual(launched, [])
+
 
 if __name__ == "__main__":
     unittest.main()

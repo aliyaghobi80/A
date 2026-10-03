@@ -28,7 +28,11 @@ import subprocess
 import tempfile
 import threading
 import time
-from deployment_scheduler import approved_resources, run_deployment
+from deployment_scheduler import (
+    approved_resources,
+    run_deployment,
+    wait_for_windows_installer_idle,
+)
 from typing import Dict, Any, List, Optional, Tuple
 
 from utils.powershell import run_powershell_json, get_hidden_subprocess_kwargs
@@ -389,6 +393,14 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
             install_error = None
             try:
                 res = _install_single_package(pkg)
+                if res.get("exit_code") == 1618:
+                    with _queue_lock:
+                        if idx < len(_queue_state["items"]):
+                            _queue_state["items"][idx]["message"] = (
+                                "Windows Installer مشغول نصب دیگری است؛ پس از پایان آن دوباره تلاش می‌شود."
+                            )
+                    if wait_for_windows_installer_idle(timeout_seconds=900):
+                        res = _install_single_package(pkg)
             except Exception as exc:
                 install_error = exc
                 res = {"success": False, "exit_code": -5, "message": f"{type(exc).__name__}: {exc}"}
@@ -431,9 +443,26 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
                 )
             time.sleep(1.0)
 
-        run_deployment(packages, run_one,
-                       double_speed=_queue_state.get("double_speed", False),
-                       resources_for=lambda pkg: approved_resources(pkg, driver=True))
+        def mark_external_wait(idx, pkg):
+            nonlocal current_index, current_previous_status
+            with _queue_lock:
+                current_index = idx
+                _queue_state["current_index"] = idx
+                _queue_state["current_package"] = pkg.get("display_name")
+                if idx < len(_queue_state["items"]):
+                    current_previous_status = _queue_state["items"][idx].get("status", "pending")
+                    _queue_state["items"][idx]["status"] = "installing"
+                    _queue_state["items"][idx]["message"] = (
+                        "در انتظار پایان نصب دستی یا Windows Installer خارجی..."
+                    )
+
+        run_deployment(
+            packages,
+            run_one,
+            double_speed=_queue_state.get("double_speed", False),
+            resources_for=lambda pkg: approved_resources(pkg, driver=True),
+            on_external_wait=mark_external_wait,
+        )
 
         try:
             problems_after = set(_query_problematic_devices())

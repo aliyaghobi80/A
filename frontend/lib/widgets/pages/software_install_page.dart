@@ -429,7 +429,7 @@ class SoftwareInstallPage extends StatelessWidget {
                                     value == true,
                           title: const Text('2X — حداکثر دو نصب هم‌زمان'),
                           subtitle: const Text(
-                            'فقط بسته‌های دارای پروفایل سازگاری؛ سایر موارد نوبتی. تغییر برای صف بعدی است.',
+                            'فقط پروفایل‌های تأییدشده؛ MSI خارجی باعث انتظار صف می‌شود. نصاب EXE دستی بیرون از برنامه قابل تضمین نیست و بهتر است بعد از صف اجرا شود.',
                           ),
                         ),
                       ),
@@ -545,6 +545,7 @@ class SoftwareInstallPage extends StatelessWidget {
     final isSelected = ctrl.selectedPackageIds.contains(pkg.id);
 
     return Container(
+      key: ValueKey('software-package-${pkg.id}'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(

@@ -21,7 +21,11 @@ from packages.manager import (
     get_packages_directory,
 )
 from windows.device_settings import get_windows_identity, has_battery
-from deployment_scheduler import approved_resources, run_deployment
+from deployment_scheduler import (
+    approved_resources,
+    run_deployment,
+    wait_for_windows_installer_idle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -297,6 +301,18 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
                         custom_dir=custom_dir,
                         timeout_seconds=timeout,
                     )
+                    if result.get("exit_code") == 1618:
+                        with _batch_lock:
+                            _batch_state["items"][idx]["message"] = (
+                                "Windows Installer توسط نصب دیگری مشغول است؛ "
+                                "پس از پایان آن، این بسته یک‌بار دیگر اجرا می‌شود."
+                            )
+                        if wait_for_windows_installer_idle(timeout_seconds=900):
+                            result = silent_install_package(
+                                item_info.get("relative_path") or pkg_id or item_info.get("filename"),
+                                custom_dir=custom_dir,
+                                timeout_seconds=timeout,
+                            )
 
         except Exception as e:
             logger.error(f"[BatchInstall] Error processing {pkg_id}: {e}")
@@ -333,9 +349,21 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
             logger.warning(f"[BatchInstall] Item {pkg_id} timed out; continuing with remaining queue items.")
         time.sleep(0.5)
 
-    run_deployment(items_to_run, run_one,
-                   double_speed=_batch_state.get("double_speed", False),
-                   resources_for=lambda item: approved_resources(item, root=resolved_pkg_dir))
+    def mark_external_wait(idx, item):
+        with _batch_lock:
+            _batch_state["current_item_index"] = idx
+            _batch_state["current_item_name"] = item.get("name") or item.get("id")
+            _batch_state["items"][idx]["message"] = (
+                "در انتظار پایان نصب دستی یا Windows Installer خارجی..."
+            )
+
+    run_deployment(
+        items_to_run,
+        run_one,
+        double_speed=_batch_state.get("double_speed", False),
+        resources_for=lambda item: approved_resources(item, root=resolved_pkg_dir),
+        on_external_wait=mark_external_wait,
+    )
 
     # Finalize
     with _batch_lock:
