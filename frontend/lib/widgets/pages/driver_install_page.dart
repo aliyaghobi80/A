@@ -438,6 +438,22 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               // Advanced Mode Toggle
+              SizedBox(
+                width: 290,
+                child: CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: ctrl.doubleSpeed.value,
+                  onChanged: isBatchRunning
+                      ? null
+                      : (value) => ctrl.doubleSpeed.value = value == true,
+                  title: const Text('2X — حداکثر دو نصب هم‌زمان'),
+                  subtitle: const Text(
+                    'فقط پروفایل‌های تأییدشده؛ گرافیک و MSI همیشه نوبتی. تغییر برای صف بعدی است.',
+                  ),
+                ),
+              ),
               OutlinedButton.icon(
                 onPressed: ctrl.toggleAdvancedMode,
                 icon: Icon(

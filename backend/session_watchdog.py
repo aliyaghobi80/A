@@ -21,6 +21,48 @@ _parent_pid: Optional[int] = None
 _parent_pids = set()
 _parent_generation = 0
 _watchdog_started = False
+_close_events = {}
+
+
+def _create_close_event(pid):
+    if os.name != "nt":
+        return None
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.CreateEventW.argtypes = [ctypes.c_void_p, wintypes.BOOL, wintypes.BOOL, wintypes.LPCWSTR]
+    kernel.CreateEventW.restype = wintypes.HANDLE
+    return kernel.CreateEventW(None, True, False, f"Local\\MarkaziSystemChecker.Close.{pid}")
+
+
+def _explicit_close_requested():
+    if os.name != "nt":
+        return False
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel.WaitForSingleObject.restype = wintypes.DWORD
+    with _state_lock:
+        handles = tuple(_close_events.values())
+    return any(handle and kernel.WaitForSingleObject(handle, 0) == 0 for handle in handles)
+
+
+def stop_owned_helpers():
+    """Stop only descendants, never processes selected by generic image name."""
+    if os.name != "nt":
+        return
+    try:
+        import subprocess
+        from packages.auto_wizard import _process_parents
+        own_pid = os.getpid()
+        children = [pid for pid, parent in _process_parents().items() if parent == own_pid]
+        for pid in children:
+            subprocess.run(["taskkill.exe", "/F", "/PID", str(pid), "/T"],
+                           capture_output=True, timeout=3,
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception:
+        logger.exception("Failed to stop owned backend helpers")
 
 
 def _is_process_alive(pid: int) -> bool:
@@ -43,12 +85,16 @@ def _is_process_alive(pid: int) -> bool:
         kernel.OpenProcess.restype = wintypes.HANDLE
         kernel.CloseHandle.argtypes = [wintypes.HANDLE]
         kernel.CloseHandle.restype = wintypes.BOOL
+        kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel.WaitForSingleObject.restype = wintypes.DWORD
         synchronize = 0x00100000
         handle = kernel.OpenProcess(synchronize, False, int(pid))
         if not handle:
             return False
-        kernel.CloseHandle(handle)
-        return True
+        try:
+            return kernel.WaitForSingleObject(handle, 0) == 0x00000102
+        finally:
+            kernel.CloseHandle(handle)
     except Exception:
         return False
 
@@ -66,6 +112,8 @@ def adopt_parent_process(parent_pid: int) -> bool:
     with _state_lock:
         _parent_pid = parsed_pid
         _parent_pids.add(parsed_pid)
+        if parsed_pid not in _close_events:
+            _close_events[parsed_pid] = _create_close_event(parsed_pid)
         _parent_generation += 1
         generation = _parent_generation
     logger.info("Backend adopted by frontend PID %s (generation %s).", parsed_pid, generation)
@@ -128,6 +176,11 @@ def start_parent_watchdog(
         missing_generation: Optional[int] = None
         missing_since = 0.0
         while True:
+            if _explicit_close_requested():
+                logger.info("Explicit native window close; stopping owned helpers and service.")
+                stop_owned_helpers()
+                exit_process(0)
+                return
             has_live_parent, generation = _prune_and_check_parents()
             current_pid, _ = get_parent_session()
             if has_live_parent:
@@ -143,6 +196,7 @@ def start_parent_watchdog(
                 )
             elif time.monotonic() - missing_since >= grace_seconds:
                 logger.info("No replacement frontend adopted the backend; stopping service.")
+                stop_owned_helpers()
                 exit_process(0)
                 return
             time.sleep(max(0.05, poll_seconds))

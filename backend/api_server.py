@@ -178,9 +178,9 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.35",
+                "version": "1.1.36",
                 "phase": 4,
-                "api_contract_version": 2,
+                "api_contract_version": 3,
             }
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return
@@ -418,6 +418,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             result = {
                 "success": success,
                 "parent_pid": parent_pid,
+                "backend_pid": os.getpid(),
                 "parent_pids": get_parent_processes(),
                 "generation": generation,
                 "message": "Frontend session attached." if success else "Invalid frontend process.",
@@ -870,6 +871,8 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                 package_ids=package_ids,
                 custom_dir=custom_dir,
                 include_system_setup=include_system_setup,
+                include_activation=payload.get("include_activation") is True,
+                double_speed=payload.get("double_speed") is True,
             )
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -913,7 +916,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             folder_path = (payload.get("folder_path") or payload.get("directory") or "").strip()
             package_ids = payload.get("package_ids", None)
             resume = payload.get("resume", False)
-            result = start_intelligent_driver_install(package_ids=package_ids, custom_dir=folder_path if folder_path else None, resume=resume)
+            result = start_intelligent_driver_install(package_ids=package_ids, custom_dir=folder_path if folder_path else None, resume=resume, double_speed=payload.get("double_speed") is True)
             self.send_response(200 if result.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()

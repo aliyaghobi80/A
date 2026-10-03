@@ -8,9 +8,10 @@ class BackendProcessManager {
   static Process? _process;
   static Future<bool>? _startupFuture;
   static int? _attachedPort;
+  static int? _backendPid;
   static int activePort = 18088;
   static const List<int> candidatePorts = [18088, 18080, 18089, 18090, 18091];
-  static const int requiredApiContractVersion = 2;
+  static const int requiredApiContractVersion = 3;
 
   static String get baseUrl => 'http://127.0.0.1:$activePort';
 
@@ -145,6 +146,9 @@ class BackendProcessManager {
   }
 
   static Future<bool> ensureBackendRunning() async {
+    // Widget tests must never launch the real technician service or act on the
+    // host through it. Tests use injected/mocked API responses instead.
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return false;
     final activeStartup = _startupFuture;
     if (activeStartup != null) {
       return activeStartup;
@@ -333,6 +337,8 @@ class BackendProcessManager {
           .timeout(const Duration(seconds: 2));
       if (response.statusCode == 200) {
         _attachedPort = port;
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        _backendPid = (data['backend_pid'] as num?)?.toInt();
         debugPrint(
           '[BackendProcessManager] Backend session attached to frontend PID $pid.',
         );
@@ -345,27 +351,37 @@ class BackendProcessManager {
   }
 
   static Future<void> shutdownBackend() async {
+    final port = _attachedPort;
+    final ownedPid = _backendPid ?? _process?.pid;
     _attachedPort = null;
-    for (final port in candidatePorts) {
+    _backendPid = null;
+    // Target only this session; never terminate every backend by image name.
+    // Kill the tree before its parent disappears, avoiding orphan helpers.
+    if (Platform.isWindows && ownedPid != null) {
+      try {
+        final result = await Process.run('taskkill.exe', [
+          '/F',
+          '/PID',
+          '$ownedPid',
+          '/T',
+        ], runInShell: false).timeout(const Duration(seconds: 5));
+        if (result.exitCode == 0) {
+          _process = null;
+          return;
+        }
+      } catch (_) {}
+    }
+    if (port != null) {
       try {
         await http
-            .get(Uri.parse('http://127.0.0.1:$port/api/shutdown'))
-            .timeout(const Duration(milliseconds: 600));
+            .post(Uri.parse('http://127.0.0.1:$port/api/shutdown'))
+            .timeout(const Duration(seconds: 2));
       } catch (_) {}
     }
     try {
       _process?.kill(ProcessSignal.sigkill);
     } catch (_) {}
-    if (Platform.isWindows) {
-      try {
-        Process.runSync('taskkill.exe', [
-          '/F',
-          '/IM',
-          'backend_server.exe',
-          '/T',
-        ], runInShell: false);
-      } catch (_) {}
-    }
+    _process = null;
   }
 
   static void dispose() {

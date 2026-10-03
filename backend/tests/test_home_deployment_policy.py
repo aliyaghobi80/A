@@ -137,6 +137,7 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
                 package_ids=["chrome", "winrar"],
                 custom_dir=r"H:\PROGRAM",
                 include_system_setup=True,
+                include_activation=True,
             )
 
         ids = [item.get("id") for item in result["items"]]
@@ -177,6 +178,7 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
         self.assertEqual(status["failed"], 0)
 
     def test_non_home_kms_queue_runs_combined_windows_and_office_flow(self):
+        batch_installer._batch_state["include_activation"] = True
         item = {
             "id": "step_kms_activate",
             "name": "Activation",
@@ -211,6 +213,31 @@ class HomeDeploymentPolicyTests(unittest.TestCase):
         status = batch_installer.get_batch_status()
         self.assertEqual(status["items"][0]["status"], "completed")
         self.assertIn("Office: active", status["items"][0]["message"])
+
+    def test_non_home_queue_skips_activation_unless_explicitly_opted_in(self):
+        scanned = {"packages_directory": r"H:\PROGRAM", "packages": [regular_package()]}
+        for choice in (False, None, "true", 1):
+            batch_installer._reset_state()
+            with (
+                patch.object(batch_installer, "scan_packages", return_value=scanned),
+                patch.object(batch_installer, "get_windows_identity", return_value=PRO),
+                patch.object(batch_installer, "has_battery", return_value=False),
+                patch.object(batch_installer.threading, "Thread"),
+            ):
+                result = batch_installer.start_batch_install(
+                    package_ids=["chrome"], custom_dir=r"H:\PROGRAM",
+                    include_system_setup=True, include_activation=choice)
+            self.assertTrue(result["success"])
+            self.assertNotIn("kms_activate", [item.get("orchestrator_action") for item in result["items"]])
+
+    def test_worker_rechecks_activation_opt_in_before_execution(self):
+        item = {"id": "kms", "name": "KMS", "status": "queued", "orchestrator_action": "kms_activate"}
+        batch_installer._batch_state.update({"is_running": True, "total": 1, "items": [item.copy()]})
+        with patch.object(orchestrator, "activate_windows_and_office_from_packages") as activate:
+            with patch.object(batch_installer.time, "sleep"):
+                batch_installer._run_batch_install([item], custom_dir=r"H:\PROGRAM")
+        activate.assert_not_called()
+        self.assertEqual(batch_installer._batch_state["items"][0]["status"], "skipped")
 
     def test_direct_office_install_paths_are_blocked_on_home_and_only_make_shortcuts(self):
         scanned = {

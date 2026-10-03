@@ -2201,6 +2201,8 @@ class BatchInstallItem {
 }
 
 class BatchInstallStatus {
+  final bool doubleSpeed;
+  final bool includeActivation;
   final bool isRunning;
   final bool cancelled;
   final int total;
@@ -2215,6 +2217,8 @@ class BatchInstallStatus {
   final String summaryMessage;
 
   BatchInstallStatus({
+    this.doubleSpeed = false,
+    this.includeActivation = false,
     required this.isRunning,
     this.cancelled = false,
     this.total = 0,
@@ -2233,6 +2237,8 @@ class BatchInstallStatus {
 
   factory BatchInstallStatus.fromJson(Map<String, dynamic> json) {
     return BatchInstallStatus(
+      doubleSpeed: json['double_speed'] == true,
+      includeActivation: json['include_activation'] == true,
       isRunning: json['is_running'] as bool? ?? false,
       cancelled: json['cancelled'] as bool? ?? false,
       total: json['total'] as int? ?? 0,
@@ -2378,6 +2384,7 @@ class DriverInstallItem {
 }
 
 class DriverBatchStatus {
+  final bool doubleSpeed;
   final bool isRunning;
   final bool cancelled;
   final int total;
@@ -2393,6 +2400,7 @@ class DriverBatchStatus {
   final List<DriverInstallItem> items;
 
   DriverBatchStatus({
+    this.doubleSpeed = false,
     required this.isRunning,
     this.cancelled = false,
     this.total = 0,
@@ -2412,6 +2420,7 @@ class DriverBatchStatus {
 
   factory DriverBatchStatus.fromJson(Map<String, dynamic> json) {
     return DriverBatchStatus(
+      doubleSpeed: json['double_speed'] == true,
       isRunning: json['is_running'] as bool? ?? false,
       cancelled: json['cancelled'] as bool? ?? false,
       total: json['total'] as int? ?? 0,

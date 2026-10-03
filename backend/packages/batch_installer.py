@@ -21,6 +21,7 @@ from packages.manager import (
     get_packages_directory,
 )
 from windows.device_settings import get_windows_identity, has_battery
+from deployment_scheduler import approved_resources, run_deployment
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +167,7 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
 
     resolved_pkg_dir = custom_dir or get_packages_directory()
 
-    for idx, item_info in enumerate(items_to_run):
+    def run_one(idx, item_info):
         # Check if cancelled
         with _batch_lock:
             if _batch_state["cancelled"]:
@@ -175,12 +176,11 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
                         _batch_state["items"][j]["status"] = "skipped"
                         _batch_state["items"][j]["message"] = "لغو شده توسط کاربر"
                         _batch_state["skipped"] += 1
-                break
+                return
 
             _batch_state["current_item_index"] = idx
             _batch_state["current_item_name"] = _batch_state["items"][idx].get("name", item_info.get("id"))
             _batch_state["items"][idx]["status"] = "installing"
-            _batch_state["progress_percent"] = round((idx / _batch_state["total"]) * 100, 1)
 
         action = item_info.get("orchestrator_action")
         pkg_id = item_info.get("id", "")
@@ -209,7 +209,10 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
                         "exit_code": 0 if res.get("success") else 1,
                     }
             elif action == "kms_activate":
-                if get_windows_identity().get("is_home") is True:
+                if _batch_state.get("include_activation") is not True:
+                    result = {"success": True, "skipped": True, "exit_code": 0,
+                              "message": "مرحلهٔ فعال‌سازی انتخاب نشده است؛ اجرا نشد."}
+                elif get_windows_identity().get("is_home") is True:
                     result = {
                         "success": True,
                         "skipped": True,
@@ -323,11 +326,16 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
                 item["status"] = "failed"
                 _batch_state["failed"] += 1
 
-            _batch_state["progress_percent"] = round(((idx + 1) / _batch_state["total"]) * 100, 1)
+            processed = sum(_batch_state[key] for key in ("completed", "failed", "skipped"))
+            _batch_state["progress_percent"] = round((processed / max(1, _batch_state["total"])) * 100, 1)
 
         if result.get("exit_code") == -2:
             logger.warning(f"[BatchInstall] Item {pkg_id} timed out; continuing with remaining queue items.")
         time.sleep(0.5)
+
+    run_deployment(items_to_run, run_one,
+                   double_speed=_batch_state.get("double_speed", False),
+                   resources_for=lambda item: approved_resources(item, root=resolved_pkg_dir))
 
     # Finalize
     with _batch_lock:
@@ -371,6 +379,8 @@ def start_batch_install(
     package_ids: Optional[List[str]] = None,
     custom_dir: Optional[str] = None,
     include_system_setup: Optional[bool] = None,
+    include_activation: bool = False,
+    double_speed: bool = False,
 ) -> Dict[str, Any]:
     """
     Starts a batch silent installation of software packages and automated system setup.
@@ -532,7 +542,7 @@ def start_batch_install(
             "exit_code": None,
         })
 
-    if include_system_setup and not is_home:
+    if include_system_setup and not is_home and include_activation is True:
         queue_items.append({
             "id": "step_kms_activate",
             "name": "استخراج KMS v6 و فعال‌سازی Windows و Office",
@@ -643,6 +653,8 @@ def start_batch_install(
             return _active_batch_response_locked()
         _reset_state()
         _batch_state["is_running"] = True
+        _batch_state["double_speed"] = double_speed is True
+        _batch_state["include_activation"] = include_activation is True and not is_home
         _batch_state["cancelled"] = False
         _batch_state["total"] = len(queue_items)
         _batch_state["items"] = copy.deepcopy(queue_items)

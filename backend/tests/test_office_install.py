@@ -51,6 +51,7 @@ class TestOfficeAutomation(unittest.TestCase):
             result = start_batch_install(
                 package_ids=["office_2024_pro_plus", "Google Chrome/Setup.msi"],
                 custom_dir=self.temp_dir,
+                include_activation=True,
             )
         self.assertTrue(result.get("success"))
         items = result.get("items", [])

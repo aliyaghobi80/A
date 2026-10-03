@@ -42,8 +42,6 @@ bool FlutterWindow::OnCreate() {
   flutter_controller_->engine()->SetNextFrameCallback([this]() {
     KillTimer(GetHandle(), 1);
     first_frame_rendered_.store(true);
-    display_recovery_pending_.store(false);
-    display_recovery_deadline_ms_.store(0);
     LogStartup("First Flutter frame rendered");
     this->Show();
   });
@@ -59,7 +57,25 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  if (close_requested_.load()) {
+    // Works even when Dart cannot process an exit notification after GPU loss.
+    const auto event_name = L"Local\\MarkaziSystemChecker.Close." +
+                            std::to_wstring(GetCurrentProcessId());
+    HANDLE close_event =
+        OpenEventW(EVENT_MODIFY_STATE, FALSE, event_name.c_str());
+    if (close_event) {
+      SetEvent(close_event);
+      CloseHandle(close_event);
+    }
+    // Engine destruction may itself block on a lost D3D device. Bound only a
+    // committed WM_CLOSE shutdown, never Win32's temporary startup teardown.
+    std::thread([]() {
+      Sleep(8000);
+      TerminateProcess(GetCurrentProcess(), 0);
+    }).detach();
+  }
   KillTimer(GetHandle(), 1);
+  KillTimer(GetHandle(), 2);
   StopDisplayRecoveryWatchdog();
   LogStartup("Window closed");
   // The backend's parent watchdog owns process cleanup. Never kill other
@@ -76,6 +92,31 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == WM_CLOSE) {
+    close_requested_.store(true);
+  }
+  if (message == WM_TIMER && wparam == 2) {
+    KillTimer(hwnd, 2);
+    if (!first_frame_rendered_.load()) {
+      // Preserve the startup callback that makes the window visible.
+      SetTimer(hwnd, 2, 500, nullptr);
+      return 0;
+    }
+    if (flutter_controller_ && display_recovery_pending_.load()) {
+      const auto generation = display_generation_.load();
+      // Probe only AFTER Flutter has processed the display-reset message.
+      // A callback from an older surface must not acknowledge a newer reset.
+      flutter_controller_->engine()->SetNextFrameCallback([this, generation]() {
+        if (display_generation_.load() == generation) {
+          display_recovery_pending_.store(false);
+          display_recovery_deadline_ms_.store(0);
+          LogStartup("New Flutter frame verified after display reset");
+        }
+      });
+      flutter_controller_->ForceRedraw();
+    }
+    return 0;
+  }
   if (message == WM_TIMER && wparam == 1) {
     KillTimer(hwnd, 1);
     LogStartup("No first frame after 30 seconds");
@@ -133,18 +174,13 @@ void FlutterWindow::ArmDisplayRecoveryWatchdog() {
     return;
   }
 
-  display_recovery_deadline_ms_.store(GetTickCount64() +
-                                      kDisplayRecoveryTimeoutMs);
-  display_recovery_pending_.store(true);
-
-  if (first_frame_rendered_.load()) {
-    flutter_controller_->engine()->SetNextFrameCallback([this]() {
-      display_recovery_pending_.store(false);
-      display_recovery_deadline_ms_.store(0);
-      LogStartup("Flutter renderer recovered after display reset");
-    });
+  display_generation_.fetch_add(1);
+  if (!display_recovery_pending_.exchange(true)) {
+    display_recovery_deadline_ms_.store(GetTickCount64() +
+                                        kDisplayRecoveryTimeoutMs);
   }
-  flutter_controller_->ForceRedraw();
+  // Repeated display events must not extend the recovery deadline forever.
+  SetTimer(GetHandle(), 2, 500, nullptr);
 }
 
 void FlutterWindow::StartDisplayRecoveryWatchdog() {

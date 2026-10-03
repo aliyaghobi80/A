@@ -670,6 +670,8 @@ class ApiService {
     List<String>? packageIds,
     String? customDir,
     bool? includeSystemSetup,
+    bool includeActivation = false,
+    bool doubleSpeed = false,
   }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
@@ -679,6 +681,8 @@ class ApiService {
     try {
       final uri = Uri.parse('$baseUrl/api/packages/batch-install');
       final body = <String, dynamic>{};
+      body['include_activation'] = includeActivation;
+      body['double_speed'] = doubleSpeed;
       if (packageIds != null && packageIds.isNotEmpty) {
         body['package_ids'] = packageIds;
       }
@@ -981,6 +985,7 @@ class ApiService {
     List<String>? packageIds,
     String? folderPath,
     bool resume = false,
+    bool doubleSpeed = false,
   }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
@@ -993,6 +998,7 @@ class ApiService {
       if (packageIds != null) bodyMap['package_ids'] = packageIds;
       if (folderPath != null) bodyMap['folder_path'] = folderPath;
       bodyMap['resume'] = resume;
+      bodyMap['double_speed'] = doubleSpeed;
 
       final response = await _client
           .post(

@@ -15,9 +15,9 @@ import sys
 import shutil
 import zipfile
 import subprocess
-import urllib.request
+import json
 
-APP_VERSION = "1.1.35"
+APP_VERSION = "1.1.36"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:
@@ -48,20 +48,23 @@ def step_kill_running_processes():
     print("==================================================")
     print("[0/6] Ensuring No Conflicting Processes Are Running...")
     print("==================================================")
-    for port in [18088, 18080, 18089]:
-        try:
-            req = urllib.request.Request(f"http://127.0.0.1:{port}/api/shutdown", method="GET")
-            with urllib.request.urlopen(req, timeout=1) as resp:
-                pass
-        except Exception:
-            pass
-
-    # Force kill any lingering instances
-    for proc_name in ["backend_server.exe", "MarkaziSystemChecker.exe", "markazi_system_checker.exe"]:
-        try:
-            subprocess.run(["taskkill", "/F", "/IM", proc_name], capture_output=True)
-        except Exception:
-            pass
+    # A build must not terminate customer sessions by image name or port.
+    # Fail with a useful diagnostic if an exact output binary is still open.
+    output_roots = [os.path.normcase(os.path.abspath(FLUTTER_RELEASE_DIR)),
+                    os.path.normcase(os.path.join(ROOT_DIR, "build_backend_out"))]
+    snapshot = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                               "Get-Process | Select-Object Id,Path | ConvertTo-Json -Compress"],
+                              capture_output=True, text=True, timeout=15, check=True)
+    processes = json.loads(snapshot.stdout or "[]")
+    if isinstance(processes, dict):
+        processes = [processes]
+    for process in processes:
+        executable = process.get("Path")
+        if not executable:
+            continue
+        executable = os.path.normcase(os.path.abspath(executable))
+        if any(executable.startswith(root + os.sep) for root in output_roots):
+            raise RuntimeError(f"Close the build-output application first (PID {process['Id']}): {executable}")
 
 def step_freeze_backend():
     print("==================================================")

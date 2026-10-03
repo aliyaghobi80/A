@@ -393,6 +393,46 @@ class SoftwareInstallPage extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                         ),
                       ),
+                      SizedBox(
+                        width: 290,
+                        child: CheckboxListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          value:
+                              softwareCtrl.includeActivation.value &&
+                              softwareCtrl.activationAllowed,
+                          onChanged:
+                              isBatchRunning || !softwareCtrl.activationAllowed
+                              ? null
+                              : (value) =>
+                                    softwareCtrl.includeActivation.value =
+                                        value == true,
+                          title: const Text('اجرای مرحلهٔ KMS (اختیاری)'),
+                          subtitle: Text(
+                            softwareCtrl.activationAllowed
+                                ? 'بدون تیک، مرحلهٔ فعال‌سازی اجرا نمی‌شود.'
+                                : 'برای Windows Home یا وضعیت نامشخص غیرفعال است.',
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 290,
+                        child: CheckboxListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          value: softwareCtrl.doubleSpeed.value,
+                          onChanged: isBatchRunning
+                              ? null
+                              : (value) => softwareCtrl.doubleSpeed.value =
+                                    value == true,
+                          title: const Text('2X — حداکثر دو نصب هم‌زمان'),
+                          subtitle: const Text(
+                            'فقط بسته‌های دارای پروفایل سازگاری؛ سایر موارد نوبتی. تغییر برای صف بعدی است.',
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),

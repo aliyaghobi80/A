@@ -85,6 +85,7 @@ def build_backend(output_dir: str = None):
         "-m", "PyInstaller",
         "--name=backend_server",
         "--onedir",
+        "--noupx",
         "--noconsole",
         "--noconfirm",
         "--clean",

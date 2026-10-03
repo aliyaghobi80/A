@@ -23,6 +23,7 @@ class DriverInstallController extends GetxController {
   final RxString driverFolder = ''.obs;
   final RxBool isScanning = false.obs;
   final RxBool isBatchInstalling = false.obs;
+  final RxBool doubleSpeed = false.obs;
   final Rx<DriverBatchStatus> batchStatus = DriverBatchStatus.empty().obs;
   final Rx<DriverScanResult> scanResult = DriverScanResult.empty().obs;
   final RxSet<String> selectedPackageIds = <String>{}.obs;
@@ -84,6 +85,7 @@ class DriverInstallController extends GetxController {
         batchStatus.value = status;
       }
       if (status.isRunning) {
+        doubleSpeed.value = status.doubleSpeed;
         isBatchInstalling.value = true;
         if (status.folderPath.isNotEmpty) {
           driverFolder.value = status.folderPath;
@@ -533,6 +535,7 @@ class DriverInstallController extends GetxController {
         packageIds: packageIds,
         folderPath: driverFolder.value,
         resume: resume,
+        doubleSpeed: doubleSpeed.value,
       );
 
       if (res['success'] == true) {

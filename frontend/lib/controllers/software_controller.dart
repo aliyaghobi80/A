@@ -70,6 +70,17 @@ class SoftwareController extends GetxController {
 
   // Batch auto-install state
   final RxBool isBatchInstalling = false.obs;
+  // Deliberately session-only: activation never carries over to another device.
+  final RxBool includeActivation = false.obs;
+  final RxBool doubleSpeed = false.obs;
+  bool get activationAllowed =>
+      Get.isRegistered<SystemInfoController>() &&
+      Get.find<SystemInfoController>()
+              .systemInfo
+              .value
+              ?.windows
+              .isHomeEdition ==
+          false;
   final Rx<BatchInstallStatus> batchStatus = BatchInstallStatus.empty().obs;
   final RxSet<String> selectedPackageIds = <String>{}.obs;
 
@@ -340,8 +351,8 @@ class SoftwareController extends GetxController {
                 it.relativePath == pkg.relativePath) ||
             it.name.toLowerCase() == pkg.name.toLowerCase(),
       );
-      if (currentItem != null && currentItem.status == 'installing') {
-        return true;
+      if (currentItem != null) {
+        return currentItem.status == 'installing';
       }
       final currentName =
           batchStatus.value.currentItemName?.toLowerCase() ?? '';
@@ -1268,6 +1279,14 @@ class SoftwareController extends GetxController {
       batchStatus.value = status;
     }
     isBatchInstalling.value = status.isRunning;
+    if (status.isRunning) {
+      doubleSpeed.value = status.doubleSpeed;
+      includeActivation.value = status.includeActivation;
+    } else {
+      // Activation consent is one-shot. A later deployment requires the
+      // technician to explicitly tick KMS again.
+      includeActivation.value = false;
+    }
     if (status.isRunning && startPolling && _batchPollTimer?.isActive != true) {
       _startBatchStatusPolling(null);
     }
@@ -1499,7 +1518,7 @@ class SoftwareController extends GetxController {
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        'ابتدا پیش‌نیازها (اکسترکت آفیس، فعال‌سازی ویندوز، آیکون‌های دسکتاپ) انجام شده و پس از نصب نرم‌افزارها، تنظیمات مهم سیستم (Sleep، باتری، ساعت و...) به صورت خودکار اعمال می‌شوند.',
+                        'نرم‌افزارها و سپس تنظیمات دستگاه اجرا می‌شوند. فعال‌سازی فقط با انتخاب صریح گزینهٔ KMS و روی ویندوز غیر Home انجام می‌شود.',
                         style: TextStyle(
                           fontSize: 12,
                           color: Color(0xFF3B82F6),
@@ -1540,6 +1559,8 @@ class SoftwareController extends GetxController {
           packageIds: availablePackages.map((p) => p.id).toList(),
           customDir: packagesDirectory.isNotEmpty ? packagesDirectory : null,
           includeSystemSetup: true,
+          includeActivation: includeActivation.value && activationAllowed,
+          doubleSpeed: doubleSpeed.value,
         );
         if (res['success'] == true) {
           final adoptedExisting = res['already_running'] == true;

@@ -413,6 +413,7 @@ def start_intelligent_driver_install(
     package_ids: Optional[List[str]] = None,
     custom_dir: Optional[str] = None,
     resume: bool = False,
+    double_speed: bool = False,
 ) -> Dict[str, Any]:
     """
     Kicks off the intelligent driver installation sequence.
@@ -422,7 +423,7 @@ def start_intelligent_driver_install(
     global _cached_packages_map
     
     if resume:
-        return start_driver_queue([], resume=True)
+        return start_driver_queue([], resume=True, double_speed=double_speed)
         
     scan = intelligent_scan_drivers(custom_dir)
     if not scan.get("success") or not scan.get("packages"):
@@ -441,7 +442,7 @@ def start_intelligent_driver_install(
             "message": "هیچ بسته درایور معتبری برای نصب یافت نشد.",
         }
 
-    return start_driver_queue(target_pkgs)
+    return start_driver_queue(target_pkgs, double_speed=double_speed)
 
 
 def launch_interactive_driver_installer(package_id: str, custom_dir: Optional[str] = None) -> Dict[str, Any]:

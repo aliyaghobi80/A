@@ -44,7 +44,11 @@ class FlutterWindow : public Win32Window {
   std::atomic<bool> display_recovery_pending_{false};
   std::atomic<bool> recovery_relaunch_started_{false};
   std::atomic<unsigned long long> display_recovery_deadline_ms_{0};
+  std::atomic<unsigned long long> display_generation_{0};
   std::atomic<bool> recovery_watchdog_stop_{false};
+  // Win32Window can destroy/recreate a temporary HWND while the Flutter host
+  // is being initialized. Only WM_CLOSE marks an actual user/app exit.
+  std::atomic<bool> close_requested_{false};
   std::thread recovery_watchdog_thread_;
 };
 

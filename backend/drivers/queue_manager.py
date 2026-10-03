@@ -28,6 +28,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from deployment_scheduler import approved_resources, run_deployment
 from typing import Dict, Any, List, Optional, Tuple
 
 from utils.powershell import run_powershell_json, get_hidden_subprocess_kwargs
@@ -218,7 +219,7 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
     method = pkg.get("install_method", "setup_exe")
     installer_path = pkg.get("installer_path") or pkg.get("installer_file") or pkg.get("source_path")
     pkg_name = pkg.get("display_name", "Driver Package")
-    silent_args = pkg.get("silent_args", ["/s", "/norestart"])
+    silent_args = pkg.get("silent_args", [])
     category = pkg.get("category", "other")
     fingerprint = pkg.get("fingerprint", "")
     version = pkg.get("driver_version", "")
@@ -362,22 +363,22 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
     try:
         problems_before = set(_query_problematic_devices())
 
-        for idx, pkg in enumerate(packages):
+        def run_one(idx, pkg):
+            nonlocal any_reboot, current_index, current_previous_status
             previous_status = "pending"
             with _queue_lock:
                 if _queue_state["cancelled"]:
                     _log_driver_event("Installation queue was cancelled by user.")
-                    break
+                    return
                 if (
                     idx < len(_queue_state["items"])
                     and _queue_state["items"][idx].get("status") == "completed"
                 ):
-                    continue
+                    return
 
                 current_index = idx
                 _queue_state["current_index"] = idx
                 _queue_state["current_package"] = pkg.get("display_name")
-                _queue_state["progress_percent"] = round((idx / max(total, 1)) * 100.0, 1)
                 _queue_state["last_update_time"] = time.time()
                 if idx < len(_queue_state["items"]):
                     previous_status = _queue_state["items"][idx].get("status", "pending")
@@ -385,10 +386,15 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
                     _queue_state["items"][idx]["status"] = "installing"
                     _queue_state["items"][idx]["message"] = "در حال نصب..."
 
-            res = _install_single_package(pkg)
-            any_reboot = any_reboot or bool(res.get("reboot_required"))
+            install_error = None
+            try:
+                res = _install_single_package(pkg)
+            except Exception as exc:
+                install_error = exc
+                res = {"success": False, "exit_code": -5, "message": f"{type(exc).__name__}: {exc}"}
 
             with _queue_lock:
+                any_reboot = any_reboot or bool(res.get("reboot_required"))
                 if idx < len(_queue_state["items"]):
                     item = _queue_state["items"][idx]
                     # Resume retries replace the earlier result instead of
@@ -411,16 +417,23 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
 
                 _queue_state["reboot_required"] = any_reboot
                 _queue_state["progress_percent"] = round(
-                    ((idx + 1) / max(total, 1)) * 100.0, 1
+                    ((_queue_state["completed"] + _queue_state["failed"] +
+                      _queue_state.get("skipped", 0)) / max(total, 1)) * 100.0, 1
                 )
                 _queue_state["last_update_time"] = time.time()
 
+            if install_error is not None:
+                raise install_error
             if res.get("exit_code") == -2:
                 _log_driver_event(
                     f"Driver package {pkg.get('display_name')} timed out (-2); "
                     "continuing with remaining queue items."
                 )
             time.sleep(1.0)
+
+        run_deployment(packages, run_one,
+                       double_speed=_queue_state.get("double_speed", False),
+                       resources_for=lambda pkg: approved_resources(pkg, driver=True))
 
         try:
             problems_after = set(_query_problematic_devices())
@@ -498,7 +511,8 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
 
 _last_packages = []
 
-def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False) -> Dict[str, Any]:
+def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
+                       double_speed: bool = False) -> Dict[str, Any]:
     """Starts the sequential installation queue for selected packages, with resume support."""
     global _queue_thread, _queue_state, _last_packages
 
@@ -559,6 +573,8 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False) -> 
                 ],
             }
 
+    with _queue_lock:
+        _queue_state["double_speed"] = double_speed is True
     _queue_thread = threading.Thread(
         target=_run_queue_thread,
         args=(sorted_pkgs,),

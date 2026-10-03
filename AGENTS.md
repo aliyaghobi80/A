@@ -37,7 +37,10 @@ Use fixtures and mocked process runners for every state-changing workflow.
 - Treat the selected driver directory as the repository for the current device,
   but show matching information as guidance rather than silently dropping OEM
   components.
-- Queue packages sequentially and expose every queue item's live state.
+- Queue packages sequentially by default and expose every queue item's live state.
+  Optional 2X is bounded to two hash-pinned, reviewed profiles with disjoint
+  resources. Unknown packages, MSI, core drivers and orchestration are barriers.
+  Do not claim untested profiles safe or enable concurrency based on filenames.
 - Queue workers must clear `is_running` in a `finally` path. A dead worker must
   be detected and repaired by the status endpoint so controls never remain
   locked indefinitely.
@@ -105,6 +108,9 @@ Use fixtures and mocked process runners for every state-changing workflow.
   for Office) over redirected menu input. Verify success through official
   license probes, not the script exit code, and remove only the generated
   activation log after verification.
+- Batch activation requires explicit `include_activation: true`, defaults off,
+  and is rechecked by the worker. Home still forbids it even with opt-in.
+  API contract 3 is required so an old backend cannot ignore this opt-out.
 - Desktop icons may only be enabled after consolidated Windows activation has
   been confirmed.
 - Removable USB media is never listed as an internal disk. Internal capacity

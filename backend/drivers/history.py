@@ -13,9 +13,20 @@ import json
 import logging
 import os
 import time
+import threading
+from functools import wraps
 from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
+_history_lock = threading.RLock()
+
+
+def _serialized(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with _history_lock:
+            return function(*args, **kwargs)
+    return wrapped
 
 HISTORY_FILE = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "data", "driver_install_history.json")
@@ -32,6 +43,7 @@ def _ensure_history_file() -> None:
             logger.error(f"Error creating driver history file: {e}")
 
 
+@_serialized
 def load_driver_history() -> List[Dict[str, Any]]:
     """Loads all historical installation records."""
     _ensure_history_file()
@@ -45,6 +57,7 @@ def load_driver_history() -> List[Dict[str, Any]]:
     return []
 
 
+@_serialized
 def record_driver_installation(
     fingerprint: str,
     category: str,
@@ -81,8 +94,10 @@ def record_driver_installation(
         history = history[-200:]
 
     try:
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        temporary = HISTORY_FILE + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2, ensure_ascii=False)
+        os.replace(temporary, HISTORY_FILE)
         logger.info(f"[DriverHistory] Recorded {result} for {package_name} ({fingerprint})")
     except Exception as e:
         logger.error(f"Error writing driver history file: {e}")
