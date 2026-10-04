@@ -7,6 +7,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import '../../theme/app_theme.dart';
 import '../common/design_components.dart';
+import '../common/instant_option_tile.dart';
 
 class DriverInstallPage extends StatefulWidget {
   const DriverInstallPage({super.key});
@@ -440,16 +441,12 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
               // Advanced Mode Toggle
               SizedBox(
                 width: 290,
-                child: CheckboxListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  value: ctrl.doubleSpeed.value,
-                  onChanged: isBatchRunning
-                      ? null
-                      : (value) => ctrl.doubleSpeed.value = value == true,
-                  title: const Text('2X'),
-                  subtitle: const Text('دو نصب سازگار هم‌زمان'),
+                child: InstantOptionTile(
+                  value: ctrl.doubleSpeed,
+                  enabled: !isBatchRunning,
+                  title: '2X',
+                  subtitle: 'دو نصب سازگار هم‌زمان',
+                  semanticLabel: 'حالت نصب دو برابر درایورها',
                 ),
               ),
               OutlinedButton.icon(

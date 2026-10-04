@@ -9,6 +9,7 @@ import '../../models/system_info.dart';
 import '../../theme/app_theme.dart';
 import '../common/design_components.dart';
 import '../common/deployment_flow_panel.dart';
+import '../common/instant_option_tile.dart';
 
 class SoftwareInstallPage extends StatelessWidget {
   const SoftwareInstallPage({super.key});
@@ -395,40 +396,25 @@ class SoftwareInstallPage extends StatelessWidget {
                       ),
                       SizedBox(
                         width: 290,
-                        child: CheckboxListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          value:
-                              softwareCtrl.includeActivation.value &&
-                              softwareCtrl.activationAllowed,
-                          onChanged:
-                              isBatchRunning || !softwareCtrl.activationAllowed
-                              ? null
-                              : (value) =>
-                                    softwareCtrl.includeActivation.value =
-                                        value == true,
-                          title: const Text('KMS'),
-                          subtitle: Text(
-                            softwareCtrl.activationAllowed
-                                ? 'فعال‌سازی اختیاری'
-                                : 'برای Windows Home غیرفعال است',
-                          ),
+                        child: InstantOptionTile(
+                          value: softwareCtrl.includeActivation,
+                          enabled:
+                              !isBatchRunning && softwareCtrl.activationAllowed,
+                          title: 'KMS',
+                          subtitle: softwareCtrl.activationAllowed
+                              ? 'فعال‌سازی اختیاری'
+                              : 'برای Windows Home غیرفعال است',
+                          semanticLabel: 'فعال‌سازی اختیاری KMS',
                         ),
                       ),
                       SizedBox(
                         width: 290,
-                        child: CheckboxListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          value: softwareCtrl.doubleSpeed.value,
-                          onChanged: isBatchRunning
-                              ? null
-                              : (value) => softwareCtrl.doubleSpeed.value =
-                                    value == true,
-                          title: const Text('2X'),
-                          subtitle: const Text('دو نصب سازگار هم‌زمان'),
+                        child: InstantOptionTile(
+                          value: softwareCtrl.doubleSpeed,
+                          enabled: !isBatchRunning,
+                          title: '2X',
+                          subtitle: 'دو نصب سازگار هم‌زمان',
+                          semanticLabel: 'حالت نصب دو برابر',
                         ),
                       ),
                     ],

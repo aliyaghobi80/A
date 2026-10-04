@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import '../common/design_components.dart';
+import '../common/copyable_value.dart';
 import '../common/hardware_illustrations.dart';
 import 'card_wrapper.dart';
 import 'info_row.dart';
@@ -69,35 +71,58 @@ class MotherboardCard extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Model Highlight
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(
-                color: brandColor.withValues(alpha: isDark ? 0.35 : 0.25),
+          CopyableValue(
+            tooltip: l10n.isPersian
+                ? 'کپی مدل مادربرد'
+                : 'Copy motherboard model',
+            onCopy: () {
+              Clipboard.setData(
+                ClipboardData(text: motherboard.fullDisplayName),
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '${l10n.copiedToClipboard}: ${motherboard.fullDisplayName}',
+                  ),
+                  duration: const Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF0F172A)
+                    : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: brandColor.withValues(alpha: isDark ? 0.35 : 0.25),
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Directionality(
-                    textDirection: TextDirection.ltr,
-                    child: Text(
-                      motherboard.fullDisplayName,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                        color: isDark
-                            ? const Color(0xFFF8FAFC)
-                            : const Color(0xFF0F172A),
-                        letterSpacing: -0.2,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Text(
+                        motherboard.fullDisplayName,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: isDark
+                              ? const Color(0xFFF8FAFC)
+                              : const Color(0xFF0F172A),
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Icon(Icons.copy_rounded, size: 15, color: brandColor),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 12),

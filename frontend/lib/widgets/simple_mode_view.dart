@@ -8,6 +8,7 @@ import '../l10n/app_localizations.dart';
 import '../models/system_info.dart';
 import 'cards/battery_card.dart';
 import 'common/design_components.dart';
+import 'common/copyable_value.dart';
 import 'common/deployment_flow_panel.dart';
 import 'common/hardware_illustrations.dart';
 import 'common/ram_slot_summary.dart';
@@ -260,6 +261,7 @@ class SimpleModeView extends StatelessWidget {
               copyValue: mb.fullDisplayName.isNotEmpty
                   ? mb.fullDisplayName
                   : mb.model,
+              tapPrimaryToCopy: true,
               onCopy: (val) => systemCtrl.copyToClipboard(
                 context,
                 val,
@@ -2663,6 +2665,7 @@ class SimpleModeView extends StatelessWidget {
     Widget? headerTrailing,
     Widget? actionWidget,
     String? copyValue,
+    bool tapPrimaryToCopy = false,
     required ValueChanged<String> onCopy,
   }) {
     final theme = Theme.of(context);
@@ -2780,21 +2783,57 @@ class SimpleModeView extends StatelessWidget {
                     if (customContent != null)
                       customContent
                     else ...[
-                      Directionality(
-                        textDirection: TextDirection.ltr,
-                        child: Text(
-                          primaryValue,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: isDark
-                                ? const Color(0xFFF8FAFC)
-                                : const Color(0xFF0F172A),
-                            letterSpacing: -0.4,
-                            height: 1.2,
+                      if (tapPrimaryToCopy &&
+                          copyValue != null &&
+                          copyValue.isNotEmpty)
+                        CopyableValue(
+                          tooltip: l10n.copy,
+                          onCopy: () => onCopy(copyValue),
+                          child: Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    primaryValue,
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      color: isDark
+                                          ? const Color(0xFFF8FAFC)
+                                          : const Color(0xFF0F172A),
+                                      letterSpacing: -0.4,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(
+                                  Icons.copy_rounded,
+                                  size: 15,
+                                  color: accentColor,
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            primaryValue,
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: isDark
+                                  ? const Color(0xFFF8FAFC)
+                                  : const Color(0xFF0F172A),
+                              letterSpacing: -0.4,
+                              height: 1.2,
+                            ),
                           ),
                         ),
-                      ),
                       if (secondaryValue != null &&
                           secondaryValue.isNotEmpty) ...[
                         const SizedBox(height: 6),

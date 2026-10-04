@@ -6,6 +6,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/system_info.dart';
 import '../../theme/app_theme.dart';
 import '../common/design_components.dart';
+import '../common/copyable_value.dart';
 
 class SystemSpecsPage extends StatefulWidget {
   final SystemInfo info;
@@ -717,20 +718,41 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Directionality(
-                      textDirection: TextDirection.ltr,
-                      child: Text(
+                    CopyableValue(
+                      tooltip: 'کپی مدل مادربرد',
+                      onCopy: () => systemCtrl.copyToClipboard(
+                        context,
                         mb.fullDisplayName,
-                        style: TextStyle(
-                          fontSize: isCompact ? 16.5 : 18.5,
-                          fontWeight: FontWeight.w800,
-                          color: isDark
-                              ? AppTheme.darkTextPrimary
-                              : AppTheme.lightTextPrimary,
-                          letterSpacing: -0.3,
+                        'مدل مادربرد کپی شد: ${mb.fullDisplayName}',
+                      ),
+                      child: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                mb.fullDisplayName,
+                                style: TextStyle(
+                                  fontSize: isCompact ? 16.5 : 18.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark
+                                      ? AppTheme.darkTextPrimary
+                                      : AppTheme.lightTextPrimary,
+                                  letterSpacing: -0.3,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.copy_rounded,
+                              size: 15,
+                              color: brandColor,
+                            ),
+                          ],
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (mb.effectiveChipset.isNotEmpty ||
