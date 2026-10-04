@@ -448,10 +448,8 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                   onChanged: isBatchRunning
                       ? null
                       : (value) => ctrl.doubleSpeed.value = value == true,
-                  title: const Text('2X — حداکثر دو نصب هم‌زمان'),
-                  subtitle: const Text(
-                    'فقط پروفایل‌های تأییدشده؛ گرافیک و MSI نوبتی‌اند. MSI خارجی صف را منتظر می‌گذارد؛ EXE دستی را بعد از صف اجرا کنید.',
-                  ),
+                  title: const Text('2X'),
+                  subtitle: const Text('دو نصب سازگار هم‌زمان'),
                 ),
               ),
               OutlinedButton.icon(

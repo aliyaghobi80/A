@@ -408,11 +408,11 @@ class SoftwareInstallPage extends StatelessWidget {
                               : (value) =>
                                     softwareCtrl.includeActivation.value =
                                         value == true,
-                          title: const Text('اجرای مرحلهٔ KMS (اختیاری)'),
+                          title: const Text('KMS'),
                           subtitle: Text(
                             softwareCtrl.activationAllowed
-                                ? 'بدون تیک، مرحلهٔ فعال‌سازی اجرا نمی‌شود.'
-                                : 'برای Windows Home یا وضعیت نامشخص غیرفعال است.',
+                                ? 'فعال‌سازی اختیاری'
+                                : 'برای Windows Home غیرفعال است',
                           ),
                         ),
                       ),
@@ -427,10 +427,8 @@ class SoftwareInstallPage extends StatelessWidget {
                               ? null
                               : (value) => softwareCtrl.doubleSpeed.value =
                                     value == true,
-                          title: const Text('2X — حداکثر دو نصب هم‌زمان'),
-                          subtitle: const Text(
-                            'فقط پروفایل‌های تأییدشده؛ MSI خارجی باعث انتظار صف می‌شود. نصاب EXE دستی بیرون از برنامه قابل تضمین نیست و بهتر است بعد از صف اجرا شود.',
-                          ),
+                          title: const Text('2X'),
+                          subtitle: const Text('دو نصب سازگار هم‌زمان'),
                         ),
                       ),
                     ],

@@ -104,6 +104,36 @@ void main() {
   );
 
   test(
+    'idle refresh preserves KMS choice and queue completion clears it',
+    () async {
+      final api = _FakeBatchApiService(BatchInstallStatus.empty());
+      final controller = SoftwareController(apiService: api);
+      controller.includeActivation.value = true;
+
+      await controller.synchronizeBatchInstallState(startPolling: false);
+      expect(controller.includeActivation.value, isTrue);
+
+      api.status = BatchInstallStatus.fromJson({
+        'is_running': true,
+        'include_activation': true,
+        'double_speed': true,
+        'total': 1,
+        'items': [
+          {'id': 'fixture', 'name': 'Fixture', 'status': 'installing'},
+        ],
+      });
+      await controller.synchronizeBatchInstallState(startPolling: false);
+      expect(controller.includeActivation.value, isTrue);
+      expect(controller.doubleSpeed.value, isTrue);
+
+      api.status = BatchInstallStatus.empty();
+      await controller.synchronizeBatchInstallState(startPolling: false);
+      expect(controller.includeActivation.value, isFalse);
+      expect(controller.doubleSpeed.value, isTrue);
+    },
+  );
+
+  test(
     'failed package refresh preserves list and technician selection',
     () async {
       final controller = SoftwareController(

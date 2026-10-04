@@ -12,7 +12,11 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
 namespace {
-constexpr unsigned long long kDisplayRecoveryTimeoutMs = 20000;
+// A display-driver replacement can leave ANGLE/D3D permanently wedged while
+// the backend queue continues normally. Eight seconds is long enough for the
+// ordinary Windows display reset, but short enough that the technician does
+// not mistake a dead renderer for a frozen deployment.
+constexpr unsigned long long kDisplayRecoveryTimeoutMs = 8000;
 }
 
 FlutterWindow::~FlutterWindow() {
@@ -133,6 +137,10 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   // still replace the UI process.
   if (message == WM_DISPLAYCHANGE) {
     LogStartup("Windows display reset detected; arming renderer recovery");
+    ArmDisplayRecoveryWatchdog();
+  }
+  if (message == WM_DWMCOMPOSITIONCHANGED) {
+    LogStartup("DWM composition reset detected; arming renderer recovery");
     ArmDisplayRecoveryWatchdog();
   }
 

@@ -9,6 +9,7 @@ import '../services/cache_service.dart';
 import '../services/folder_picker_service.dart';
 import 'system_info_controller.dart';
 import 'device_settings_controller.dart';
+import 'deployment_preferences.dart';
 import 'qc_controller.dart';
 
 bool officeInstallBlockedForWindows(
@@ -70,9 +71,9 @@ class SoftwareController extends GetxController {
 
   // Batch auto-install state
   final RxBool isBatchInstalling = false.obs;
-  // Deliberately session-only: activation never carries over to another device.
-  final RxBool includeActivation = false.obs;
-  final RxBool doubleSpeed = false.obs;
+  final DeploymentPreferences deploymentPreferences = DeploymentPreferences();
+  RxBool get includeActivation => deploymentPreferences.includeActivation;
+  RxBool get doubleSpeed => deploymentPreferences.doubleSpeed;
   bool get activationAllowed =>
       Get.isRegistered<SystemInfoController>() &&
       Get.find<SystemInfoController>()
@@ -1279,14 +1280,7 @@ class SoftwareController extends GetxController {
       batchStatus.value = status;
     }
     isBatchInstalling.value = status.isRunning;
-    if (status.isRunning) {
-      doubleSpeed.value = status.doubleSpeed;
-      includeActivation.value = status.includeActivation;
-    } else {
-      // Activation consent is one-shot. A later deployment requires the
-      // technician to explicitly tick KMS again.
-      includeActivation.value = false;
-    }
+    deploymentPreferences.reconcileQueue(status);
     if (status.isRunning && startPolling && _batchPollTimer?.isActive != true) {
       _startBatchStatusPolling(null);
     }
