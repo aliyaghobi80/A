@@ -41,9 +41,11 @@ class DeviceActionSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             exe = Path(temp_dir) / "Wub_x64.exe"
             exe.write_bytes(b"MZ")
-            with patch.object(manager, "get_windows_identity", return_value={"is_home": False, "label": "Windows 11 Pro"}), patch.object(manager, "_run_elevated_and_wait", return_value=0) as runner, patch.object(manager, "_windows_update_service_status", return_value={"disabled": True}):
+            with patch.object(manager, "get_windows_identity", return_value={"is_home": False, "label": "Windows 11 Pro"}), patch.object(manager, "_run_elevated_and_wait", return_value=0) as runner, patch.object(manager, "_windows_update_service_status", return_value={"disabled": True}), patch.object(manager, "_open_windows_update_blocker", return_value=True) as opener:
                 result = manager._disable_windows_update_with_wub(self._wub_package(str(exe)), automatic=True)
             self.assertTrue(result["success"])
+            self.assertTrue(result["opened_for_pin"])
+            opener.assert_called_once_with(str(exe))
             command = runner.call_args.args[0]
             self.assertEqual(command[1:], ["/D", "/P"])
             self.assertNotIn("restart", " ".join(command).lower())
@@ -135,6 +137,31 @@ class DeviceActionSafetyTests(unittest.TestCase):
             result = batch_installer.start_batch_install(package_ids=["app"])
         self.assertTrue(result["success"])
         self.assertEqual([item["id"] for item in result["items"]], ["app", "wub"])
+
+    def test_full_deployment_finishes_settings_then_opens_windows_security(self):
+        app = {
+            "id": "app", "relative_path": "App/setup.exe", "filename": "setup.exe",
+            "name": "App", "is_valid": True, "auto_install_supported": True,
+            "install_allowed": True, "is_installed": False, "installer_type": "inno",
+        }
+        wub = {
+            "id": "wub", "relative_path": "Tools/Wub_x64.exe", "filename": "Wub_x64.exe",
+            "name": "Windows Update Blocker", "is_valid": True,
+            "auto_install_supported": False, "install_allowed": False,
+            "is_installed": True, "installer_type": "portable_tool",
+        }
+        batch_installer._reset_state()
+        self.addCleanup(batch_installer._reset_state)
+        with patch.object(batch_installer, "scan_packages", return_value={"directory_exists": True, "packages": [app, wub]}), patch.object(batch_installer, "get_windows_identity", return_value={"is_home": False, "generation": "Windows 11", "label": "Windows 11 Pro"}), patch.object(batch_installer, "has_battery", return_value=False), patch.object(batch_installer.threading, "Thread"):
+            result = batch_installer.start_batch_install(
+                package_ids=["app"],
+                include_system_setup=True,
+            )
+
+        actions = [item.get("orchestrator_action") for item in result["items"]]
+        self.assertEqual(actions[-1], "windows_security")
+        self.assertLess(actions.index("sleep_never"), actions.index("windows_security"))
+        self.assertLess(actions.index("startup_apps"), actions.index("windows_security"))
 
 
 if __name__ == "__main__":

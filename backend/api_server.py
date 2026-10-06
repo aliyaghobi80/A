@@ -178,7 +178,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.40",
+                "version": "1.1.41",
                 "phase": 4,
                 "api_contract_version": 3,
             }
@@ -653,14 +653,24 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                 logger.info("Applying all essential device settings and desktop icons...")
                 icons_res = apply_desktop_icons()
                 settings_res = apply_essential_device_settings()
-                any_ok = icons_res.get("success", False) or settings_res.get("success", False)
-                all_ok = icons_res.get("success", False) and settings_res.get("all_success", False)
+                security_res = pin_windows_security()
+                any_ok = (
+                    icons_res.get("success", False)
+                    or settings_res.get("success", False)
+                    or security_res.get("success", False)
+                )
+                all_ok = (
+                    icons_res.get("success", False)
+                    and settings_res.get("all_success", False)
+                    and security_res.get("success", False)
+                )
                 msg = "تمام تنظیمات مهم دستگاه و آیکن‌های دسکتاپ با موفقیت اعمال شدند." if all_ok else "تنظیمات مهم دستگاه (خاموشی صفحه، Sleep و...) با موفقیت اعمال شدند."
                 resp = {
                     "success": any_ok,
                     "all_ok": all_ok,
                     "desktop_icons": icons_res,
                     "settings": settings_res,
+                    "windows_security": security_res,
                     "message": msg,
                 }
             except Exception as e:

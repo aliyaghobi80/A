@@ -289,6 +289,17 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
                     "message": res.get("message", "برنامه‌های پس‌زمینه بهینه‌سازی شدند."),
                     "exit_code": 0,
                 }
+            elif action == "windows_security":
+                from windows.device_settings import pin_windows_security
+                res = pin_windows_security()
+                result = {
+                    "success": res.get("success", False),
+                    "message": res.get(
+                        "message",
+                        "Windows Security برای بررسی و Pin به Taskbar باز شد.",
+                    ),
+                    "exit_code": 0 if res.get("success") else 1,
+                }
             else:
                 # Regular Software Package Installer
                 is_office = _is_microsoft_office_package(item_info)
@@ -668,6 +679,22 @@ def start_batch_install(
                 "installed_version": "",
                 "exit_code": None,
             })
+
+        # Keep this as the final setup barrier. It opens Defender only after
+        # every installation and machine setting has finished, so the
+        # technician can inspect it and pin it without interrupting the queue.
+        queue_items.append({
+            "id": "step_windows_security",
+            "name": "باز کردن Windows Security برای بررسی و Pin",
+            "filename": "Windows Security",
+            "relative_path": "",
+            "installer_type": "orchestrator",
+            "orchestrator_action": "windows_security",
+            "status": "queued",
+            "message": "",
+            "installed_version": "",
+            "exit_code": None,
+        })
 
     if not queue_items:
         return {

@@ -652,6 +652,30 @@ if defined Unattend goto :DoActivate
         )
         extractor.assert_called_once()
 
+    def test_kms_archive_atomically_replaces_canonical_kms_v6_folder(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            old_folder = Path(temp_dir) / "KMS v6"
+            old_folder.mkdir()
+            (old_folder / "WINDOWS.cmd").write_text("old", encoding="ascii")
+            (old_folder / "stale.txt").write_text("stale", encoding="ascii")
+            archive = Path(temp_dir) / "KMS V6.zip"
+            import zipfile
+
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("KMS v6/WINDOWS.cmd", "new")
+                bundle.writestr("KMS v6/OFFICE.cmd", "new office")
+
+            with patch.object(orchestrator, "get_windows_identity", return_value=PRO):
+                result = orchestrator.extract_kms_archive(temp_dir)
+
+            canonical = Path(temp_dir) / "KMS v6"
+            self.assertTrue(result["success"])
+            self.assertTrue(result["replaced_existing"])
+            self.assertEqual(Path(result["extract_dir"]), canonical)
+            self.assertEqual((canonical / "WINDOWS.cmd").read_text(encoding="ascii"), "new")
+            self.assertFalse((canonical / "stale.txt").exists())
+            self.assertFalse(list(Path(temp_dir).glob("KMS v6.markazi_backup_*")))
+
 
 if __name__ == "__main__":
     unittest.main()

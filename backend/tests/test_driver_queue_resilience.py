@@ -103,6 +103,20 @@ class DriverQueueResilienceTests(unittest.TestCase):
         self.assertEqual(status["items"][0]["status"], "failed")
         self.assertEqual(status["fatal_error"], "worker_thread_stopped")
 
+    def test_duplicate_start_adopts_existing_queue_snapshot(self):
+        state = self._running_state()
+        with queue_manager._queue_lock:
+            queue_manager._queue_state = state
+
+        result = queue_manager.start_driver_queue(
+            [{"package_id": "different", "display_name": "Different"}],
+        )
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["already_running"])
+        self.assertTrue(result["status"]["is_running"])
+        self.assertEqual(result["status"]["items"][0]["package_id"], "gpu-1")
+
     def test_driver_log_uses_local_app_data_when_available(self):
         path = queue_manager._resolve_driver_log_file(r"C:\Users\Tech\AppData\Local")
         self.assertEqual(

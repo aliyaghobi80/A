@@ -26,6 +26,15 @@ class _FailingPackagesApiService extends ApiService {
   }
 }
 
+class _FakeDriverApiService extends ApiService {
+  DriverBatchStatus status;
+
+  _FakeDriverApiService(this.status);
+
+  @override
+  Future<DriverBatchStatus> getDriverBatchStatus() async => status;
+}
+
 void main() {
   test('seventh sidebar destination opens application settings', () {
     final controller = ThemeLanguageController();
@@ -128,8 +137,41 @@ void main() {
 
       api.status = BatchInstallStatus.empty();
       await controller.synchronizeBatchInstallState(startPolling: false);
+      expect(controller.includeActivation.value, isTrue);
+      expect(controller.isBatchInstalling.value, isTrue);
+
+      await controller.synchronizeBatchInstallState(startPolling: false);
       expect(controller.includeActivation.value, isFalse);
       expect(controller.doubleSpeed.value, isTrue);
+    },
+  );
+
+  test(
+    'driver controller ignores one transient empty queue snapshot',
+    () async {
+      final api = _FakeDriverApiService(
+        DriverBatchStatus.fromJson({
+          'is_running': true,
+          'double_speed': true,
+          'total': 2,
+          'completed': 0,
+          'items': [
+            {
+              'package_id': 'chipset',
+              'display_name': 'Chipset',
+              'status': 'installing',
+            },
+          ],
+        }),
+      );
+      final controller = DriverInstallController(apiService: api);
+
+      expect(await controller.synchronizeDriverBatchState(), isTrue);
+      api.status = DriverBatchStatus.empty();
+      expect(await controller.synchronizeDriverBatchState(), isTrue);
+      expect(controller.batchStatus.value.total, 2);
+
+      expect(await controller.synchronizeDriverBatchState(), isFalse);
     },
   );
 

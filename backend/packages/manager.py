@@ -2223,6 +2223,24 @@ def _windows_update_service_status() -> Dict[str, Any]:
     return status
 
 
+def _open_windows_update_blocker(executable: str) -> bool:
+    """Open the verified WUB executable so the technician can pin/inspect it.
+
+    The state-changing command has already completed before this helper runs;
+    this launch is intentionally non-blocking and never changes the reported
+    success of the service operation.
+    """
+    executable = os.path.abspath(executable)
+    if os.name != "nt" or not os.path.isfile(executable):
+        return False
+    try:
+        subprocess.Popen([executable], cwd=os.path.dirname(executable))
+        return True
+    except Exception:
+        logger.warning("Could not open Windows Update Blocker for inspection", exc_info=True)
+        return False
+
+
 def _disable_windows_update_with_wub(
     pkg: Dict[str, Any], *, allow_home: bool = False, automatic: bool = False
 ) -> Dict[str, Any]:
@@ -2253,16 +2271,18 @@ def _disable_windows_update_with_wub(
         state_known = state.get("start") is not None
         verified_disabled = bool(state.get("disabled", False))
         success = exit_code == 0 and (verified_disabled or not state_known)
+        opened_for_pin = _open_windows_update_blocker(executable) if success else False
         return {
             "success": success,
             "skipped": False,
             "exit_code": exit_code,
             "update_service": state,
             "windows_update_blocked": verified_disabled,
+            "opened_for_pin": opened_for_pin,
             "package_id": pkg.get("id"),
             "name": pkg.get("name", "Windows Update Blocker"),
             "message": (
-                "Windows Update غیرفعال و تنظیمات سرویس محافظت شد؛ ری‌استارت انجام نمی‌شود."
+                "Windows Update غیرفعال شد و برنامه WUB برای بررسی و Pin باز شد؛ ری‌استارت انجام نمی‌شود."
                 if success
                 else f"Windows Update Blocker با کد {exit_code} پایان یافت، اما غیرفعال‌شدن سرویس تأیید نشد."
             ),

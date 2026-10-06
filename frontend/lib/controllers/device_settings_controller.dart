@@ -52,6 +52,9 @@ class DeviceSettingsController extends GetxController {
   }
 
   Future<void> refreshStatus({bool afterAction = false}) async {
+    // Do not let the 10-second heartbeat compete with the long sequential
+    // apply-all request. The explicit post-action refresh remains allowed.
+    if (isApplyingAll.value && !afterAction) return;
     if (afterAction) {
       while (isLoading.value && !isClosed) {
         await Future<void>.delayed(const Duration(milliseconds: 50));

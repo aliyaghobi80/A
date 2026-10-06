@@ -89,6 +89,7 @@ class SoftwareController extends GetxController {
   Timer? _initialTimer;
   bool _batchPollInFlight = false;
   bool _batchSyncInFlight = false;
+  int _emptyBatchSnapshots = 0;
   bool _syncInFlight = false;
   int _scanGeneration = 0;
   Timer? _debounceTimer;
@@ -1254,8 +1255,8 @@ class SoftwareController extends GetxController {
     try {
       final status = await _apiService.getBatchInstallStatus();
       if (isClosed) return false;
-      _applyBatchStatus(status, startPolling: startPolling);
-      return status.isRunning;
+      final effective = _applyBatchStatus(status, startPolling: startPolling);
+      return effective.isRunning;
     } catch (error) {
       // Preserve the last known state on a transient backend/HTTP failure.
       // Replacing it with BatchInstallStatus.empty() would make an active
@@ -1267,10 +1268,27 @@ class SoftwareController extends GetxController {
     }
   }
 
-  void _applyBatchStatus(
+  BatchInstallStatus _applyBatchStatus(
     BatchInstallStatus status, {
     bool startPolling = true,
   }) {
+    // A backend restart/race can briefly yield a default empty snapshot while
+    // the installer worker is still alive. Require two consecutive empty
+    // snapshots before clearing a queue that the UI already knows is running.
+    // A real completion snapshot keeps its total/items and is accepted at once.
+    if (batchStatus.value.isRunning &&
+        !status.isRunning &&
+        status.total == 0 &&
+        status.items.isEmpty) {
+      _emptyBatchSnapshots += 1;
+      if (_emptyBatchSnapshots < 2) {
+        isBatchInstalling.value = true;
+        return batchStatus.value;
+      }
+    } else {
+      _emptyBatchSnapshots = 0;
+    }
+
     final preserveLastCompleted =
         !status.isRunning &&
         status.total == 0 &&
@@ -1279,11 +1297,15 @@ class SoftwareController extends GetxController {
     if (!preserveLastCompleted) {
       batchStatus.value = status;
     }
-    isBatchInstalling.value = status.isRunning;
-    deploymentPreferences.reconcileQueue(status);
-    if (status.isRunning && startPolling && _batchPollTimer?.isActive != true) {
+    final effective = preserveLastCompleted ? batchStatus.value : status;
+    isBatchInstalling.value = effective.isRunning;
+    deploymentPreferences.reconcileQueue(effective);
+    if (effective.isRunning &&
+        startPolling &&
+        _batchPollTimer?.isActive != true) {
       _startBatchStatusPolling(null);
     }
+    return effective;
   }
 
   BatchInstallStatus? _statusFromStartResponse(Map<String, dynamic> response) {
@@ -1623,7 +1645,7 @@ class SoftwareController extends GetxController {
       try {
         final status = await _apiService.getBatchInstallStatus();
         if (isClosed || timer != _batchPollTimer) return;
-        _applyBatchStatus(status, startPolling: false);
+        final effective = _applyBatchStatus(status, startPolling: false);
 
         // REAL-TIME IN-MEMORY UPDATE:
         // Update package cards immediately as each package finishes in the batch queue
@@ -1632,7 +1654,7 @@ class SoftwareController extends GetxController {
         final updatedList = <SoftwarePackage>[];
 
         for (final pkg in currentPkgs) {
-          final matchingItem = status.items.firstWhereOrNull(
+          final matchingItem = effective.items.firstWhereOrNull(
             (it) =>
                 it.id == pkg.id ||
                 (pkg.relativePath.isNotEmpty &&
@@ -1665,7 +1687,7 @@ class SoftwareController extends GetxController {
           packagesResponse.refresh();
         }
 
-        if (!status.isRunning) {
+        if (!effective.isRunning) {
           timer.cancel();
           await scanPackages(silent: true, force: true);
 
@@ -1681,16 +1703,17 @@ class SoftwareController extends GetxController {
             Get.find<QcController>().fetchInitialQcStatus();
           }
 
-          if (status.completed > 0 &&
+          if (effective.completed > 0 &&
               Get.isRegistered<SystemInfoController>()) {
             Get.find<SystemInfoController>().recordSoftwareInstall();
           }
 
-          if (scaffoldMessenger != null && status.summaryMessage.isNotEmpty) {
+          if (scaffoldMessenger != null &&
+              effective.summaryMessage.isNotEmpty) {
             scaffoldMessenger.showSnackBar(
               SnackBar(
-                content: Text(status.summaryMessage),
-                backgroundColor: status.failed == 0
+                content: Text(effective.summaryMessage),
+                backgroundColor: effective.failed == 0
                     ? const Color(0xFF10B981)
                     : const Color(0xFFF59E0B),
                 duration: const Duration(seconds: 6),
@@ -1698,7 +1721,7 @@ class SoftwareController extends GetxController {
               ),
             );
           }
-          if (status.rebootRequired) {
+          if (effective.rebootRequired) {
             _showManualRestartReminder();
           }
         }

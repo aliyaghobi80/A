@@ -2,7 +2,7 @@ name: markazi_system_checker
 description: "Markazi System Checker - Hardware & Windows Information Desktop App"
 publish_to: 'none'
 
-version: 1.1.40+41
+version: 1.1.41+42
 
 environment:
   sdk: ^3.12.2

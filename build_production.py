@@ -17,7 +17,7 @@ import zipfile
 import subprocess
 import json
 
-APP_VERSION = "1.1.40"
+APP_VERSION = "1.1.41"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:

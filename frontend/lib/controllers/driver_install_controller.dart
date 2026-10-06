@@ -18,7 +18,10 @@ Set<String> toggledSelectAll(Set<String> current, Set<String> selectable) {
 }
 
 class DriverInstallController extends GetxController {
-  final ApiService _apiService = ApiService();
+  DriverInstallController({ApiService? apiService})
+    : _apiService = apiService ?? ApiService();
+
+  final ApiService _apiService;
 
   final RxString driverFolder = ''.obs;
   final RxBool isScanning = false.obs;
@@ -36,6 +39,7 @@ class DriverInstallController extends GetxController {
   Timer? _pollTimer;
   bool _pollInFlight = false;
   bool _syncInFlight = false;
+  int _emptyQueueSnapshots = 0;
   int _scanGeneration = 0;
 
   @override
@@ -76,19 +80,12 @@ class DriverInstallController extends GetxController {
     try {
       final status = await _apiService.getDriverBatchStatus();
       if (isClosed) return false;
-      final preserveLastCompleted =
-          !status.isRunning &&
-          status.total == 0 &&
-          batchStatus.value.total > 0 &&
-          !batchStatus.value.isRunning;
-      if (!preserveLastCompleted) {
-        batchStatus.value = status;
-      }
-      if (status.isRunning) {
-        doubleSpeed.value = status.doubleSpeed;
+      final effective = _applyDriverBatchStatus(status);
+      if (effective.isRunning) {
+        doubleSpeed.value = effective.doubleSpeed;
         isBatchInstalling.value = true;
-        if (status.folderPath.isNotEmpty) {
-          driverFolder.value = status.folderPath;
+        if (effective.folderPath.isNotEmpty) {
+          driverFolder.value = effective.folderPath;
         }
         if (_pollTimer?.isActive != true) {
           _startDriverBatchPolling(null);
@@ -96,13 +93,38 @@ class DriverInstallController extends GetxController {
       } else {
         isBatchInstalling.value = false;
       }
-      return status.isRunning;
+      return effective.isRunning;
     } catch (error) {
       debugPrint('[DriverInstallController] Queue state sync error: $error');
       return batchStatus.value.isRunning;
     } finally {
       _syncInFlight = false;
     }
+  }
+
+  DriverBatchStatus _applyDriverBatchStatus(DriverBatchStatus status) {
+    if (batchStatus.value.isRunning &&
+        !status.isRunning &&
+        status.total == 0 &&
+        status.items.isEmpty) {
+      _emptyQueueSnapshots += 1;
+      if (_emptyQueueSnapshots < 2) {
+        isBatchInstalling.value = true;
+        return batchStatus.value;
+      }
+    } else {
+      _emptyQueueSnapshots = 0;
+    }
+
+    final preserveLastCompleted =
+        !status.isRunning &&
+        status.total == 0 &&
+        batchStatus.value.total > 0 &&
+        !batchStatus.value.isRunning;
+    if (!preserveLastCompleted) {
+      batchStatus.value = status;
+    }
+    return preserveLastCompleted ? batchStatus.value : status;
   }
 
   void toggleAdvancedMode() {
@@ -539,8 +561,15 @@ class DriverInstallController extends GetxController {
       );
 
       if (res['success'] == true) {
-        if (!resume) {
-          batchStatus.value = DriverBatchStatus.empty();
+        final rawStatus = res['status'];
+        if (rawStatus is Map) {
+          _applyDriverBatchStatus(
+            DriverBatchStatus.fromJson(Map<String, dynamic>.from(rawStatus)),
+          );
+        } else {
+          // Keep the local running state visible until the first status poll;
+          // never replace it with an idle-looking empty queue.
+          isBatchInstalling.value = true;
         }
         scaffoldMessenger.showSnackBar(
           SnackBar(
@@ -611,14 +640,14 @@ class DriverInstallController extends GetxController {
       try {
         final status = await _apiService.getDriverQueueStatus();
         if (isClosed || timer != _pollTimer) return;
-        batchStatus.value = status;
+        final effective = _applyDriverBatchStatus(status);
 
         // Update the session counters in real time, but do not launch a full
         // WMI/hardware refresh after every package. That refresh used to pile
         // up exactly while graphics installers were resetting the display.
-        if (status.completed > lastCompletedCount) {
-          final newlyCompleted = status.completed - lastCompletedCount;
-          lastCompletedCount = status.completed;
+        if (effective.completed > lastCompletedCount) {
+          final newlyCompleted = effective.completed - lastCompletedCount;
+          lastCompletedCount = effective.completed;
           try {
             if (Get.isRegistered<SystemInfoController>()) {
               Get.find<SystemInfoController>().recordDriverInstall(
@@ -628,19 +657,20 @@ class DriverInstallController extends GetxController {
           } catch (_) {}
         }
 
-        if (!status.isRunning) {
+        if (!effective.isRunning) {
           timer.cancel();
           isBatchInstalling.value = false;
 
           // Let Windows finish rebuilding the display stack, then refresh the
           // hardware and folder once. GPU queues receive a longer settle time.
-          unawaited(_refreshAfterCompletedQueue(status));
+          unawaited(_refreshAfterCompletedQueue(effective));
 
-          if (scaffoldMessenger != null && status.summaryMessage.isNotEmpty) {
+          if (scaffoldMessenger != null &&
+              effective.summaryMessage.isNotEmpty) {
             scaffoldMessenger.showSnackBar(
               SnackBar(
-                content: Text(status.summaryMessage),
-                backgroundColor: status.failed == 0
+                content: Text(effective.summaryMessage),
+                backgroundColor: effective.failed == 0
                     ? const Color(0xFF0D9488)
                     : const Color(0xFFF59E0B),
                 duration: const Duration(seconds: 7),
@@ -650,7 +680,7 @@ class DriverInstallController extends GetxController {
           }
 
           // If reboot is required, show reboot dialog
-          if (status.rebootRequired) {
+          if (effective.rebootRequired) {
             _showRebootRequiredDialog();
           }
         }

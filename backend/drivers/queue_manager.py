@@ -547,7 +547,15 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
 
     with _queue_lock:
         if _queue_state["is_running"]:
-            return {"success": False, "message": "صف نصب درایورها هم‌اکنون در حال اجراست."}
+            status = copy.deepcopy(_queue_state)
+            return {
+                "success": True,
+                "already_running": True,
+                "adopted_existing": True,
+                "message": "صف نصب درایورها از قبل فعال است؛ وضعیت زنده بازیابی شد.",
+                "total": status.get("total", 0),
+                "status": status,
+            }
 
     if not packages and not resume:
         return {"success": False, "message": "هیچ بسته درایوری برای نصب انتخاب نشده است."}
@@ -624,10 +632,13 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
         return {"success": False, "message": "شروع صف نصب ناموفق بود؛ دوباره تلاش کنید."}
 
     msg = "ادامه نصب درایورها آغاز شد." if resume else f"صف نصب {len(sorted_pkgs)} بسته درایور با اولویت‌بندی صحیح آغاز شد."
+    with _queue_lock:
+        status = copy.deepcopy(_queue_state)
     return {
         "success": True,
         "message": msg,
         "total": len(sorted_pkgs),
+        "status": status,
     }
 
 

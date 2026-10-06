@@ -233,7 +233,11 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> applyAllDeviceSettings() async {
-    return _postJson('/api/device-settings/apply-all', {});
+    return _postJson(
+      '/api/device-settings/apply-all',
+      {},
+      timeout: const Duration(minutes: 3),
+    );
   }
 
   Future<Map<String, dynamic>> createOfficeDesktopShortcuts() async {
@@ -242,8 +246,9 @@ class ApiService {
 
   Future<Map<String, dynamic>> _postJson(
     String path,
-    Map<String, dynamic> body,
-  ) async {
+    Map<String, dynamic> body, {
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
     final isRunning = await BackendProcessManager.ensureBackendRunning();
     if (!isRunning) {
       return {'success': false, 'message': 'Backend service is not running.'};
@@ -255,7 +260,7 @@ class ApiService {
             headers: {'Content-Type': 'application/json; charset=utf-8'},
             body: json.encode(body),
           )
-          .timeout(const Duration(seconds: 45));
+          .timeout(timeout);
       return json.decode(utf8.decode(response.bodyBytes));
     } catch (e) {
       return {'success': false, 'message': '$e'};

@@ -345,18 +345,14 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
     packages_dir = os.path.abspath(packages_dir)
     kms_archives = _find_kms_archives(packages_dir)
 
-    # Avoid re-extracting KMS v6, while still allowing a v6 archive to replace
-    # an older extracted KMS folder that happens to be present in PROGRAM.
+    # If no archive is present, a valid existing KMS folder remains usable. If
+    # an archive is present, it is authoritative and is staged/validated below
+    # before atomically replacing the canonical ``KMS v6`` folder.
     existing_cmd = find_windows_cmd(packages_dir, allow_bundled=False)
-    if existing_cmd:
+    if existing_cmd and not kms_archives:
         relative = os.path.relpath(existing_cmd, packages_dir).replace("\\", "/").lower()
         normalized = _normalized_kms_name(relative)
-        has_v6_archive = any(
-            "kms v6" in _normalized_kms_name(os.path.relpath(path, packages_dir))
-            or "kms 6" in _normalized_kms_name(os.path.relpath(path, packages_dir))
-            for path in kms_archives
-        )
-        if "kms v6" in normalized or ("kms" in normalized and not has_v6_archive):
+        if "kms" in normalized:
             bundle_root = _activation_bundle_root(existing_cmd, packages_dir)
             return {
                 "success": True,
@@ -408,32 +404,7 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
             }
 
     archive_parent = os.path.dirname(target_archive)
-    archive_stem = os.path.splitext(archive_name)[0].strip() or "KMS v6"
-    preferred_destination = os.path.join(archive_parent, archive_stem)
-
-    # An exact sibling folder is the expected result for KMS v6.rar/.zip.
-    if os.path.isdir(preferred_destination):
-        sibling_cmd = find_windows_cmd(
-            preferred_destination,
-            allow_bundled=False,
-        )
-        if sibling_cmd:
-            return {
-                "success": True,
-                "found": True,
-                "already_extracted": True,
-                "archive_name": archive_name,
-                "archive_path": target_archive,
-                "extract_dir": preferred_destination,
-                "command_path": sibling_cmd,
-                "windows_command_path": sibling_cmd,
-                "office_command_path": find_office_cmd(
-                    preferred_destination,
-                    allow_bundled=False,
-                ),
-                "prerequisite": prerequisite,
-                "message": "KMS v6 قبلاً استخراج شده و WINDOWS.cmd آماده است.",
-            }
+    preferred_destination = os.path.join(archive_parent, "KMS v6")
 
     staging_dir = tempfile.mkdtemp(prefix=".markazi_kms_extract_", dir=archive_parent)
     logger.info(
@@ -463,27 +434,57 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
                 ),
             }
 
-        destination = preferred_destination
-        if os.path.exists(destination):
-            suffix = 1
-            destination = f"{preferred_destination}_extracted"
-            while os.path.exists(destination):
-                suffix += 1
-                destination = f"{preferred_destination}_extracted_{suffix}"
+        staged_bundle = _activation_bundle_root(staged_cmd, staging_dir)
+        if not _path_is_inside(staged_bundle, staging_dir):
+            raise RuntimeError("مسیر بسته استخراج‌شده خارج از پوشه موقت است.")
 
-        command_relative = os.path.relpath(staged_cmd, staging_dir)
+        destination = preferred_destination
+        command_relative = os.path.relpath(staged_cmd, staged_bundle)
         office_command_relative = (
-            os.path.relpath(staged_office_cmd, staging_dir)
+            os.path.relpath(staged_office_cmd, staged_bundle)
             if staged_office_cmd
             else None
         )
-        os.replace(staging_dir, destination)
+
+        # Publish only after both extraction and command discovery succeeded.
+        # The old exact KMS v6 folder is moved aside first so a failed publish
+        # can be rolled back without leaving a half-extracted activation tool.
+        backup_path: Optional[str] = None
+        if os.path.exists(destination):
+            backup_path = f"{destination}.markazi_backup_{int(time.time() * 1000)}"
+            os.replace(destination, backup_path)
+        try:
+            os.replace(staged_bundle, destination)
+        except Exception:
+            if backup_path and os.path.exists(backup_path) and not os.path.exists(destination):
+                os.replace(backup_path, destination)
+            raise
+
         command_path = os.path.abspath(os.path.join(destination, command_relative))
         office_command_path = (
             os.path.abspath(os.path.join(destination, office_command_relative))
             if office_command_relative
             else None
         )
+        if not os.path.isfile(command_path):
+            if backup_path and os.path.exists(backup_path):
+                if os.path.isdir(destination):
+                    shutil.rmtree(destination, ignore_errors=True)
+                elif os.path.exists(destination):
+                    os.remove(destination)
+                os.replace(backup_path, destination)
+            raise RuntimeError("WINDOWS.cmd پس از جایگزینی پوشه KMS v6 پیدا نشد.")
+
+        if backup_path and os.path.exists(backup_path):
+            try:
+                if os.path.isdir(backup_path):
+                    shutil.rmtree(backup_path, ignore_errors=True)
+                else:
+                    os.remove(backup_path)
+            except OSError:
+                # The canonical folder is already verified and live. A locked
+                # rollback copy is harmless and can be cleaned on the next run.
+                logger.warning("Could not remove old KMS rollback folder: %s", backup_path)
         return {
             "success": True,
             "found": True,
@@ -494,7 +495,12 @@ def extract_kms_archive(packages_dir: str) -> Dict[str, Any]:
             "windows_command_path": command_path,
             "office_command_path": office_command_path,
             "prerequisite": prerequisite,
-            "message": f"آرشیو {archive_name} با موفقیت استخراج و بررسی شد.",
+            "replaced_existing": backup_path is not None,
+            "message": (
+                f"آرشیو {archive_name} با موفقیت در پوشه KMS v6 استخراج و جایگزین شد."
+                if backup_path is not None
+                else f"آرشیو {archive_name} با موفقیت در پوشه KMS v6 استخراج و بررسی شد."
+            ),
         }
     except Exception as e:
         logger.error(f"[Orchestrator] KMS extraction error: {e}")
