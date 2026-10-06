@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
 import 'qc_controller.dart';
+import 'system_info_controller.dart';
 
 class DeviceSettingsController extends GetxController {
   final ApiService _api;
@@ -62,7 +63,18 @@ class DeviceSettingsController extends GetxController {
       final result = await _api.getDeviceSettingsStatus();
       if (isClosed) return;
       final desktop = result['desktop_time'] as Map<String, dynamic>? ?? {};
-      windowsActivated.value = desktop['windows_activated'] == true;
+      final confirmedBySystemScan =
+          Get.isRegistered<SystemInfoController>() &&
+          Get.find<SystemInfoController>()
+                  .systemInfo
+                  .value
+                  ?.windowsActivation
+                  .activated ==
+              true;
+      // Never let a transient device-status probe overwrite the most recent
+      // positive result returned by the official activation status endpoint.
+      windowsActivated.value =
+          desktop['windows_activated'] == true || confirmedBySystemScan;
       desktopIconsReady.value = desktop['desktop_icons_ready'] == true;
       timezoneReady.value =
           '${desktop['timezone']}'.replaceAll('_dstoff', '') ==

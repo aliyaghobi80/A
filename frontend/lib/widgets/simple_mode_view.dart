@@ -2119,12 +2119,6 @@ class SimpleModeView extends StatelessWidget {
         : (valid(info.bios.serial)
               ? info.bios.serial
               : info.motherboard.serial);
-    final modelParts = [
-      info.system.manufacturer,
-      info.system.model,
-    ].where(valid).toSet().join(' ');
-    final title = modelParts.isNotEmpty ? modelParts : info.motherboard.model;
-
     return Semantics(
       container: true,
       label: l10n.isPersian
@@ -2171,24 +2165,51 @@ class SimpleModeView extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  Directionality(
-                    textDirection: TextDirection.ltr,
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: isDark
-                            ? const Color(0xFFF8FAFC)
-                            : const Color(0xFF0F172A),
+                  CopyableValue(
+                    tooltip: l10n.isPersian
+                        ? 'کپی مدل دقیق دستگاه'
+                        : 'Copy exact device model',
+                    onCopy: () => systemCtrl.copyToClipboard(
+                      context,
+                      info.system.deviceDisplayName,
+                      '${l10n.copiedToClipboard}: ${info.system.deviceDisplayName}',
+                    ),
+                    child: Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              info.system.deviceDisplayName,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: isDark
+                                    ? const Color(0xFFF8FAFC)
+                                    : const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          const Icon(Icons.copy_rounded, size: 14),
+                        ],
                       ),
                     ),
                   ),
                   if (valid(info.system.sku))
-                    SelectableText(
-                      'System SKU: ${info.system.sku}',
-                      textDirection: TextDirection.ltr,
-                      style: Theme.of(context).textTheme.bodySmall,
+                    CopyableValue(
+                      tooltip: 'کپی System SKU',
+                      onCopy: () => systemCtrl.copyToClipboard(
+                        context,
+                        info.system.sku,
+                        '${l10n.copiedToClipboard}: ${info.system.sku}',
+                      ),
+                      child: Text(
+                        'System SKU: ${info.system.sku}',
+                        textDirection: TextDirection.ltr,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
                 ],
               ),

@@ -240,6 +240,7 @@ class WindowsCard extends StatelessWidget {
               label: l10n.systemModel,
               value: system.model,
               icon: Icons.devices_rounded,
+              copyable: true,
               forceLtrValue: true,
             ),
           if (system.manufacturer != 'Not available')
@@ -277,6 +278,7 @@ class WindowsCard extends StatelessWidget {
               label: 'SKU',
               value: system.sku,
               icon: Icons.inventory_2_outlined,
+              copyable: true,
               forceLtrValue: true,
             ),
         ],

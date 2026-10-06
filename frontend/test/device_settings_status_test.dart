@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:markazi_system_checker/controllers/device_settings_controller.dart';
+import 'package:markazi_system_checker/controllers/system_info_controller.dart';
 import 'package:markazi_system_checker/controllers/theme_language_controller.dart';
+import 'package:markazi_system_checker/models/system_info.dart';
 import 'package:markazi_system_checker/services/api_service.dart';
 import 'package:markazi_system_checker/widgets/pages/device_settings_page.dart';
 
@@ -41,7 +43,54 @@ class StatusApi extends ApiService {
   };
 }
 
+class StableSystemInfoController extends SystemInfoController {
+  @override
+  // The test supplies a complete snapshot and intentionally skips I/O timers.
+  // ignore: must_call_super
+  void onInit() {}
+}
+
 void main() {
+  testWidgets(
+    'official positive activation keeps desktop icon action enabled on Home',
+    (tester) async {
+      Get.testMode = true;
+      final systemController = Get.put<SystemInfoController>(
+        StableSystemInfoController(),
+      );
+      systemController.systemInfo.value = SystemInfo.fromJson({
+        'windows': {'edition': 'Windows 11 Home'},
+        'system': {
+          'manufacturer': 'ASUS',
+          'model': 'Vivobook',
+          'display_name': 'ASUS Vivobook X1504VAP',
+          'sku': 'ASUS_Notebook_X1504VAP',
+        },
+        'windows_activation': {
+          'activated': true,
+          'status_text': 'Licensed',
+          'edition': 'Windows 11 Home',
+        },
+      });
+      Get.put(ThemeLanguageController());
+      final controller = Get.put(
+        DeviceSettingsController(api: StatusApi()..ready = false),
+      );
+      addTearDown(Get.reset);
+
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: DeviceSettingsPage())),
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.windowsActivated.value, isTrue);
+      expect(find.text('نمایش سه آیکن'), findsOneWidget);
+      expect(find.text('ابتدا ویندوز را فعال کنید'), findsNothing);
+      await Get.delete<DeviceSettingsController>();
+      await Get.delete<SystemInfoController>();
+    },
+  );
+
   for (final dark in [false, true]) {
     testWidgets(
       'verified states change labels and clear on external changes (dark=$dark)',

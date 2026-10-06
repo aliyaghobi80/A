@@ -119,14 +119,51 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                   l10n.isPersian ? 'مدل دقیق دستگاه' : 'Device model',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                SelectableText(
-                  '${info.system.manufacturer} ${info.system.model}',
-                  textDirection: TextDirection.ltr,
+                CopyableValue(
+                  tooltip: l10n.isPersian
+                      ? 'کپی مدل دقیق دستگاه'
+                      : 'Copy exact device model',
+                  onCopy: () => systemCtrl.copyToClipboard(
+                    context,
+                    info.system.deviceDisplayName,
+                    '${l10n.copiedToClipboard}: ${info.system.deviceDisplayName}',
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          info.system.deviceDisplayName,
+                          textDirection: TextDirection.ltr,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.copy_rounded, size: 15),
+                    ],
+                  ),
                 ),
-                SelectableText(
-                  'System SKU: ${info.system.sku}',
-                  textDirection: TextDirection.ltr,
-                ),
+                if (info.system.sku != 'Not available')
+                  CopyableValue(
+                    tooltip: 'کپی System SKU',
+                    onCopy: () => systemCtrl.copyToClipboard(
+                      context,
+                      info.system.sku,
+                      '${l10n.copiedToClipboard}: ${info.system.sku}',
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'System SKU: ${info.system.sku}',
+                            textDirection: TextDirection.ltr,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.copy_rounded, size: 15),
+                      ],
+                    ),
+                  ),
                 const SizedBox(height: 12),
               ],
               _buildHardwareSummaryRow(info, isDark, accent, l10n),

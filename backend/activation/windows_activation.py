@@ -10,6 +10,8 @@ import os
 import re
 import subprocess
 import logging
+import threading
+import time
 import winreg
 from typing import Dict, Any, Optional
 
@@ -22,6 +24,27 @@ logger = logging.getLogger(__name__)
 # Windows OS Application ID in SoftwareLicensing service
 WINDOWS_APP_ID = "55c92734-d682-4d71-983e-d6ec3f16059f"
 
+# A transient WMI/slmgr timeout must not erase a positive result that was
+# confirmed moments earlier by an official Windows licensing source.  Keep the
+# confirmation briefly; every call still performs fresh probes first.
+_POSITIVE_CONFIRMATION_TTL_SECONDS = 300.0
+_positive_confirmation_lock = threading.Lock()
+_positive_confirmation_at = 0.0
+
+
+def _preserve_recent_positive(current: bool) -> bool:
+    global _positive_confirmation_at
+    now = time.monotonic()
+    with _positive_confirmation_lock:
+        if current:
+            _positive_confirmation_at = now
+            return True
+        return (
+            _positive_confirmation_at > 0
+            and now - _positive_confirmation_at
+            <= _POSITIVE_CONFIRMATION_TTL_SECONDS
+        )
+
 
 def _query_wmi_licensing() -> Dict[str, Any]:
     """
@@ -31,11 +54,14 @@ def _query_wmi_licensing() -> Dict[str, Any]:
     res = {}
     try:
         script = """
-        $products = Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL" -ErrorAction SilentlyContinue |
-                    Where-Object { $_.ApplicationId -eq '55c92734-d682-4d71-983e-d6ec3f16059f' -and -not $_.LicenseIsAddon }
+        $products = Get-CimInstance SoftwareLicensingProduct -Filter "ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f'" -ErrorAction SilentlyContinue |
+                    Where-Object { -not $_.LicenseIsAddon }
         
         # Prioritize finding a licensed product first
         $win = $products | Where-Object { $_.LicenseStatus -eq 1 } | Select-Object -First 1
+        if (-not $win) {
+            $win = $products | Where-Object { $_.PartialProductKey } | Select-Object -First 1
+        }
         if (-not $win) {
             $win = $products | Select-Object -First 1
         }
@@ -197,7 +223,9 @@ def get_windows_activation_info() -> Dict[str, Any]:
     wmi_data = _query_wmi_licensing()
 
     # Multi-source activation confirmation
-    activated = _resolve_activation_state(wmi_data, dli_data, xpr_activated)
+    activated = _preserve_recent_positive(
+        _resolve_activation_state(wmi_data, dli_data, xpr_activated)
+    )
 
     info["activated"] = activated
     info["status_code"] = 1 if activated else wmi_data.get("status_code", 0)

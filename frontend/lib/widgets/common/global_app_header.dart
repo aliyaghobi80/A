@@ -8,6 +8,7 @@ import '../../controllers/theme_language_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/persian_date_time.dart';
+import 'copyable_value.dart';
 
 class GlobalAppHeader extends StatefulWidget {
   const GlobalAppHeader({super.key});
@@ -93,24 +94,38 @@ class _GlobalAppHeaderState extends State<GlobalAppHeader> {
                       ),
                       const SizedBox(width: 8),
                       Flexible(
-                        child: Tooltip(
-                          message: info == null
+                        child: CopyableValue(
+                          tooltip: info == null
                               ? host
-                              : '$host • ${info.system.computerName}',
-                          child: Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: Text(
-                              host,
-                              style: TextStyle(
-                                fontSize: 15.5,
-                                fontWeight: FontWeight.w800,
-                                color: isDark
-                                    ? AppTheme.darkTextPrimary
-                                    : AppTheme.lightTextPrimary,
+                              : '${l10n.isPersian ? "کپی مدل دستگاه" : "Copy device model"}: $host • ${info.system.computerName}',
+                          onCopy: () => systemCtrl.copyToClipboard(
+                            context,
+                            host,
+                            '${l10n.copiedToClipboard}: $host',
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Directionality(
+                                  textDirection: TextDirection.ltr,
+                                  child: Text(
+                                    host,
+                                    style: TextStyle(
+                                      fontSize: 15.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: isDark
+                                          ? AppTheme.darkTextPrimary
+                                          : AppTheme.lightTextPrimary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                              const SizedBox(width: 5),
+                              Icon(Icons.copy_rounded, size: 13, color: accent),
+                            ],
                           ),
                         ),
                       ),
