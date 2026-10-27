@@ -55,3 +55,5 @@ build_backend_out/
 dist/
 logs/
 data/logs/
+PC_Test_Lab_Portable/
+*.zip

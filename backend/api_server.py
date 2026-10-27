@@ -48,6 +48,9 @@ from hardware.storage import get_connected_usb_drives, safe_eject_drive
 from qc.qc_engine import evaluate_system_qc
 from windows.power_settings import set_laptop_power_modes
 from session_watchdog import adopt_parent_process, get_parent_processes, get_parent_session
+from hardware_tests.audio_test import play_audio_tone, stop_audio
+from hardware_tests.mic_test import get_mic_devices, start_loopback_test, get_loopback_status
+from hardware_tests.camera_test import get_camera_devices, launch_camera_app
 
 logger = logging.getLogger(__name__)
 
@@ -386,6 +389,33 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
 
         elif path == "/api/drivers/history":
             resp = load_driver_history()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/hardware-tests/mic/devices":
+            resp = {"status": "ok", "devices": get_mic_devices()}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/hardware-tests/mic/loopback/status":
+            resp = {"status": "ok", **get_loopback_status()}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/hardware-tests/camera/devices":
+            resp = {"status": "ok", "devices": get_camera_devices()}
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
@@ -1078,6 +1108,61 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             res = set_file_requirement_path(req_id, new_path)
             _invalidate_system_cache()
             res["files_status"] = check_required_files()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(res, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/hardware-tests/audio/play":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+            res = play_audio_tone(
+                kind=payload.get("kind", "both"),
+                freq=float(payload.get("frequency", 440.0)),
+                duration=float(payload.get("duration", 2.2)),
+                volume=float(payload.get("volume", 0.2)),
+                sweep=bool(payload.get("sweep", False)),
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(res, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/hardware-tests/audio/stop":
+            success = stop_audio()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "stopped": success}, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/hardware-tests/mic/loopback/start":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                payload = json.loads(body_raw.decode("utf-8"))
+            except Exception:
+                payload = {}
+            duration = float(payload.get("duration", 3.0))
+            res = start_loopback_test(duration_seconds=duration)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(res, indent=2).encode("utf-8"))
+            return
+
+        elif path == "/api/hardware-tests/camera/open":
+            res = launch_camera_app()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()

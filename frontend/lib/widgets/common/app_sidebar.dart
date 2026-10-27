@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/driver_install_controller.dart';
+import '../../controllers/hardware_test_controller.dart';
 import '../../controllers/qc_controller.dart';
 import '../../controllers/software_controller.dart';
 import '../../controllers/theme_language_controller.dart';
@@ -26,6 +27,9 @@ class AppSidebar extends StatelessWidget {
     final themeCtrl = Get.find<ThemeLanguageController>();
     final driverCtrl = Get.find<DriverInstallController>();
     final softwareCtrl = Get.find<SoftwareController>();
+    final hardwareCtrl = Get.isRegistered<HardwareTestController>()
+        ? Get.find<HardwareTestController>()
+        : Get.put(HardwareTestController(), permanent: true);
     final qcCtrl = Get.find<QcController>();
     final l10n = AppLocalizations.of(context);
     final width = isCompact ? 70.0 : 220.0;
@@ -212,8 +216,28 @@ class AppSidebar extends StatelessWidget {
                     themeCtrl: themeCtrl,
                     isCompact: isCompact,
                   ),
+                  if (isCompact)
+                    _buildNavItem(
+                      index: 3,
+                      icon: Icons.fact_check_rounded,
+                      title: l10n.isPersian ? 'تست قطعات' : 'Hardware Tests',
+                      badgeCount: hardwareCtrl.totalTestsCount > 0
+                          ? hardwareCtrl.totalTestsCount
+                          : null,
+                      badgeColor: const Color(0xFF43A047),
+                      isDark: isDark,
+                      themeCtrl: themeCtrl,
+                      isCompact: isCompact,
+                    )
+                  else
+                    _buildHardwareTestsAccordion(
+                      isDark: isDark,
+                      themeCtrl: themeCtrl,
+                      hardwareCtrl: hardwareCtrl,
+                      l10n: l10n,
+                    ),
                   _buildNavItem(
-                    index: 3,
+                    index: 4,
                     icon: Icons.verified_user_rounded,
                     title: l10n.isPersian ? 'وضعیت لایسنس' : 'License Status',
                     isDark: isDark,
@@ -221,7 +245,7 @@ class AppSidebar extends StatelessWidget {
                     isCompact: isCompact,
                   ),
                   _buildNavItem(
-                    index: 4,
+                    index: 5,
                     icon: Icons.folder_open_rounded,
                     title: l10n.isPersian
                         ? 'پوشه‌ها و ابزارها'
@@ -231,7 +255,7 @@ class AppSidebar extends StatelessWidget {
                     isCompact: isCompact,
                   ),
                   _buildNavItem(
-                    index: 5,
+                    index: 6,
                     icon: Icons.important_devices_rounded,
                     title: l10n.isPersian
                         ? 'تنظیمات مهم دستگاه'
@@ -241,7 +265,7 @@ class AppSidebar extends StatelessWidget {
                     isCompact: isCompact,
                   ),
                   _buildNavItem(
-                    index: 6,
+                    index: 7,
                     icon: Icons.settings_rounded,
                     title: l10n.isPersian ? 'تنظیمات برنامه' : 'Settings',
                     isDark: isDark,
@@ -561,6 +585,242 @@ class AppSidebar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHardwareTestsAccordion({
+    required bool isDark,
+    required ThemeLanguageController themeCtrl,
+    required HardwareTestController hardwareCtrl,
+    required AppLocalizations l10n,
+  }) {
+    final isSelected = selectedIndex == 3;
+    final isExpanded = hardwareCtrl.isAccordionExpanded.value;
+    final accent = themeCtrl.currentAccentColor;
+
+    final subItems = [
+      {
+        'id': 'hub',
+        'title': l10n.isPersian ? 'داشبورد آزمون‌ها' : 'Overview',
+        'icon': Icons.grid_view_rounded,
+      },
+      {
+        'id': 'monitor',
+        'title': l10n.isPersian ? 'مانیتور و پیکسل' : 'Monitor Test',
+        'icon': Icons.desktop_windows_rounded,
+      },
+      {
+        'id': 'audio',
+        'title': l10n.isPersian ? 'صدا و هدفون' : 'Audio & Headphones',
+        'icon': Icons.headphones_rounded,
+      },
+      {
+        'id': 'mic',
+        'title': l10n.isPersian ? 'میکروفون' : 'Microphone',
+        'icon': Icons.mic_rounded,
+      },
+      {
+        'id': 'webcam',
+        'title': l10n.isPersian ? 'وب‌کم و دوربین' : 'Webcam',
+        'icon': Icons.videocam_rounded,
+      },
+      {
+        'id': 'keyboard',
+        'title': l10n.isPersian ? 'کیبورد' : 'Keyboard',
+        'icon': Icons.keyboard_rounded,
+      },
+      {
+        'id': 'mouse',
+        'title': l10n.isPersian ? 'موس و اسکرول' : 'Mouse & Scroll',
+        'icon': Icons.mouse_rounded,
+      },
+      {
+        'id': 'report',
+        'title': l10n.isPersian ? 'کارنامه و گزارش' : 'Test Report',
+        'icon': Icons.assignment_turned_in_rounded,
+      },
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2.5),
+          child: InkWell(
+            onTap: () {
+              onItemSelected(3);
+              hardwareCtrl.toggleAccordion();
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? (isDark
+                          ? accent.withValues(alpha: 0.25)
+                          : accent.withValues(alpha: 0.12))
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isSelected
+                      ? (isDark ? accent : accent.withValues(alpha: 0.4))
+                      : Colors.transparent,
+                  width: 1.2,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: accent.withValues(alpha: isDark ? 0.25 : 0.1),
+                          blurRadius: 6,
+                          offset: const Offset(0, 1),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  if (isSelected)
+                    Container(
+                      width: 3.5,
+                      height: 18,
+                      margin: const EdgeInsetsDirectional.only(end: 6),
+                      decoration: BoxDecoration(
+                        color: accent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  Icon(
+                    Icons.fact_check_rounded,
+                    size: 20,
+                    color: isSelected
+                        ? (isDark ? Colors.white : accent)
+                        : (isDark
+                              ? AppTheme.darkTextSecondary
+                              : AppTheme.lightTextSecondary),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      l10n.isPersian ? 'تست قطعات' : 'Hardware Tests',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        color: isSelected
+                            ? (isDark ? Colors.white : accent)
+                            : (isDark
+                                  ? AppTheme.darkTextSecondary
+                                  : AppTheme.lightTextPrimary),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (hardwareCtrl.totalTestsCount > 0)
+                    Container(
+                      margin: const EdgeInsetsDirectional.only(end: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF43A047).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF43A047).withValues(alpha: 0.5)),
+                      ),
+                      child: Text(
+                        '${hardwareCtrl.totalTestsCount}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF66BB6A),
+                        ),
+                      ),
+                    ),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (isExpanded)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: 14, top: 2, bottom: 4),
+            child: Column(
+              children: subItems.map((item) {
+                final itemId = item['id'] as String;
+                final itemTitle = item['title'] as String;
+                final itemIcon = item['icon'] as IconData;
+                final isSubActive =
+                    isSelected && hardwareCtrl.activeSubTest.value == itemId;
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 1.5),
+                  child: InkWell(
+                    onTap: () {
+                      onItemSelected(3);
+                      hardwareCtrl.selectSubTest(itemId);
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSubActive
+                            ? accent.withValues(alpha: isDark ? 0.2 : 0.1)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isSubActive
+                              ? accent.withValues(alpha: 0.35)
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            itemIcon,
+                            size: 15,
+                            color: isSubActive
+                                ? (isDark ? Colors.white : accent)
+                                : (isDark
+                                      ? AppTheme.darkTextMuted
+                                      : AppTheme.lightTextMuted),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              itemTitle,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isSubActive
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: isSubActive
+                                    ? (isDark ? Colors.white : accent)
+                                    : (isDark
+                                          ? AppTheme.darkTextSecondary
+                                          : AppTheme.lightTextSecondary),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+      ],
     );
   }
 }

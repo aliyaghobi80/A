@@ -78,6 +78,10 @@ def build_backend(output_dir: str = None):
         "drivers.deduplicator",
         "drivers.queue_manager",
         "drivers.history",
+        "hardware_tests",
+        "hardware_tests.audio_test",
+        "hardware_tests.mic_test",
+        "hardware_tests.camera_test",
     ]
 
     cmd = [

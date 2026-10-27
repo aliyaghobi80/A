@@ -1185,4 +1185,151 @@ class ApiService {
       return [];
     }
   }
+
+  // -------------------------------------------------------------
+  // Hardware Component Diagnostics (Audio, Mic, Camera)
+  // -------------------------------------------------------------
+
+  Future<Map<String, dynamic>> playAudioTone({
+    required String kind,
+    double frequency = 440.0,
+    double duration = 2.2,
+    double volume = 0.2,
+    bool sweep = false,
+  }) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return {'status': 'error', 'message': 'Backend not running'};
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/hardware-tests/audio/play');
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({
+              'kind': kind,
+              'frequency': frequency,
+              'duration': duration,
+              'volume': volume,
+              'sweep': sweep,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+      return json.decode(utf8.decode(response.bodyBytes));
+    } catch (e) {
+      debugPrint('[ApiService] playAudioTone error: $e');
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  Future<bool> stopAudioTone() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return false;
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/hardware-tests/audio/stop');
+      final response = await _client
+          .post(uri)
+          .timeout(const Duration(seconds: 4));
+      final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data['stopped'] == true;
+    } catch (e) {
+      debugPrint('[ApiService] stopAudioTone error: $e');
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchMicDevices() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return [];
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/hardware-tests/mic/devices');
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final List<dynamic> list = data['devices'] ?? [];
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('[ApiService] fetchMicDevices error: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> startMicLoopback({double duration = 3.0}) async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return {'status': 'error', 'message': 'Backend not running'};
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/hardware-tests/mic/loopback/start');
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'duration': duration}),
+          )
+          .timeout(const Duration(seconds: 8));
+      return json.decode(utf8.decode(response.bodyBytes));
+    } catch (e) {
+      debugPrint('[ApiService] startMicLoopback error: $e');
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchMicLoopbackStatus() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return {'phase': 'idle', 'is_busy': false};
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/hardware-tests/mic/loopback/status');
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 4));
+      return json.decode(utf8.decode(response.bodyBytes));
+    } catch (e) {
+      debugPrint('[ApiService] fetchMicLoopbackStatus error: $e');
+      return {'phase': 'idle', 'is_busy': false};
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchCameraDevices() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return [];
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/hardware-tests/camera/devices');
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final List<dynamic> list = data['devices'] ?? [];
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('[ApiService] fetchCameraDevices error: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> launchCameraApp() async {
+    final isRunning = await BackendProcessManager.ensureBackendRunning();
+    if (!isRunning) return {'status': 'error', 'message': 'Backend not running'};
+
+    try {
+      final uri = Uri.parse('$baseUrl/api/hardware-tests/camera/open');
+      final response = await _client
+          .post(uri)
+          .timeout(const Duration(seconds: 6));
+      return json.decode(utf8.decode(response.bodyBytes));
+    } catch (e) {
+      debugPrint('[ApiService] launchCameraApp error: $e');
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 }

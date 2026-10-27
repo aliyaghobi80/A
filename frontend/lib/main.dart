@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'controllers/activation_controller.dart';
 import 'controllers/driver_install_controller.dart';
 import 'controllers/device_settings_controller.dart';
+import 'controllers/hardware_test_controller.dart';
 import 'controllers/qc_controller.dart';
 import 'controllers/software_controller.dart';
 import 'controllers/system_info_controller.dart';
@@ -22,6 +23,7 @@ import 'widgets/error_view.dart';
 import 'widgets/loading_view.dart';
 import 'widgets/pages/driver_install_page.dart';
 import 'widgets/pages/device_settings_page.dart';
+import 'widgets/pages/hardware_tests_page.dart';
 import 'widgets/pages/license_status_page.dart';
 import 'widgets/pages/settings_page.dart';
 import 'widgets/pages/software_install_page.dart';
@@ -50,6 +52,7 @@ void main() async {
   Get.put(DriverInstallController(), permanent: true);
   Get.put(DeviceSettingsController(), permanent: true);
   Get.put(ActivationController(), permanent: true);
+  Get.put(HardwareTestController(), permanent: true);
   Get.put(QcController(), permanent: true);
 
   runApp(const MarkaziSystemCheckerApp());
@@ -225,13 +228,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 const DriverInstallPage(),
                                 // Page 2: نصب نرم‌افزارها
                                 const SoftwareInstallPage(),
-                                // Page 3: وضعیت لایسنس
+                                // Page 3: تست قطعات
+                                const HardwareTestsPage(),
+                                // Page 4: وضعیت لایسنس
                                 const LicenseStatusPage(),
-                                // Page 4: ابزارها
+                                // Page 5: ابزارها
                                 const ToolsSourceFoldersPage(),
-                                // Page 5: تنظیمات
+                                // Page 6: تنظیمات
                                 const DeviceSettingsPage(),
-                                // Page 6: تنظیمات برنامه
+                                // Page 7: تنظیمات برنامه
                                 const SettingsPage(),
                               ],
                             ),
