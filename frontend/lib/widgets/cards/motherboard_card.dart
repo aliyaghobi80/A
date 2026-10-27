@@ -146,13 +146,6 @@ class MotherboardCard extends StatelessWidget {
             forceLtrValue: true,
             copyable: true,
           ),
-          InfoRow(
-            label: l10n.serialNumber,
-            value: motherboard.serial,
-            icon: Icons.qr_code_rounded,
-            copyable: true,
-            isMonospace: true,
-          ),
           if (motherboard.uuid.isNotEmpty && motherboard.uuid != '-')
             InfoRow(
               label: 'UUID',

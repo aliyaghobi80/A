@@ -95,12 +95,6 @@ class RamCard extends StatelessWidget {
             ...ram.modules.asMap().entries.map((entry) {
               final idx = entry.key;
               final mod = entry.value;
-              final serialText =
-                  (mod.serial != 'Not available' &&
-                      mod.serial != '00000000' &&
-                      mod.serial.isNotEmpty)
-                  ? mod.serial
-                  : (mod.partNumber != 'Not available' ? mod.partNumber : null);
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -209,22 +203,6 @@ class RamCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (serialText != null &&
-                              serialText.isNotEmpty &&
-                              serialText != 'Default string') ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              '${l10n.isPersian ? "سریال: " : "S/N: "}$serialText',
-                              style: TextStyle(
-                                fontFamily: 'Consolas',
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? const Color(0xFFCBD5E1)
-                                    : const Color(0xFF475569),
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ),

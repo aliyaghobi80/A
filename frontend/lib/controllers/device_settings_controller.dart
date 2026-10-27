@@ -226,6 +226,11 @@ class DeviceSettingsController extends GetxController {
     if (isApplyingAll.value) return;
     isApplyingAll.value = true;
     try {
+      // Let Flutter paint the busy state before the local backend starts the
+      // comparatively expensive sequential settings workflow. Without this
+      // frame boundary the button can appear inert for several seconds.
+      await WidgetsBinding.instance.endOfFrame;
+      if (isClosed) return;
       final result = await _api.applyAllDeviceSettings();
       await refreshStatus(afterAction: true);
       if (context.mounted) _showResult(context, result);

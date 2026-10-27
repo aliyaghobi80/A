@@ -121,40 +121,7 @@ class DeviceSettingsPage extends StatelessWidget {
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
-                      FilledButton.icon(
-                        onPressed: controller.isApplyingAll.value
-                            ? null
-                            : () => controller.applyAllSettings(context),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        icon: controller.isApplyingAll.value
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.flash_on_rounded, size: 18),
-                        label: Text(
-                          controller.isApplyingAll.value
-                              ? 'در حال اعمال همه تنظیمات...'
-                              : 'اعمال خودکار همه تنظیمات',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
+                      _ApplyAllSettingsButton(controller: controller),
                     ],
                   );
 
@@ -419,6 +386,65 @@ class DeviceSettingsPage extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ApplyAllSettingsButton extends StatelessWidget {
+  const _ApplyAllSettingsButton({required this.controller});
+
+  final DeviceSettingsController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    // Keep this high-frequency interaction in its own reactive boundary so a
+    // tap does not wait for the complete settings page to rebuild.
+    return Obx(() {
+      final isApplying = controller.isApplyingAll.value;
+      final label = isApplying ? 'در حال انجام...' : 'اعمال خودکار همه تنظیمات';
+
+      return Semantics(
+        liveRegion: true,
+        label: isApplying
+            ? 'در حال اعمال تنظیمات مهم دستگاه'
+            : 'اعمال خودکار همه تنظیمات مهم دستگاه',
+        child: FilledButton.icon(
+          key: const Key('apply-all-settings-button'),
+          onPressed: isApplying
+              ? null
+              : () => controller.applyAllSettings(context),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF2563EB),
+            minimumSize: const Size(230, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            child: isApplying
+                ? const SizedBox(
+                    key: ValueKey('apply-all-loading'),
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(
+                    Icons.flash_on_rounded,
+                    key: ValueKey('apply-all-idle'),
+                    size: 18,
+                  ),
+          ),
+          label: Text(
+            label,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    });
   }
 }
 

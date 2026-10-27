@@ -877,71 +877,8 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                     ),
                     const SizedBox(height: 12),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        if (mb.serial.isNotEmpty &&
-                            mb.serial != 'Not available' &&
-                            mb.serial != 'Default string' &&
-                            mb.serial != '-') ...[
-                          Tooltip(
-                            message: 'کپی شماره سریال مادربرد',
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(6),
-                              onTap: () => systemCtrl.copyToClipboard(
-                                context,
-                                mb.serial,
-                                'شماره سریال مادربرد کپی شد: ${mb.serial}',
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? const Color(0xFF1E293B)
-                                      : const Color(0xFFF1F5F9),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: isDark
-                                        ? const Color(0xFF334155)
-                                        : const Color(0xFFCBD5E1),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.qr_code_rounded,
-                                      size: 14,
-                                      color: brandColor,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'S/N: ${mb.serial}',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        fontFamily: 'monospace',
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark
-                                            ? AppTheme.darkTextSecondary
-                                            : AppTheme.lightTextSecondary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      Icons.copy_rounded,
-                                      size: 12,
-                                      color: isDark
-                                          ? AppTheme.darkTextMuted
-                                          : AppTheme.lightTextMuted,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                        const Spacer(),
                         OutlinedButton.icon(
                           onPressed: () => _showMotherboardDetails(
                             context,
@@ -1045,17 +982,6 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
               mb.manufacturer,
               isDark,
               isLtrValue: true,
-            ),
-            _buildDialogRow(
-              'شماره سریال مادربرد:',
-              mb.serial,
-              isDark,
-              isLtrValue: true,
-              onCopy: () => systemCtrl.copyToClipboard(
-                context,
-                mb.serial,
-                'شماره سریال مادربرد کپی شد: ${mb.serial}',
-              ),
             ),
             _buildDialogRow(
               'شناسه سخت‌افزاری (UUID):',
@@ -1307,12 +1233,6 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
             _buildDialogRow(
               'سازنده پردازنده:',
               cpu.manufacturer,
-              isDark,
-              isLtrValue: true,
-            ),
-            _buildDialogRow(
-              'شماره سریال پردازنده:',
-              cpu.serial,
               isDark,
               isLtrValue: true,
             ),
@@ -1603,8 +1523,6 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
               ),
               if (mod.partNumber.isNotEmpty && mod.partNumber != '-')
                 _buildSmallSpec('Part Number', mod.partNumber, isDark),
-              if (mod.serial.isNotEmpty && mod.serial != '-')
-                _buildSmallSpec('Serial Number', mod.serial, isDark),
               if (mod.manufacturer.isNotEmpty &&
                   mod.manufacturer != 'Not available')
                 _buildSmallSpec('سازنده ماژول', mod.manufacturer, isDark),
@@ -2591,12 +2509,6 @@ class _SystemSpecsPageState extends State<SystemSpecsPage> {
                 isDark,
                 isLtrValue: true,
               ),
-            _buildDialogRow(
-              'شماره سریال دیسک:',
-              drive.serial,
-              isDark,
-              isLtrValue: true,
-            ),
           ],
         ),
         actions: [

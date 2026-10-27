@@ -237,14 +237,6 @@ class _BatteryCardState extends State<BatteryCard> {
                 value: '${bat.cycleCount}',
                 icon: Icons.repeat_rounded,
               ),
-            if (bat.serial != 'Not available' && bat.serial.isNotEmpty)
-              InfoRow(
-                label: l10n.isPersian ? 'شماره سریال باتری' : 'Battery Serial',
-                value: bat.serial,
-                icon: Icons.qr_code_2_rounded,
-                isMonospace: true,
-                copyable: true,
-              ),
             if (bat.manufacturer != 'Not available' &&
                 bat.manufacturer != 'Unknown')
               InfoRow(

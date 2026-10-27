@@ -274,13 +274,6 @@ class StorageCard extends StatelessWidget {
                     icon: Icons.cable_rounded,
                     forceLtrValue: true,
                   ),
-                  InfoRow(
-                    label: l10n.serialNumber,
-                    value: drive.serial,
-                    icon: Icons.qr_code_rounded,
-                    copyable: true,
-                    isMonospace: true,
-                  ),
                 ],
               );
             }),

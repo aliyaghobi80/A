@@ -108,13 +108,6 @@ class SimpleModeView extends StatelessWidget {
           builder: (context, constraints) {
             final isWide = constraints.maxWidth > 850;
 
-            final cpuSerial =
-                (info.cpu.serial != 'Not available' &&
-                    info.cpu.serial != 'None' &&
-                    info.cpu.serial != '-' &&
-                    info.cpu.serial.isNotEmpty)
-                ? info.cpu.serial
-                : '-';
             final cardCpu = _buildProminentSpecCard(
               context: context,
               stepNumber: 1,
@@ -133,7 +126,6 @@ class SimpleModeView extends StatelessWidget {
                 if (info.cpu.maxClockDisplay != 'Not available')
                   info.cpu.maxClockDisplay,
               ],
-              serialNumber: cpuSerial,
               copyValue: info.cpu.name,
               onCopy: (val) => systemCtrl.copyToClipboard(
                 context,
@@ -213,19 +205,6 @@ class SimpleModeView extends StatelessWidget {
               ),
             );
 
-            final mbSerial =
-                (info.motherboard.serial != 'Not available' &&
-                    info.motherboard.serial != 'Default string' &&
-                    info.motherboard.serial != '-' &&
-                    info.motherboard.serial.isNotEmpty)
-                ? info.motherboard.serial
-                : ((info.system.serial != 'Not available' &&
-                          info.system.serial != 'Default string' &&
-                          info.system.serial != '-' &&
-                          info.system.serial.isNotEmpty)
-                      ? info.system.serial
-                      : '-');
-
             final mb = info.motherboard;
             final cardMotherboard = _buildProminentSpecCard(
               context: context,
@@ -257,7 +236,6 @@ class SimpleModeView extends StatelessWidget {
                 if (info.bios.version != 'Not available') info.bios.version,
                 if (mb.uuid != '-' && mb.uuid.isNotEmpty) 'UUID: ${mb.uuid}',
               ],
-              serialNumber: mbSerial,
               copyValue: mb.fullDisplayName.isNotEmpty
                   ? mb.fullDisplayName
                   : mb.model,
@@ -286,7 +264,7 @@ class SimpleModeView extends StatelessWidget {
               ),
               primaryValue: '',
               copyValue: info.storage
-                  .map((d) => '${d.capacityDisplay} ${d.type} S/N: ${d.serial}')
+                  .map((d) => '${d.capacityDisplay} ${d.type}')
                   .join(', '),
               onCopy: (val) => systemCtrl.copyToClipboard(
                 context,
@@ -308,11 +286,6 @@ class SimpleModeView extends StatelessWidget {
                     )
                   else
                     ...info.storage.map((d) {
-                      final hasValidSerial =
-                          d.serial.isNotEmpty &&
-                          d.serial != 'Not available' &&
-                          d.serial != 'Default string' &&
-                          d.serial != '-';
                       final hasPartNumber =
                           d.partNumber.isNotEmpty &&
                           d.partNumber != '-' &&
@@ -389,162 +362,56 @@ class SimpleModeView extends StatelessWidget {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: [
-                                if (hasPartNumber)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: (isDark
-                                          ? const Color(0xFF0F172A)
-                                          : const Color(0xFFF1F5F9)),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(
-                                        color: (isDark
-                                            ? const Color(0xFF1E293B)
-                                            : const Color(0xFFE2E8F0)),
-                                        width: 0.8,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          '${l10n.isPersian ? "پارت نامبر:" : "P/N:"} ',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            color: isDark
-                                                ? const Color(0xFF94A3B8)
-                                                : const Color(0xFF64748B),
-                                          ),
-                                        ),
-                                        Directionality(
-                                          textDirection: TextDirection.ltr,
-                                          child: Text(
-                                            d.partNumber.trim(),
-                                            style: TextStyle(
-                                              fontFamily: 'Consolas',
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700,
-                                              color: isDark
-                                                  ? const Color(0xFFCBD5E1)
-                                                  : const Color(0xFF334155),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                            if (hasPartNumber) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: (isDark
+                                      ? const Color(0xFF0F172A)
+                                      : const Color(0xFFF1F5F9)),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: (isDark
+                                        ? const Color(0xFF1E293B)
+                                        : const Color(0xFFE2E8F0)),
+                                    width: 0.8,
                                   ),
-                                if (hasValidSerial)
-                                  InkWell(
-                                    onTap: () => systemCtrl.copyToClipboard(
-                                      context,
-                                      d.serial.trim(),
-                                      '${l10n.copiedToClipboard}: ${d.serial.trim()}',
-                                    ),
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: (isDark
-                                            ? const Color(0xFF0F172A)
-                                            : const Color(0xFFF1F5F9)),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: const Color(
-                                            0xFF06B6D4,
-                                          ).withValues(alpha: 0.4),
-                                          width: 0.8,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(
-                                            Icons.qr_code_2_rounded,
-                                            size: 11,
-                                            color: Color(0xFF06B6D4),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '${l10n.isPersian ? "شماره سریال:" : "S/N:"} ',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              color: isDark
-                                                  ? const Color(0xFF94A3B8)
-                                                  : const Color(0xFF64748B),
-                                            ),
-                                          ),
-                                          Directionality(
-                                            textDirection: TextDirection.ltr,
-                                            child: Text(
-                                              d.serial.trim(),
-                                              style: TextStyle(
-                                                fontFamily: 'Consolas',
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                                color: isDark
-                                                    ? const Color(0xFFCBD5E1)
-                                                    : const Color(0xFF334155),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Icon(
-                                            Icons.copy_rounded,
-                                            size: 10,
-                                            color: isDark
-                                                ? const Color(0xFF64748B)
-                                                : const Color(0xFF94A3B8),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: (isDark
-                                          ? const Color(0xFF0F172A)
-                                          : const Color(0xFFF1F5F9)),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(
-                                        color: (isDark
-                                            ? const Color(0xFF1E293B)
-                                            : const Color(0xFFE2E8F0)),
-                                        width: 0.8,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      l10n.isPersian
-                                          ? "شماره سریال: -"
-                                          : "S/N: -",
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${l10n.isPersian ? "پارت نامبر:" : "P/N:"} ',
                                       style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
                                         color: isDark
-                                            ? const Color(0xFF64748B)
-                                            : const Color(0xFF94A3B8),
+                                            ? const Color(0xFF94A3B8)
+                                            : const Color(0xFF64748B),
                                       ),
                                     ),
-                                  ),
-                              ],
-                            ),
+                                    Directionality(
+                                      textDirection: TextDirection.ltr,
+                                      child: Text(
+                                        d.partNumber.trim(),
+                                        style: TextStyle(
+                                          fontFamily: 'Consolas',
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark
+                                              ? const Color(0xFFCBD5E1)
+                                              : const Color(0xFF334155),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       );
@@ -2681,7 +2548,6 @@ class SimpleModeView extends StatelessWidget {
     Widget? illustration,
     String? secondaryValue,
     List<String>? specPills,
-    String? serialNumber,
     Widget? customContent,
     Widget? headerTrailing,
     Widget? actionWidget,
@@ -2907,111 +2773,6 @@ class SimpleModeView extends StatelessWidget {
                               .toList(),
                         ),
                       ],
-                      if (serialNumber != null && serialNumber.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        if (serialNumber != '-' &&
-                            serialNumber != 'Not available' &&
-                            serialNumber != 'Default string' &&
-                            serialNumber != 'None')
-                          InkWell(
-                            onTap: () => onCopy(serialNumber),
-                            borderRadius: BorderRadius.circular(6),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: (isDark
-                                    ? const Color(0xFF0F172A)
-                                    : const Color(0xFFF1F5F9)),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: accentColor.withValues(
-                                    alpha: isDark ? 0.4 : 0.3,
-                                  ),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.qr_code_2_rounded,
-                                    size: 13,
-                                    color: accentColor,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '${l10n.isPersian ? "شماره سریال:" : "S/N:"} ',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? const Color(0xFF94A3B8)
-                                          : const Color(0xFF64748B),
-                                    ),
-                                  ),
-                                  Flexible(
-                                    child: Directionality(
-                                      textDirection: TextDirection.ltr,
-                                      child: Text(
-                                        serialNumber,
-                                        style: TextStyle(
-                                          fontFamily: 'Consolas',
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: isDark
-                                              ? const Color(0xFFCBD5E1)
-                                              : const Color(0xFF334155),
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Icons.copy_rounded,
-                                    size: 11,
-                                    color: isDark
-                                        ? const Color(0xFF64748B)
-                                        : const Color(0xFF94A3B8),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        else
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: (isDark
-                                  ? const Color(0xFF0F172A)
-                                  : const Color(0xFFF1F5F9)),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: (isDark
-                                    ? const Color(0xFF1E293B)
-                                    : const Color(0xFFE2E8F0)),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Text(
-                              l10n.isPersian ? "شماره سریال: -" : "S/N: -",
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? const Color(0xFF64748B)
-                                    : const Color(0xFF94A3B8),
-                              ),
-                            ),
-                          ),
-                      ],
                     ],
                   ],
                 ),
@@ -3146,12 +2907,6 @@ class SimpleModeView extends StatelessWidget {
             final stickWidgets = ram.modules.asMap().entries.map((entry) {
               final idx = entry.key;
               final mod = entry.value;
-              final hasValidSerial =
-                  mod.serial.isNotEmpty &&
-                  mod.serial != 'Not available' &&
-                  mod.serial != '00000000' &&
-                  mod.serial != '-' &&
-                  mod.serial != 'Default string';
               final hasPartNumber =
                   mod.partNumber.isNotEmpty &&
                   mod.partNumber != 'Not available' &&
@@ -3384,111 +3139,6 @@ class SimpleModeView extends StatelessWidget {
                       ),
                     ],
 
-                    // Serial Number Row (or '-' if placeholder/unavailable)
-                    const SizedBox(height: 6),
-                    if (hasValidSerial)
-                      InkWell(
-                        onTap: () => systemCtrl.copyToClipboard(
-                          context,
-                          mod.serial.trim(),
-                          '${l10n.copiedToClipboard}: ${mod.serial.trim()}',
-                        ),
-                        borderRadius: BorderRadius.circular(4),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: (isDark
-                                ? const Color(0xFF0B1120)
-                                : Colors.white),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: const Color(
-                                0xFFF59E0B,
-                              ).withValues(alpha: 0.4),
-                              width: 0.7,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.qr_code_2_rounded,
-                                size: 10,
-                                color: Color(0xFFF59E0B),
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                '${l10n.isPersian ? "سریال:" : "S/N:"} ',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark
-                                      ? const Color(0xFF94A3B8)
-                                      : const Color(0xFF64748B),
-                                ),
-                              ),
-                              Flexible(
-                                child: Directionality(
-                                  textDirection: TextDirection.ltr,
-                                  child: Text(
-                                    mod.serial.trim(),
-                                    style: TextStyle(
-                                      fontFamily: 'Consolas',
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
-                                      color: isDark
-                                          ? const Color(0xFFCBD5E1)
-                                          : const Color(0xFF334155),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 3),
-                              Icon(
-                                Icons.copy_rounded,
-                                size: 9,
-                                color: isDark
-                                    ? const Color(0xFF64748B)
-                                    : const Color(0xFF94A3B8),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: (isDark
-                              ? const Color(0xFF0B1120)
-                              : Colors.white),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: (isDark
-                                ? const Color(0xFF1E293B)
-                                : const Color(0xFFE2E8F0)),
-                            width: 0.7,
-                          ),
-                        ),
-                        child: Text(
-                          l10n.isPersian ? "سریال: -" : "S/N: -",
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: isDark
-                                ? const Color(0xFF64748B)
-                                : const Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               );

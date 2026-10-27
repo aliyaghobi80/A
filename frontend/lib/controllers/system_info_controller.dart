@@ -252,30 +252,17 @@ class SystemInfoController extends GetxController {
     buffer.writeln('');
     buffer.writeln('[${l10n.hardware}]');
     buffer.writeln('${l10n.cpu}: ${info.cpu.name}');
-    if (info.cpu.serial.isNotEmpty &&
-        info.cpu.serial != 'Not available' &&
-        info.cpu.serial != '-') {
-      buffer.writeln(
-        '  - ${l10n.isPersian ? "شناسه پردازنده" : "Processor ID"}: ${info.cpu.serial}',
-      );
-    }
 
     buffer.writeln(
       '${l10n.ram}: ${info.ram.totalDisplay}${info.ram.speedDisplay != 'Not available' ? ' (${info.ram.speedDisplay})' : ''}',
     );
     for (int i = 0; i < info.ram.modules.length; i++) {
       final m = info.ram.modules[i];
-      final mSerial =
-          (m.serial.isNotEmpty &&
-              m.serial != '00000000' &&
-              m.serial != 'Not available')
-          ? m.serial
-          : '-';
       final mPart = (m.partNumber.isNotEmpty && m.partNumber != 'Not available')
           ? m.partNumber
           : '-';
       buffer.writeln(
-        '  - ${l10n.isPersian ? "ماژول" : "Slot"} ${i + 1} (${m.slot}): ${m.capacityDisplay} ${m.type} ${m.speedDisplay} | ${l10n.isPersian ? "پارت" : "P/N"}: $mPart | ${l10n.isPersian ? "سریال" : "S/N"}: $mSerial',
+        '  - ${l10n.isPersian ? "ماژول" : "Slot"} ${i + 1} (${m.slot}): ${m.capacityDisplay} ${m.type} ${m.speedDisplay} | ${l10n.isPersian ? "پارت" : "P/N"}: $mPart',
       );
     }
 
@@ -294,15 +281,7 @@ class SystemInfoController extends GetxController {
     final mbName = info.motherboard.model != 'Not available'
         ? info.motherboard.model
         : info.motherboard.manufacturer;
-    final mbSerial =
-        (info.motherboard.serial.isNotEmpty &&
-            info.motherboard.serial != 'Not available' &&
-            info.motherboard.serial != 'Default string')
-        ? info.motherboard.serial
-        : '-';
-    buffer.writeln(
-      '${l10n.motherboard}: $mbName | ${l10n.isPersian ? "سریال" : "S/N"}: $mbSerial',
-    );
+    buffer.writeln('${l10n.motherboard}: $mbName');
     if (info.motherboard.uuid.isNotEmpty && info.motherboard.uuid != '-') {
       buffer.writeln('  - UUID: ${info.motherboard.uuid}');
     }
@@ -310,9 +289,6 @@ class SystemInfoController extends GetxController {
     if (info.storage.isNotEmpty) {
       buffer.writeln('${l10n.storage}:');
       for (final d in info.storage) {
-        final dSerial = (d.serial.isNotEmpty && d.serial != 'Not available')
-            ? d.serial
-            : '-';
         final dPart =
             (d.partNumber.isNotEmpty &&
                 d.partNumber != '-' &&
@@ -320,7 +296,7 @@ class SystemInfoController extends GetxController {
             ? ' | ${l10n.isPersian ? "پارت" : "P/N"}: ${d.partNumber}'
             : '';
         buffer.writeln(
-          '  - ${d.capacityDisplay} ${d.type} (${d.model})$dPart | ${l10n.isPersian ? "سریال" : "S/N"}: $dSerial',
+          '  - ${d.capacityDisplay} ${d.type} (${d.model})$dPart',
         );
       }
     } else {
