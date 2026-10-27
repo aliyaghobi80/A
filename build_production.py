@@ -17,7 +17,7 @@ import zipfile
 import subprocess
 import json
 
-APP_VERSION = "1.1.42"
+APP_VERSION = "1.1.43"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:
@@ -80,11 +80,58 @@ def step_build_flutter():
     print("[2/6] Building Flutter Windows Release...")
     print("==================================================")
     flutter_bin = shutil.which("flutter.bat") or shutil.which("flutter") or "flutter"
+    runner_exe = os.path.join(FLUTTER_RELEASE_DIR, "MarkaziSystemChecker.exe")
     flutter_cmd = f'"{flutter_bin}" build windows --release --no-pub'
     print(f"[*] Running: {flutter_cmd} in {FRONTEND_DIR}")
     res = subprocess.run(flutter_cmd, cwd=FRONTEND_DIR, shell=True)
     if res.returncode != 0:
-        raise RuntimeError(f"Flutter build failed with return code {res.returncode}")
+        if os.path.isfile(runner_exe):
+            print("[!] Full C++ toolchain build failed or Visual Studio toolchain is incomplete.")
+            print("[*] Recompiling Dart AOT snapshot & assets directly via Flutter assemble...")
+            assemble_dir = os.path.join(FRONTEND_DIR, "build", "windows_assemble")
+            os.makedirs(assemble_dir, exist_ok=True)
+            assemble_cmd = (
+                f'"{flutter_bin}" assemble '
+                f'-dTargetPlatform=windows-x64 '
+                f'-dBuildMode=release '
+                f'--output="{assemble_dir}" '
+                f'release_bundle_windows-x64_assets'
+            )
+            print(f"[*] Running: {assemble_cmd} in {FRONTEND_DIR}")
+            res_asm = subprocess.run(assemble_cmd, cwd=FRONTEND_DIR, shell=True)
+            if res_asm.returncode != 0:
+                raise RuntimeError(f"Flutter assemble failed with return code {res_asm.returncode}")
+
+            # Copy newly compiled app.so into data
+            asm_app_so = os.path.join(assemble_dir, "windows", "app.so")
+            dst_data = os.path.join(FLUTTER_RELEASE_DIR, "data")
+            os.makedirs(dst_data, exist_ok=True)
+            if os.path.isfile(asm_app_so):
+                shutil.copy2(asm_app_so, os.path.join(dst_data, "app.so"))
+                print(f"[OK] Updated Dart AOT snapshot -> {os.path.join(dst_data, 'app.so')}")
+            else:
+                raise FileNotFoundError(f"Compiled app.so not found at {asm_app_so}")
+
+            # Copy flutter_assets into data/flutter_assets
+            asm_assets = os.path.join(assemble_dir, "flutter_assets")
+            dst_assets = os.path.join(dst_data, "flutter_assets")
+            if os.path.isdir(asm_assets):
+                shutil.copytree(asm_assets, dst_assets, dirs_exist_ok=True)
+                print(f"[OK] Updated flutter_assets -> {dst_assets}")
+
+            # Ensure engine artifacts (flutter_windows.dll, icudtl.dat) exist
+            engine_dir = os.path.join(os.path.dirname(flutter_bin), "cache", "artifacts", "engine", "windows-x64")
+            for artifact in ["flutter_windows.dll"]:
+                art_src = os.path.join(engine_dir, artifact)
+                art_dst = os.path.join(FLUTTER_RELEASE_DIR, artifact)
+                if os.path.isfile(art_src) and not os.path.isfile(art_dst):
+                    shutil.copy2(art_src, art_dst)
+            icu_src = os.path.join(engine_dir, "icudtl.dat")
+            icu_dst = os.path.join(dst_data, "icudtl.dat")
+            if os.path.isfile(icu_src) and not os.path.isfile(icu_dst):
+                shutil.copy2(icu_src, icu_dst)
+        else:
+            raise RuntimeError(f"Flutter build failed with return code {res.returncode}")
     print("[OK] Flutter Windows Release compiled successfully.")
 
 
