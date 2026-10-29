@@ -306,6 +306,9 @@ def match_package_to_hardware(
         recommendation = "recommended"
         reasons.append("سخت‌افزار متناظر روی دستگاه شناسایی شد.")
 
+    if status == "up_to_date":
+        recommendation = "skip"
+
     return {
         "is_matched": True,
         "confidence": confidence,

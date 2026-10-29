@@ -75,6 +75,12 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
 
                 const SizedBox(height: 14),
 
+                // GPU Screen Flashing Warning Banner (prominently shown when installing GPU driver)
+                if (isBatchRunning && batchStatus.hasActiveGpuInstall) ...[
+                  _buildGpuFlashingWarningBanner(isDark),
+                  const SizedBox(height: 12),
+                ],
+
                 // 2. Active Installation Queue Banner (If running)
                 if (isBatchRunning) ...[
                   _buildQueueProgressPanel(
@@ -1012,6 +1018,51 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
     );
   }
 
+  Widget _buildGpuFlashingWarningBanner(bool isDark) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        key: const ValueKey('gpu-screen-flashing-warning'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF78350F).withValues(alpha: isDark ? 0.35 : 0.18),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.6 : 0.45),
+            width: 1.2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.tv_rounded,
+                color: Color(0xFFF59E0B),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                '«ممکن است صفحه چند ثانیه چشمک بزند؛ برنامه ادامه می‌دهد»',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFF59E0B),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildQueueProgressPanel(
     DriverBatchStatus status,
     DriverInstallController ctrl,
@@ -1025,6 +1076,27 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
     final done = completed + failed;
     final percent = total > 0 ? (done / total * 100).clamp(0.0, 100.0) : 0.0;
     final currentItem = status.currentFile;
+    final activeItems = status.effectiveActiveItems;
+    final isDualActive = activeItems.length >= 2;
+
+    String subtitleText;
+    if (isRunning) {
+      if (isDualActive) {
+        subtitleText =
+            'در حال نصب (۲ مورد هم‌زمان): ${activeItems[0].displayName} • ${activeItems[1].displayName}';
+      } else if (activeItems.isNotEmpty) {
+        subtitleText =
+            'در حال نصب: ${activeItems.first.displayName} ($done از $total)';
+      } else if (currentItem != null && currentItem.isNotEmpty) {
+        subtitleText = 'در حال نصب: $currentItem ($done از $total)';
+      } else {
+        subtitleText = 'در حال آماده‌سازی...';
+      }
+    } else {
+      subtitleText = status.summaryMessage.isNotEmpty
+          ? status.summaryMessage
+          : '$completed درایور نصب شد';
+    }
 
     final Color statusColor = isRunning
         ? accent
@@ -1120,13 +1192,7 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      isRunning
-                          ? (currentItem != null && currentItem.isNotEmpty
-                                ? 'در حال نصب: $currentItem ($done از $total)'
-                                : 'در حال آماده‌سازی...')
-                          : (status.summaryMessage.isNotEmpty
-                                ? status.summaryMessage
-                                : '$completed درایور نصب شد'),
+                      subtitleText,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -1252,6 +1318,99 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
             ],
           ),
 
+          // Dual Active Item Slots in 2X mode
+          if (isRunning && isDualActive) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                for (int i = 0; i < activeItems.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: Container(
+                      key: ValueKey(
+                        'queue-item-${activeItems[i].packageId ?? activeItems[i].displayName}',
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: isDark ? 0.16 : 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: accent.withValues(alpha: isDark ? 0.5 : 0.3),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: accent,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Worker ${activeItems[i].workerId ?? (i + 1)}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: accent,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  activeItems[i].displayName,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark
+                                        ? const Color(0xFFF1F5F9)
+                                        : const Color(0xFF0F172A),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (activeItems[i].elapsedSeconds > 0)
+                                  Text(
+                                    '${activeItems[i].elapsedSeconds.toStringAsFixed(0)} ثانیه',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: isDark
+                                          ? const Color(0xFF94A3B8)
+                                          : const Color(0xFF64748B),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+
           // Mini Item Chips
           if (status.items.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -1279,6 +1438,7 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                 }
 
                 return Container(
+                  key: ValueKey('queue-item-${item.packageId ?? item.filename}'),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 4,

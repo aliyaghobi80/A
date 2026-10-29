@@ -57,3 +57,7 @@ logs/
 data/logs/
 PC_Test_Lab_Portable/
 *.zip
+.agents/
+PROJECT.md
+setup.inf
+setup.rpt

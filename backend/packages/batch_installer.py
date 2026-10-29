@@ -312,18 +312,26 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
                         custom_dir=custom_dir,
                         timeout_seconds=timeout,
                     )
-                    if result.get("exit_code") == 1618:
+                    retry_count = 0
+                    while result.get("exit_code") == 1618 and retry_count < 2:
+                        retry_count += 1
+                        backoff = 3.0 if retry_count == 1 else 7.0
                         with _batch_lock:
                             _batch_state["items"][idx]["message"] = (
-                                "Windows Installer توسط نصب دیگری مشغول است؛ "
-                                "پس از پایان آن، این بسته یک‌بار دیگر اجرا می‌شود."
+                                f"Windows Installer در حال استفاده است؛ تلاش مجدد {retry_count} از ۲..."
                             )
+                        time.sleep(backoff)
                         if wait_for_windows_installer_idle(timeout_seconds=900):
                             result = silent_install_package(
                                 item_info.get("relative_path") or pkg_id or item_info.get("filename"),
                                 custom_dir=custom_dir,
                                 timeout_seconds=timeout,
                             )
+                        else:
+                            break
+                    if result.get("exit_code") == 1618:
+                        result["message"] = "نصب‌کننده Windows Installer همچنان مشغول است؛ بیش از ۲ بار تلاش انجام شد و نصب متوقف گردید."
+                        result["success"] = False
 
         except Exception as e:
             logger.error(f"[BatchInstall] Error processing {pkg_id}: {e}")

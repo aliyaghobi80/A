@@ -8,7 +8,14 @@ Recursively detects, inspects, and classifies real-world Windows driver packages
 - Type D: Direct INF driver trees (PnPUtil ready, hardware IDs parsed)
 
 Supports hardware vendors: ASUS, Gigabyte, Lenovo, MSI, ASRock, Acer, Dell, HP,
-Intel, AMD, NVIDIA, Realtek, MediaTek, Qualcomm, Broadcom, etc.
+Samsung, Toshiba/Dynabook, Huawei, Intel, AMD, NVIDIA, Realtek, MediaTek, Qualcomm,
+Broadcom, Goodix, Synaptics, ELAN, etc.
+
+Safety & Profiling:
+- Zero guessed switches: unknown packages receive empty silent_args []
+- Concurrency classification: is_barrier and is_parallel_safe conforming to CONTRACT.md
+- Exclusion filter: excludes diagnostics, cleanup utilities, firmware/BIOS flashers, uninstallers
+- Helper metadata parser: extracts documented metadata from .cva, InstallStep.txt, README
 """
 
 import configparser
@@ -44,8 +51,45 @@ DRIVER_CATEGORIES = {
 KNOWN_VENDOR_NAMES = [
     "asus", "gigabyte", "lenovo", "msi", "asrock", "acer", "dell", "hp",
     "intel", "amd", "nvidia", "realtek", "mediatek", "qualcomm", "broadcom",
-    "synaptics", "elan", "cirrus", "conexant", "killer", "asix"
+    "synaptics", "elan", "cirrus", "conexant", "killer", "asix",
+    "samsung", "toshiba", "dynabook", "huawei", "goodix",
 ]
+
+# Exclusion keywords for non-driver utilities
+EXCLUDED_KEYWORDS = {
+    # Diagnostics
+    "supportassist", "hwdiagnostic", "diags", "pc-doctor", "pc_doctor", "pcdoctor",
+    "diagnostics", "lenovodiagnostics", "dellcommandupdate",
+    # Cleanup utilities
+    "ddu", "amdcleanuputility", "cleaner", "remover", "cleanup", "drivercleaner",
+    # Firmware / BIOS flashers
+    "fwupdate", "firmwareupdate", "meupdate", "flash.bat", "flash.exe", "fpt.exe", "afudos",
+    "biosflash", "bios_update", "bios-update", "insydeflash", "hpflash", "amifldrv", "afuwin",
+    "firmware", "bios", "uefi", "ec firmware", "embedded controller",
+    # Uninstallers
+    "uninstall", "unins000", "unins001", "uninstaller",
+}
+
+
+def is_excluded_utility(path_or_name: str) -> bool:
+    """Checks if a file or directory path matches diagnostics, cleanup, firmware/BIOS, or uninstallers."""
+    if not path_or_name:
+        return False
+    p_lower = path_or_name.lower().replace("\\", "/")
+    base_name = os.path.basename(p_lower)
+    parts = {part.strip(" ._-()[]") for part in p_lower.split("/")}
+
+    if base_name in ("flash.bat", "flash.exe", "fpt.exe", "afudos.exe", "afudos"):
+        return True
+
+    if parts.intersection(EXCLUDED_KEYWORDS):
+        return True
+
+    for kw in EXCLUDED_KEYWORDS:
+        if kw in base_name or kw in p_lower:
+            return True
+
+    return False
 
 
 def _safe_extract_zip(archive_path: str, destination: str) -> None:
@@ -92,9 +136,7 @@ def extract_pe_metadata(exe_path: str) -> Dict[str, str]:
         return metadata
 
     try:
-        # Fallback fast heuristic: search for unicode StringFileInfo strings
         with open(exe_path, "rb") as f:
-            # Read first 1.5MB and last 512KB where PE resources typically reside
             head = f.read(1572864)
             f.seek(max(0, os.path.getsize(exe_path) - 524288))
             tail = f.read(524288)
@@ -114,7 +156,6 @@ def extract_pe_metadata(exe_path: str) -> Dict[str, str]:
             idx = blob.find(pattern_utf16)
             if idx != -1:
                 sub = blob[idx + len(pattern_utf16): idx + len(pattern_utf16) + 300]
-                # Filter null bytes and decode utf-16le
                 try:
                     text = sub.decode("utf-16le", errors="ignore").split("\x00")[0].strip()
                     if text and len(text) < 120 and text.isprintable():
@@ -199,7 +240,6 @@ def parse_inf_file(inf_path: str) -> Dict[str, Any]:
             if k_low == "provider":
                 res["provider"] = val_clean.strip("%")
             elif k_low == "driverver":
-                # Format: MM/DD/YYYY,X.X.X.X
                 parts = [p.strip() for p in val_clean.split(",")]
                 if len(parts) >= 1:
                     res["driver_date"] = parts[0]
@@ -217,7 +257,6 @@ def parse_inf_file(inf_path: str) -> Dict[str, Any]:
     compat_ids = set()
     model_names = set()
 
-    # Find model sections referenced in [Manufacturer] or matching *model* or *nt*
     model_section_names = set()
     for m in sections.get("manufacturer", []):
         if "=" in m:
@@ -227,7 +266,6 @@ def parse_inf_file(inf_path: str) -> Dict[str, Any]:
                 if ref:
                     model_section_names.add(ref)
 
-    # Search in all sections that match or look like model entries
     target_sections = model_section_names if model_section_names else [
         s for s in sections.keys() if any(t in s for t in ("nt", "model", "pci", "usb", "hdaudio", "acpi"))
     ]
@@ -245,13 +283,11 @@ def parse_inf_file(inf_path: str) -> Dict[str, Any]:
                     for m in matches:
                         hw_ids.add(m.upper())
 
-    # Fallback search for Hardware IDs in the entire content
     if not hw_ids:
         all_matches = hw_id_pattern.findall(content)
         for m in all_matches:
             hw_ids.add(m.upper())
 
-    # Resolve String Substitutions if any (e.g. %DeviceDesc% = ...)
     strings_map: Dict[str, str] = {}
     for str_sec in [s for s in sections.keys() if "strings" in s]:
         for line in sections.get(str_sec, []):
@@ -283,7 +319,7 @@ def classify_driver_category(
     """
     Classifies driver category based on multi-signal scoring:
     1. INF Class / ClassGuid
-    2. Hardware IDs (VEN_10DE -> GPU, VEN_10EC DEV_8168 -> LAN, etc.)
+    2. Hardware IDs (VEN_10DE -> GPU, VEN_10EC DEV_8168 -> LAN, VID_27C6 -> Goodix touchpad/biometric)
     3. Directory / Package filename hints
     Returns (category_key, category_persian_name).
     """
@@ -292,8 +328,6 @@ def classify_driver_category(
     inf_c = inf_class.lower()
     hw_text = " ".join(hardware_ids or []).upper()
 
-    # The bundle name is more reliable than one aggregated INF class when a
-    # vendor ships base, extension and software-component INFs together.
     strong_hints = (
         ("audio", ("drv_audio",)),
         ("bluetooth", ("drv_bt_", "bluetooth")),
@@ -331,6 +365,8 @@ def classify_driver_category(
         return "chipset", DRIVER_CATEGORIES["chipset"]["fa"]
 
     # 2. Hardware ID vendor/device heuristics
+    if "VID_27C6" in hw_text:  # Goodix Fingerprint / Touch sensor
+        return "touchpad", DRIVER_CATEGORIES["touchpad"]["fa"]
     if "VEN_10DE" in hw_text or "VEN_1002" in hw_text:  # NVIDIA or AMD Radeon
         if any(w in hints_text for w in ("vga", "graphics", "display", "geforce", "radeon")) or not any(w in hints_text for w in ("audio", "sound")):
             return "gpu", DRIVER_CATEGORIES["gpu"]["fa"]
@@ -352,7 +388,7 @@ def classify_driver_category(
         return "gpu", DRIVER_CATEGORIES["gpu"]["fa"]
     if any(w in hints_text for w in ("rst", "rapid storage", "ahci", "raid", "sata", "nvme", "vmd")):
         return "storage", DRIVER_CATEGORIES["storage"]["fa"]
-    if any(w in hints_text for w in ("touchpad", "trackpad", "touch pad", "precision", "elan", "synaptics")):
+    if any(w in hints_text for w in ("touchpad", "trackpad", "touch pad", "precision", "elan", "synaptics", "goodix", "fingerprint", "biometric")):
         return "touchpad", DRIVER_CATEGORIES["touchpad"]["fa"]
     if any(w in hints_text for w in ("camera", "webcam", "imaging")):
         return "camera", DRIVER_CATEGORIES["camera"]["fa"]
@@ -373,6 +409,53 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
     else:
         return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+def classify_concurrency_flags(
+    category: str,
+    install_method: str,
+    silent_args: List[str],
+) -> Tuple[bool, bool]:
+    """
+    Returns (is_barrier, is_parallel_safe) conforming to CONTRACT.md Section 3.
+    """
+    # 3.1 Strict Barriers (is_barrier: True, is_parallel_safe: False)
+    # 1. Core Platform & Chipset
+    if category in ("chipset", "system_mei", "storage"):
+        return True, False
+
+    # 2. Graphics Drivers (GPU)
+    if category == "gpu":
+        return True, False
+
+    # 3. Windows Installer (MSI Packages)
+    if install_method == "msiexec":
+        return True, False
+
+    # 4. PnPUtil INF Batches
+    if install_method in ("pnputil", "inf_pnputil"):
+        return True, False
+
+    # 5. Vendor Batch Scripts
+    if install_method == "script":
+        return True, False
+
+    # 6. Unknown or Unswitched Installers (requires GUI Autopilot)
+    if not silent_args:
+        return True, False
+
+    # 3.2 Parallel-Safe Packages (is_barrier: False, is_parallel_safe: True)
+    parallel_safe_categories = {
+        "audio", "lan", "wifi", "bluetooth", "touchpad", "card_reader", "camera", "usb", "other"
+    }
+    if (
+        category in parallel_safe_categories
+        and install_method in ("setup_exe", "asus_setup")
+        and bool(silent_args)
+    ):
+        return False, True
+
+    return True, False
 
 
 class DriverPackage:
@@ -402,6 +485,11 @@ class DriverPackage:
         notes: str = "",
         inf_files: Optional[List[str]] = None,
         supported_windows: Optional[List[str]] = None,
+        is_barrier: Optional[bool] = None,
+        is_parallel_safe: Optional[bool] = None,
+        resource_tag: Optional[str] = None,
+        timeout_seconds: Optional[int] = None,
+        requires_reboot: bool = False,
     ):
         self.package_id = package_id
         self.display_name = display_name
@@ -412,7 +500,7 @@ class DriverPackage:
         self.relative_path = relative_path
         self.installer_file = installer_file
         self.install_method = install_method
-        self.silent_args = silent_args
+        self.silent_args = list(silent_args) if silent_args else []
         self.size_bytes = size_bytes
         self.fingerprint = fingerprint
         self.hardware_ids = hardware_ids
@@ -426,10 +514,31 @@ class DriverPackage:
         self.inf_files = inf_files or []
         self.supported_windows = supported_windows or []
 
+        # Concurrency flags classification (CONTRACT.md Section 3)
+        if is_barrier is None or is_parallel_safe is None:
+            calc_barrier, calc_parallel = classify_concurrency_flags(
+                self.category, self.install_method, self.silent_args
+            )
+            self.is_barrier = calc_barrier if is_barrier is None else is_barrier
+            self.is_parallel_safe = calc_parallel if is_parallel_safe is None else is_parallel_safe
+        else:
+            self.is_barrier = is_barrier
+            self.is_parallel_safe = is_parallel_safe
+
+        self.resource_tag = resource_tag if resource_tag is not None else self.category
+        if timeout_seconds is not None:
+            self.timeout_seconds = timeout_seconds
+        else:
+            if self.category == "gpu":
+                self.timeout_seconds = 600
+            elif self.category in ("chipset", "system_mei", "storage"):
+                self.timeout_seconds = 420
+            else:
+                self.timeout_seconds = 300
+        self.requires_reboot = requires_reboot
+
     def to_dict(self) -> Dict[str, Any]:
-        # Determine effective installer path and method:
-        # If a vendor installer or script exists (AsusSetup.exe, Setup.exe, etc.), prioritize it!
-        # Use pnputil ONLY when no vendor installer/script exists (pure INF packages).
+        # Determine effective installer path and method
         if self.installer_file and self.install_method not in ("pnputil", "none"):
             eff_installer_path = self.installer_file
             eff_install_method = self.install_method
@@ -439,6 +548,12 @@ class DriverPackage:
         else:
             eff_installer_path = self.installer_file
             eff_install_method = self.install_method or "setup_exe"
+
+        eff_barrier = self.is_barrier
+        eff_parallel = self.is_parallel_safe
+        if eff_install_method in ("pnputil", "inf_pnputil", "msiexec", "script"):
+            eff_barrier = True
+            eff_parallel = False
 
         return {
             "package_id": self.package_id,
@@ -455,6 +570,11 @@ class DriverPackage:
             "manual_installer_path": self.installer_file or (self.inf_files[0] if self.inf_files else ""),
             "manual_install_method": self.install_method if self.install_method != "none" else ("pnputil" if self.inf_files else "setup_exe"),
             "silent_args": self.silent_args,
+            "is_barrier": eff_barrier,
+            "is_parallel_safe": eff_parallel,
+            "resource_tag": self.resource_tag,
+            "timeout_seconds": self.timeout_seconds,
+            "requires_reboot": self.requires_reboot,
             "size_bytes": self.size_bytes,
             "file_size_display": _format_size(self.size_bytes),
             "fingerprint": self.fingerprint,
@@ -470,11 +590,137 @@ class DriverPackage:
         }
 
 
+def _parse_helper_metadata(root_dir: str) -> Dict[str, Any]:
+    """
+    Parses helper documentation files (.cva, InstallStep.txt, README) in root_dir
+    to discover metadata (title, version) and documented entry points without executing scripts.
+    """
+    result: Dict[str, Any] = {
+        "title": "",
+        "version": "",
+        "entrypoint": None,
+        "silent_args": [],
+        "method": None,
+    }
+    if not os.path.isdir(root_dir):
+        return result
+
+    try:
+        entries = os.listdir(root_dir)
+    except Exception:
+        return result
+
+    # 1. Parse HP .cva files
+    cva_files = [os.path.join(root_dir, e) for e in entries if e.lower().endswith(".cva")]
+    for cva in cva_files:
+        try:
+            with open(cva, "r", encoding="utf-8", errors="ignore") as f:
+                cva_text = f.read()
+            for line in cva_text.splitlines():
+                line_str = line.strip()
+                if "=" in line_str:
+                    k, v = [x.strip() for x in line_str.split("=", 1)]
+                    k_low = k.lower()
+                    val = v.strip(' "\'')
+                    if k_low in ("software title", "title") and not result["title"]:
+                        result["title"] = val
+                    elif k_low == "version" and not result["version"]:
+                        result["version"] = val
+                    elif k_low in ("silentinstall", "install") and not result["entrypoint"]:
+                        tokens = [t.strip(' "\'') for t in val.split() if t.strip(' "\'')]
+                        if tokens:
+                            candidate_file = tokens[0]
+                            full_cand = os.path.join(root_dir, candidate_file)
+                            if os.path.isfile(full_cand) and not is_excluded_utility(full_cand):
+                                result["entrypoint"] = full_cand
+                                ext = os.path.splitext(candidate_file)[1].lower()
+                                if ext == ".exe":
+                                    result["method"] = "setup_exe"
+                                elif ext in (".cmd", ".bat"):
+                                    result["method"] = "script"
+                                elif ext == ".msi":
+                                    result["method"] = "msiexec"
+                                result["silent_args"] = [t for t in tokens[1:] if t.startswith(("-", "/"))]
+        except Exception as e:
+            logger.debug(f"Error reading .cva file {cva}: {e}")
+
+    # 2. Parse ASUS InstallStep.txt
+    installstep_files = [
+        os.path.join(root_dir, e) for e in entries
+        if e.lower() in ("installstep.txt", "install_step.txt", "installstep.bat.txt")
+    ]
+    for step_file in installstep_files:
+        try:
+            with open(step_file, "r", encoding="utf-8", errors="ignore") as f:
+                step_text = f.read()
+            for line in step_text.splitlines():
+                line_str = line.strip()
+                tokens = [t.strip(' "\';') for t in line_str.split() if t.strip(' "\';')]
+                for token in tokens:
+                    cand_name = os.path.basename(token)
+                    if cand_name.lower().endswith((".exe", ".bat", ".cmd")):
+                        full_cand = os.path.join(root_dir, cand_name)
+                        if os.path.isfile(full_cand) and not is_excluded_utility(full_cand) and not result["entrypoint"]:
+                            result["entrypoint"] = full_cand
+                            cand_low = cand_name.lower()
+                            if "asussetup" in cand_low:
+                                result["method"] = "asus_setup"
+                                result["silent_args"] = ["-s", "-norestart"]
+                            elif cand_low.endswith(".exe"):
+                                result["method"] = "setup_exe"
+                                switches = [t for t in tokens if t.startswith(("-", "/"))]
+                                result["silent_args"] = switches if switches else get_driver_exe_silent_args(full_cand)
+                            elif cand_low.endswith((".bat", ".cmd")):
+                                result["method"] = "script"
+                                result["silent_args"] = [t for t in tokens if t.startswith(("-", "/"))]
+                            break
+        except Exception as e:
+            logger.debug(f"Error reading InstallStep file {step_file}: {e}")
+
+    # 3. Parse README files
+    if not result["entrypoint"]:
+        readme_files = [
+            os.path.join(root_dir, e) for e in entries
+            if any(e.lower().startswith(p) for p in ("readme", "read_me", "install.txt"))
+        ]
+        for rm in readme_files:
+            try:
+                with open(rm, "r", encoding="utf-8", errors="ignore") as f:
+                    rm_text = f.read()
+                for line in rm_text.splitlines():
+                    tokens = [t.strip(' "\';') for t in line.strip().split() if t.strip(' "\';')]
+                    for token in tokens:
+                        cand_name = os.path.basename(token)
+                        if cand_name.lower().endswith((".exe", ".bat", ".cmd")):
+                            full_cand = os.path.join(root_dir, cand_name)
+                            if os.path.isfile(full_cand) and not is_excluded_utility(full_cand) and not result["entrypoint"]:
+                                result["entrypoint"] = full_cand
+                                ext = os.path.splitext(cand_name)[1].lower()
+                                if ext == ".exe":
+                                    result["method"] = "setup_exe"
+                                    switches = [t for t in tokens if t.startswith(("-", "/"))]
+                                    result["silent_args"] = switches if switches else get_driver_exe_silent_args(full_cand)
+                                elif ext in (".bat", ".cmd"):
+                                    result["method"] = "script"
+                                    result["silent_args"] = [t for t in tokens if t.startswith(("-", "/"))]
+                                break
+                    if result["entrypoint"]:
+                        break
+            except Exception as e:
+                logger.debug(f"Error reading readme file {rm}: {e}")
+
+    return result
+
 
 def get_driver_exe_silent_args(file_path: str) -> List[str]:
-    """Returns vendor-specific silent switches for driver executables (ASUS, Gigabyte, MSI, Lenovo, HP, Dell, NVIDIA, AMD, Intel, Realtek)."""
+    """
+    Returns vendor-specific silent switches for driver executables
+    (ASUS, Gigabyte, MSI, Lenovo, HP, Dell, Samsung, Toshiba/Dynabook, Huawei, Goodix, NVIDIA, AMD, Intel, Realtek).
+    Returns empty list [] for unknown packages (no guessed switches!).
+    """
     name_l = os.path.basename(file_path).lower()
     path_l = os.path.abspath(file_path).lower().replace("\\", "/")
+
     if "dpinst" in name_l:
         return ["/q", "/se", "/sa", "/sw"]
     elif any(t in name_l for t in ("nvidia", "geforce", "quadro")) or name_l.endswith("-international-dch-whql.exe") or "-whql" in name_l:
@@ -483,9 +729,6 @@ def get_driver_exe_silent_args(file_path: str) -> List[str]:
         return ["-INSTALL", "-OUTPUT", "screen", "-NORESTART"]
     elif any(t in name_l for t in ("asussetup", "asus")):
         return ["-s", "-norestart"]
-    # Intel's current Graphics Installer documents ``--overwrite -s``.  The
-    # downloaded EXE may be named gfx_win_*.exe, or become Installer.exe after
-    # extraction, so use the complete path as a vendor/category hint.
     elif (
         "gfx_win" in path_l
         or "igfx" in path_l
@@ -500,9 +743,23 @@ def get_driver_exe_silent_args(file_path: str) -> List[str]:
         return ["/VERYSILENT", "/NORESTART", "/SUPPRESSMSGBOXES"]
     elif "dell" in name_l or "win64" in name_l:  # Dell DUP
         return ["/s"]
-    elif any(t in name_l for t in ("intel", "realtek", "audio", "lan", "wlan", "wifi", "bluetooth", "touchpad", "chipset")):
+    # Samsung vendor profile
+    elif "samsung" in name_l or "samsung" in path_l:
         return ["/s", "/norestart"]
-    return ["/s", "/norestart"]
+    # Toshiba / Dynabook vendor profile
+    elif any(t in name_l or t in path_l for t in ("toshiba", "dynabook")):
+        return ["/s", "/norestart"]
+    # Huawei vendor profile
+    elif "huawei" in name_l or "huawei" in path_l:
+        return ["/s", "/norestart"]
+    # Goodix component profile
+    elif "goodix" in name_l or "goodix" in path_l:
+        return ["/s", "/norestart"]
+    elif any(t in name_l or t in path_l for t in ("intel", "realtek", "audio", "lan", "wlan", "wifi", "bluetooth", "touchpad", "chipset")):
+        return ["/s", "/norestart"]
+
+    # Zero guessed switches for unknown packages
+    return []
 
 
 def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], List[str]]:
@@ -518,6 +775,9 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
     for r, _, files in os.walk(root_dir):
         for f in files:
             full = os.path.join(r, f)
+            # Skip excluded utilities
+            if is_excluded_utility(full):
+                continue
             ext = os.path.splitext(f)[1].lower()
             if ext == ".exe":
                 candidates_exe.append(full)
@@ -534,7 +794,17 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
             alts = [c for c in candidates_exe if c != exe]
             return exe, "asus_setup", ["-s", "-norestart"], alts
 
-    # 2. Recognized standard vendor setups (Gigabyte, MSI, Intel, Realtek)
+    # 2. Check helper metadata (.cva, InstallStep.txt, README)
+    helper_meta = _parse_helper_metadata(root_dir)
+    if helper_meta.get("entrypoint") and os.path.isfile(helper_meta["entrypoint"]):
+        ep = helper_meta["entrypoint"]
+        if not is_excluded_utility(ep):
+            method = helper_meta.get("method") or "setup_exe"
+            args = helper_meta.get("silent_args") or get_driver_exe_silent_args(ep)
+            alts = [c for c in candidates_exe if c != ep]
+            return ep, method, args, alts
+
+    # 3. Recognized standard vendor setups (Gigabyte, MSI, Intel, Realtek, Samsung, Huawei)
     known_setups = (
         "setup.exe", "installer.exe", "setuprst.exe", "setupchipset.exe",
         "igxpin.exe", "dpinst.exe", "dpinst64.exe", "install.exe",
@@ -546,7 +816,7 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
             args = get_driver_exe_silent_args(exe)
             return exe, "setup_exe", args, alts
 
-    # 3. Trusted vendor scripts (SilentInstall.cmd, install.bat, etc.)
+    # 4. Trusted vendor scripts (SilentInstall.cmd, install.bat, etc.)
     trusted_scripts = (
         "silentinstall.cmd", "silentinstall.bat", "install.cmd", "install.bat",
         "setup.cmd", "setup.bat", "installstep.bat", "silent.bat", "silent.cmd"
@@ -555,7 +825,7 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
         if os.path.basename(scr).lower() in trusted_scripts:
             return scr, "script", [], [c for c in candidates_script if c != scr]
 
-    # 4. Standalone OEM vendor driver packages (NVIDIA, AMD, Intel, Lenovo, HP, Dell)
+    # 5. Standalone OEM vendor driver packages (NVIDIA, AMD, Intel, Lenovo, HP, Dell)
     for exe in candidates_exe:
         exe_low = os.path.basename(exe).lower()
         if (
@@ -570,24 +840,19 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
             alts = [c for c in candidates_exe if c != exe]
             return exe, "setup_exe", get_driver_exe_silent_args(exe), alts
 
-    # 5. INF payloads often contain service/helper executables that are not
-    # installers.  Prefer the complete INF tree unless a known OEM wrapper was
-    # selected above; this also ensures every base/extension/component INF is
-    # passed to PnPUtil.
+    # 6. Prefer the complete INF tree unless a known OEM wrapper was selected
     if candidates_inf:
         return candidates_inf[0], "pnputil", [], candidates_inf[1:] + candidates_exe
 
-    # 6. Any root or shallow EXE
+    # 7. Any root or shallow EXE
     if candidates_exe:
-        # Sort by directory depth so shallowest setup is chosen
         candidates_exe.sort(key=lambda p: len(os.path.relpath(p, root_dir).replace("\\", "/").split("/")))
         primary = candidates_exe[0]
-        # Only use if not deep in helper folder unless no other option
         rel_parts = os.path.relpath(primary, root_dir).replace("\\", "/").split("/")
         if len(rel_parts) <= 2 or not candidates_inf:
             return primary, "setup_exe", get_driver_exe_silent_args(primary), candidates_exe[1:]
 
-    # 7. MSI packages
+    # 8. MSI packages
     if candidates_msi:
         return candidates_msi[0], "msiexec", ["/qn", "/norestart", "REBOOT=ReallySuppress"], candidates_msi[1:]
 
@@ -597,7 +862,8 @@ def _resolve_installer_entrypoint(root_dir: str) -> tuple[str, str, List[str], L
 def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[DriverPackage]:
     """
     Inspects a candidate file or directory in the driver directory and returns a DriverPackage.
-    Guarantees no arbitrary execution during inspection.
+    Guarantees zero arbitrary execution during inspection.
+    Excludes diagnostics, cleanup utilities, firmware/BIOS flashers, and uninstallers.
     """
     if not os.path.exists(entry_path):
         return None
@@ -605,14 +871,10 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
     rel_path = os.path.relpath(entry_path, driver_root)
     base_name = os.path.basename(entry_path)
     parent_folder = os.path.basename(os.path.dirname(entry_path))
-    rel_lower = rel_path.lower().replace("\\", "/")
-    path_parts = {part.strip(" ._-()[]") for part in rel_lower.split("/")}
-    is_firmware = (
-        any(word in rel_lower for word in ("uninstall", "unins000", "biosflash", "bios_update", "bios-update"))
-        or bool(path_parts.intersection({"bios", "uefi", "firmware", "ec firmware", "embedded controller"}))
-    )
-    if is_firmware:
-        logger.info("Excluded removal/firmware utility from driver installation: %s", rel_path)
+
+    # Exclusion filter: diagnostics, cleanup, firmware/BIOS, uninstallers
+    if is_excluded_utility(rel_path) or is_excluded_utility(entry_path) or is_excluded_utility(base_name):
+        logger.info("Excluded removal/diagnostic/firmware utility from driver installation: %s", rel_path)
         return None
 
     version_hint = rel_path.lower().replace("-", "_")
@@ -639,9 +901,6 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
                 "install.bat", "setup.cmd", "setup.bat", "installstep.bat",
                 "installpackage.bat", "silent.bat", "silent.cmd",
             }
-            # Do not treat arbitrary command files as a driver package.  OEM
-            # packages commonly use these named setup wrappers (including
-            # ASUS InstallStep/setup.bat), so support only those known forms.
             if base_name.lower() not in trusted_scripts:
                 return None
             package_type = "script"
@@ -652,12 +911,10 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
     else:
         return None
 
-    # Handle Package Inspection by Type
     extracted_temp_dir: Optional[str] = None
     target_scan_dir = entry_path
 
     if package_type == "zip":
-        # Safe extraction to temporary directory for deep inspection
         try:
             temp_dir = tempfile.mkdtemp(prefix="markazi_inspect_zip_")
             _safe_extract_zip(entry_path, temp_dir)
@@ -725,6 +982,16 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
         silent_args = ["/qn", "/norestart", "REBOOT=ReallySuppress"]
         alts = []
 
+    # Final check on resolved installer file
+    if installer_file and is_excluded_utility(installer_file):
+        logger.info("Excluded removal/diagnostic/firmware utility installer: %s", installer_file)
+        return None
+
+    # Helper metadata from .cva / InstallStep.txt / README
+    helper_meta = _parse_helper_metadata(target_scan_dir) if os.path.isdir(target_scan_dir) else {}
+    if not driver_version and helper_meta.get("version"):
+        driver_version = helper_meta["version"]
+
     # PE Metadata extraction for EXEs
     pe_meta = {}
     if installer_file and installer_file.lower().endswith(".exe") and os.path.isfile(installer_file):
@@ -739,26 +1006,28 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
     if os.path.isfile(entry_path):
         name_hints.append(parent_folder)
     name_hints.extend([pe_meta.get("file_description", ""), pe_meta.get("product_name", "")])
+    if helper_meta.get("title"):
+        name_hints.append(helper_meta["title"])
     name_hints.extend(model_names[:3])
     category_key, category_fa = classify_driver_category(name_hints, inf_class, list(combined_hw_ids))
 
-    # Smart Driver Display Name (Human-readable instead of meaningless EXE name)
+    # Smart Driver Display Name
     display_name = ""
-    if pe_meta.get("product_name") and len(pe_meta["product_name"]) > 4:
+    if helper_meta.get("title") and len(helper_meta["title"]) > 4:
+        display_name = helper_meta["title"]
+    elif pe_meta.get("product_name") and len(pe_meta["product_name"]) > 4:
         display_name = pe_meta["product_name"]
     elif pe_meta.get("file_description") and len(pe_meta["file_description"]) > 4:
         display_name = pe_meta["file_description"]
     elif model_names:
         display_name = f"{provider} {model_names[0]}".strip()
     elif package_type == "folder":
-        # Beautify folder name (e.g. ASUS_LAN -> ASUS LAN Driver)
         clean_folder = base_name.replace("_", " ").replace("-", " ").title()
         display_name = f"{clean_folder} Driver"
     elif package_type == "zip":
         clean_zip = os.path.splitext(base_name)[0].replace("_", " ").replace("-", " ").title()
         display_name = f"{clean_zip} Driver"
     else:
-        # Fallback to category name
         display_name = os.path.splitext(base_name)[0]
 
     # Calculate size and fingerprint
@@ -773,7 +1042,7 @@ def inspect_driver_package(entry_path: str, driver_root: str) -> Optional[Driver
                 except Exception:
                     pass
 
-    # Fingerprint: deterministic hash based on rel_path, category, version, and hardware IDs
+    # Fingerprint
     fp_source = f"{rel_path}|{category_key}|{driver_version}|{','.join(sorted(list(combined_hw_ids))[:10])}"
     fingerprint = hashlib.sha256(fp_source.encode("utf-8")).hexdigest()[:16]
     package_id = f"drv_pkg_{fingerprint}"

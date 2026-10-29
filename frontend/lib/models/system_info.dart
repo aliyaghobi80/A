@@ -2335,6 +2335,52 @@ class ScannedDriverFile {
   }
 }
 
+class DriverActiveItem {
+  final String? packageId;
+  final String displayName;
+  final String category;
+  final int? workerId;
+  final String status;
+  final double? startTime;
+  final double elapsedSeconds;
+  final int retryCount;
+
+  DriverActiveItem({
+    this.packageId,
+    required this.displayName,
+    this.category = '',
+    this.workerId,
+    this.status = 'installing',
+    this.startTime,
+    this.elapsedSeconds = 0.0,
+    this.retryCount = 0,
+  });
+
+  factory DriverActiveItem.fromJson(Map<String, dynamic> json) {
+    return DriverActiveItem(
+      packageId: json['package_id'] as String?,
+      displayName: (json['display_name'] ?? json['package_id'] ?? '') as String,
+      category: json['category'] as String? ?? '',
+      workerId: json['worker_id'] as int?,
+      status: json['status'] as String? ?? 'installing',
+      startTime: (json['start_time'] as num?)?.toDouble(),
+      elapsedSeconds: (json['elapsed_seconds'] as num?)?.toDouble() ?? 0.0,
+      retryCount: json['retry_count'] as int? ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'package_id': packageId,
+    'display_name': displayName,
+    'category': category,
+    'worker_id': workerId,
+    'status': status,
+    'start_time': startTime,
+    'elapsed_seconds': elapsedSeconds,
+    'retry_count': retryCount,
+  };
+}
+
 class DriverInstallItem {
   final String filename;
   final String relativePath;
@@ -2347,6 +2393,10 @@ class DriverInstallItem {
   final String? displayName;
   final String? failureReason;
   final String category;
+  final int? workerId;
+  final int retryCount;
+  final String? categoryFa;
+  final double? elapsedSeconds;
 
   DriverInstallItem({
     required this.filename,
@@ -2360,6 +2410,10 @@ class DriverInstallItem {
     this.displayName,
     this.failureReason,
     this.category = '',
+    this.workerId,
+    this.retryCount = 0,
+    this.categoryFa,
+    this.elapsedSeconds,
   });
 
   factory DriverInstallItem.fromJson(Map<String, dynamic> json) {
@@ -2379,6 +2433,10 @@ class DriverInstallItem {
       displayName: json['display_name'] as String?,
       failureReason: json['failure_reason'] as String?,
       category: json['category'] as String? ?? '',
+      workerId: json['worker_id'] as int?,
+      retryCount: json['retry_count'] as int? ?? 0,
+      categoryFa: json['category_fa'] as String?,
+      elapsedSeconds: (json['elapsed_seconds'] as num?)?.toDouble(),
     );
   }
 }
@@ -2398,6 +2456,12 @@ class DriverBatchStatus {
   final bool rebootRequired;
   final String summaryMessage;
   final List<DriverInstallItem> items;
+  final List<DriverActiveItem> activeItems;
+  final int activeWorkers;
+  final int workerCount;
+  final String? mode;
+  final bool workerAlive;
+  final String fatalError;
 
   DriverBatchStatus({
     this.doubleSpeed = false,
@@ -2414,11 +2478,18 @@ class DriverBatchStatus {
     this.rebootRequired = false,
     this.summaryMessage = '',
     this.items = const [],
+    this.activeItems = const [],
+    this.activeWorkers = 0,
+    this.workerCount = 1,
+    this.mode,
+    this.workerAlive = true,
+    this.fatalError = '',
   });
 
   factory DriverBatchStatus.empty() => DriverBatchStatus(isRunning: false);
 
   factory DriverBatchStatus.fromJson(Map<String, dynamic> json) {
+    final rawActiveItems = json['active_items'] as List<dynamic>? ?? [];
     return DriverBatchStatus(
       doubleSpeed: json['double_speed'] == true,
       isRunning: json['is_running'] as bool? ?? false,
@@ -2433,10 +2504,79 @@ class DriverBatchStatus {
       folderPath: json['folder_path'] ?? '',
       rebootRequired: json['reboot_required'] as bool? ?? false,
       summaryMessage: json['summary_message'] ?? '',
+      activeWorkers: json['active_workers'] as int? ?? 0,
+      workerCount: json['worker_count'] as int? ?? 1,
+      mode: json['mode'] as String?,
+      workerAlive: json['worker_alive'] as bool? ?? true,
+      fatalError: json['fatal_error'] as String? ?? '',
       items: (json['items'] as List<dynamic>? ?? [])
           .map((e) => DriverInstallItem.fromJson(e as Map<String, dynamic>))
           .toList(),
+      activeItems: rawActiveItems
+          .map((e) => DriverActiveItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
+  }
+
+  /// Backward-compatible resolution of active items:
+  /// Uses activeItems if present, or derives from items with status == 'installing'.
+  List<DriverActiveItem> get effectiveActiveItems {
+    if (activeItems.isNotEmpty) return activeItems;
+    return items
+        .where((i) => i.status == 'installing')
+        .map((i) => DriverActiveItem(
+              packageId: i.packageId,
+              displayName: i.displayName ?? i.filename,
+              category: i.category,
+              workerId: i.workerId,
+              status: i.status,
+              elapsedSeconds: i.elapsedSeconds ?? 0.0,
+              retryCount: i.retryCount,
+            ))
+        .toList();
+  }
+
+  /// Whether any currently installing item is a GPU driver
+  bool get hasActiveGpuInstall {
+    if (!isRunning) return false;
+    final actives = effectiveActiveItems;
+    if (actives.isNotEmpty) {
+      return actives.any((a) {
+        final cat = a.category.toLowerCase();
+        final name = a.displayName.toLowerCase();
+        return cat == 'gpu' ||
+            cat == 'display' ||
+            name.contains('gpu') ||
+            name.contains('graphic') ||
+            name.contains('vga') ||
+            name.contains('display') ||
+            name.contains('nvidia') ||
+            name.contains('geforce') ||
+            name.contains('radeon') ||
+            name.contains('adrenalin') ||
+            name.contains('intel arc') ||
+            name.contains('intel graphics') ||
+            a.displayName.contains('گرافیک');
+      });
+    }
+    return items.any((i) {
+      if (i.status != 'installing') return false;
+      final cat = i.category.toLowerCase();
+      final name = (i.displayName ?? i.filename).toLowerCase();
+      return cat == 'gpu' ||
+          cat == 'display' ||
+          name.contains('gpu') ||
+          name.contains('graphic') ||
+          name.contains('vga') ||
+          name.contains('display') ||
+          name.contains('nvidia') ||
+          name.contains('geforce') ||
+          name.contains('radeon') ||
+          name.contains('adrenalin') ||
+          name.contains('intel arc') ||
+          name.contains('intel graphics') ||
+          (i.displayName ?? i.filename).contains('گرافیک');
+    });
   }
 }
 

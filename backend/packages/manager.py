@@ -2030,6 +2030,29 @@ class _SHELLEXECUTEINFOW(ctypes.Structure):
     ]
 
 
+def terminate_process_tree(pid: int) -> bool:
+    """
+    Forcefully terminates a process and all of its spawned child processes.
+    Uses Windows native taskkill.exe with /F (force) and /T (tree).
+    """
+    if not pid or pid <= 0:
+        return False
+    try:
+        cmd = ["taskkill.exe", "/F", "/T", "/PID", str(pid)]
+        CREATE_NO_WINDOW = 0x08000000
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=CREATE_NO_WINDOW,
+            timeout=10,
+        )
+        return res.returncode == 0
+    except Exception as e:
+        logger.error(f"Failed to terminate process tree for PID {pid}: {e}")
+        return False
+
+
 def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds: int, keywords: Optional[List[str]] = None) -> int:
     """Runs a command with elevation, launches auto-wizard autopilot, and returns its process exit code."""
     if not command:
@@ -2063,12 +2086,11 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
             try:
                 process.wait(timeout=timeout_seconds)
             except subprocess.TimeoutExpired:
-                # Do not kill an installer halfway through a transaction.
+                terminate_process_tree(process.pid)
                 return -2
             wait_for_remaining = max(0.5, deadline - time.monotonic())
             if not autopilot.wait_for_children(wait_for_remaining):
-                # A child wizard is still alive. Do not advance the sequential
-                # queue and overlap the next driver with an unfinished setup.
+                terminate_process_tree(process.pid)
                 return -2
             return int(process.returncode)
         finally:
@@ -2099,6 +2121,8 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
         autopilot.stop()
         return 0
 
+    pid = None
+
     try:
         try:
             pid = ctypes.windll.kernel32.GetProcessId(info.hProcess)
@@ -2110,12 +2134,16 @@ def _run_elevated_and_wait(command: List[str], working_dir: str, timeout_seconds
 
         wait_result = ctypes.windll.kernel32.WaitForSingleObject(info.hProcess, timeout_seconds * 1000)
         if wait_result != 0:
+            if pid:
+                terminate_process_tree(pid)
             return -2
         exit_code = wintypes.DWORD()
         if not ctypes.windll.kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(exit_code)):
             return -3
         wait_for_remaining = max(0.5, deadline - time.monotonic())
         if not autopilot.wait_for_children(wait_for_remaining):
+            if pid:
+                terminate_process_tree(pid)
             return -2
         return int(exit_code.value)
     finally:

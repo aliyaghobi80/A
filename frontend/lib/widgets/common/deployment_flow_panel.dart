@@ -47,16 +47,11 @@ class _DeploymentFlowPanelState extends State<DeploymentFlowPanel> {
     final stage2Running = batch.isStageRunning(2);
     final stage3Running = batch.isStageRunning(3);
 
-    // Active item description
-    BatchInstallItem? activeItem;
-    if (isRunning && batch.items.isNotEmpty) {
-      for (final it in batch.items) {
-        if (it.status == 'installing') {
-          activeItem = it;
-          break;
-        }
-      }
-    }
+    // Active item description (supports concurrent active items in 2X mode)
+    final activeItems = isRunning
+        ? batch.items.where((it) => it.status == 'installing').toList()
+        : <BatchInstallItem>[];
+    final activeItem = activeItems.isNotEmpty ? activeItems.first : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -151,11 +146,13 @@ class _DeploymentFlowPanelState extends State<DeploymentFlowPanel> {
                       const SizedBox(height: 3),
                       Text(
                         isRunning
-                            ? (activeItem != null
-                                ? 'گام جاری: ${activeItem.friendlyDescription} (${activeItem.stageNameFa})'
-                                : (currentItem != null
-                                    ? 'در حال پردازش: $currentItem'
-                                    : 'در حال آماده‌سازی مراحل...'))
+                            ? (activeItems.length >= 2
+                                ? 'گام‌های جاری (۲ مورد هم‌زمان): ${activeItems.map((a) => a.friendlyDescription).join(' • ')}'
+                                : (activeItem != null
+                                    ? 'گام جاری: ${activeItem.friendlyDescription} (${activeItem.stageNameFa})'
+                                    : (currentItem != null
+                                        ? 'در حال پردازش: $currentItem'
+                                        : 'در حال آماده‌سازی مراحل...')))
                             : (batch.summaryMessage.isNotEmpty
                                 ? batch.summaryMessage
                                 : 'تمام مراحل استقرار و تنظیمات به پایان رسید.'),
@@ -206,6 +203,83 @@ class _DeploymentFlowPanelState extends State<DeploymentFlowPanel> {
               ],
             ),
           ),
+
+          // Dual Active Items Slots (when 2 items run concurrently in 2X mode)
+          if (isRunning && activeItems.length >= 2) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              child: Row(
+                children: [
+                  for (int i = 0; i < activeItems.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        key: ValueKey('queue-item-${activeItems[i].id}'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: isDark ? 0.15 : 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: accent.withValues(alpha: isDark ? 0.4 : 0.25),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                color: accent,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 1.5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'خط ${i + 1}',
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: accent,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                activeItems[i].friendlyDescription,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? const Color(0xFFE2E8F0)
+                                      : const Color(0xFF1E293B),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
 
           // 2. Visual 3-Stage Stepper Flow
           Container(
@@ -368,7 +442,10 @@ class _DeploymentFlowPanelState extends State<DeploymentFlowPanel> {
                 separatorBuilder: (context, index) => const Divider(height: 6),
                 itemBuilder: (context, idx) {
                   final it = batch.items[idx];
-                  return _buildItemRow(it, isDark, accent);
+                  return KeyedSubtree(
+                    key: ValueKey('queue-item-${it.id}'),
+                    child: _buildItemRow(it, isDark, accent),
+                  );
                 },
               ),
             ),

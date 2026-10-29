@@ -17,6 +17,7 @@ except Exception:
     pass
 
 # Ensure backend directory is in sys.path
+APP_VERSION = "1.1.44"
 _backend_dir = os.path.dirname(os.path.abspath(__file__))
 if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
@@ -181,9 +182,9 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "service": "Markazi System Checker Backend",
-                "version": "1.1.43",
+                "version": APP_VERSION,
                 "phase": 4,
-                "api_contract_version": 3,
+                "api_contract_version": 4,
             }
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return

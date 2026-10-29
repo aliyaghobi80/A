@@ -25,7 +25,7 @@ from typing import Dict, Any, List, Optional
 
 from utils.powershell import run_powershell_json
 from .archive_extractor import auto_unpack_driver_archives
-from .package_inspector import inspect_driver_package, DriverPackage
+from .package_inspector import inspect_driver_package, DriverPackage, is_excluded_utility
 from .hardware_matcher import get_current_system_hardware, match_package_to_hardware
 from .deduplicator import deduplicate_driver_packages
 from .history import load_driver_history
@@ -231,16 +231,20 @@ def _collect_driver_candidates(dir_path: str, current_depth: int = 0, max_depth:
         and not os.path.isjunction(os.path.join(dir_path, d))
         and d.lower() not in _IGNORED_DRIVER_DIR_NAMES
         and not d.startswith(".")
+        and not is_excluded_utility(d)
+        and not is_excluded_utility(os.path.join(dir_path, d))
     ]
 
     executables = [
         path for path in direct_files
         if os.path.splitext(path)[1].lower() in (".exe", ".msi")
+        and not is_excluded_utility(path)
     ]
     scripts = [
         path for path in direct_files
         if os.path.splitext(path)[1].lower() in (".cmd", ".bat")
         and any(k in os.path.basename(path).lower() for k in ("install", "setup", "silent"))
+        and not is_excluded_utility(path)
     ]
     has_inf = any(os.path.splitext(path)[1].lower() == ".inf" for path in direct_files)
 
@@ -435,8 +439,20 @@ def start_intelligent_driver_install(
         id_set = set(package_ids)
         target_pkgs = [p for p in all_pkgs if p.get("package_id") in id_set]
     else:
-        target_pkgs = [p for p in all_pkgs if p.get("is_valid", True)]
+        target_pkgs = [
+            p for p in all_pkgs
+            if p.get("is_valid", True)
+            and p.get("match", {}).get("status") != "up_to_date"
+            and p.get("match", {}).get("recommendation") != "skip"
+        ]
     if not target_pkgs:
+        up_to_date_pkgs = [p for p in all_pkgs if p.get("match", {}).get("status") == "up_to_date"]
+        if up_to_date_pkgs:
+            return {
+                "success": True,
+                "message": f"تمامی {len(up_to_date_pkgs)} درایور سیستم به‌روز هستند و نیازی به نصب مجدد نیست.",
+                "skipped_count": len(up_to_date_pkgs),
+            }
         return {
             "success": False,
             "message": "هیچ بسته درایور معتبری برای نصب یافت نشد.",

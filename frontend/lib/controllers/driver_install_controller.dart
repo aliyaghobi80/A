@@ -42,6 +42,13 @@ class DriverInstallController extends GetxController {
   int _emptyQueueSnapshots = 0;
   int _scanGeneration = 0;
 
+  List<DriverActiveItem> get activeItems =>
+      batchStatus.value.effectiveActiveItems;
+
+  bool get isDualActive => activeItems.length >= 2;
+
+  bool get hasActiveGpuInstall => batchStatus.value.hasActiveGpuInstall;
+
   @override
   void onInit() {
     super.onInit();
@@ -641,6 +648,7 @@ class DriverInstallController extends GetxController {
         final status = await _apiService.getDriverQueueStatus();
         if (isClosed || timer != _pollTimer) return;
         final effective = _applyDriverBatchStatus(status);
+        doubleSpeed.value = effective.doubleSpeed;
 
         // Update the session counters in real time, but do not launch a full
         // WMI/hardware refresh after every package. That refresh used to pile
@@ -693,9 +701,10 @@ class DriverInstallController extends GetxController {
   }
 
   Future<void> _refreshAfterCompletedQueue(DriverBatchStatus status) async {
-    final touchedGraphics = status.items.any(
-      (item) => item.category.toLowerCase() == 'gpu',
-    );
+    final touchedGraphics = status.hasActiveGpuInstall ||
+        status.items.any(
+          (item) => item.category.toLowerCase() == 'gpu',
+        );
     await Future<void>.delayed(Duration(seconds: touchedGraphics ? 8 : 2));
     if (isClosed) return;
 

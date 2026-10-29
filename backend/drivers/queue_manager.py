@@ -1,45 +1,60 @@
 # backend/drivers/queue_manager.py
 """
 Intelligent Driver Installation Queue & Execution Manager.
-Organizes selected driver packages into a strict 9-tier priority queue:
+Organizes selected driver packages into a strict priority queue:
   1. Chipset / Platform
   2. Management Engine / Serial IO / System Interfaces
   3. Storage Controller (SATA / AHCI / RAID / NVMe)
-  4. Wired LAN / Ethernet
-  5. Wireless Wi-Fi
-  6. Bluetooth
-  7. Audio / Sound
-  8. Dedicated & Integrated GPU
-  9. Other peripheral devices
+  4. Integrated GPU (iGPU: AMD APU, Intel UHD/Iris)
+  5. Discrete GPU (dGPU: NVIDIA, AMD Radeon, Intel Arc)
+  6. Wired LAN / Ethernet
+  7. Wireless Wi-Fi
+  8. Bluetooth
+  9. Audio / Sound
+  10. Touchpad
+  11. Camera
+  12. Card Reader
+  13. USB
+  14. Other peripheral devices
 
-Executes packages sequentially:
+Executes packages sequentially (1X) or bounded 2X concurrency using DeploymentWorkerPool:
+- Dedicated GPU vendor installers (NvidiaGpuInstaller, AmdGpuInstaller, IntelGpuInstaller)
 - PnPUtil for INF packages (/add-driver ... /install)
 - Standard & Vendor EXEs with verified silent switches
 - MsiExec for MSI packages
 - Post-install PnP device verification
-- Real-time status reporting and reboot requirement tracking
+- Real-time status reporting, reboot requirement tracking, active_items exposure
+- Atomic state persistence (driver_queue_state.json.tmp -> os.replace)
 - File logging to data/logs/driver_manager.log
 """
 
-import logging
 import copy
+import logging
 import os
 import subprocess
-import tempfile
 import threading
 import time
+from typing import Dict, Any, List, Optional, Tuple
+
 from deployment_scheduler import (
     approved_resources,
     run_deployment,
     wait_for_windows_installer_idle,
+    persist_queue_state_atomic,
+    DeploymentWorkerPool,
 )
-from typing import Dict, Any, List, Optional, Tuple
-
+from .gpu_installers import (
+    get_gpu_installer,
+    execute_gpu_settle_delay,
+    gpu_priority_key,
+    deduplicate_gpu_packages,
+)
 from utils.powershell import run_powershell_json, get_hidden_subprocess_kwargs
-from packages.manager import _run_elevated_and_wait
+from packages.manager import _run_elevated_and_wait, terminate_process_tree
 from .history import record_driver_installation
 
 logger = logging.getLogger(__name__)
+
 
 def _resolve_driver_log_file(local_app_data: Optional[str] = None) -> str:
     """Return a writable diagnostic path in installed and development builds."""
@@ -73,14 +88,20 @@ PRIORITY_ORDER = {
 
 _queue_lock = threading.Lock()
 _queue_state: Dict[str, Any] = {
+    "status": "ok",
     "is_running": False,
     "cancelled": False,
+    "mode": "1X",
+    "double_speed": False,
+    "worker_count": 1,
+    "active_workers": 0,
     "total": 0,
     "completed": 0,
     "failed": 0,
     "skipped": 0,
     "current_index": 0,
     "current_package": None,
+    "current_file": None,
     "progress_percent": 0.0,
     "start_time": None,
     "end_time": None,
@@ -90,6 +111,7 @@ _queue_state: Dict[str, Any] = {
     "last_update_time": None,
     "worker_alive": False,
     "fatal_error": "",
+    "active_items": [],
     "items": [],
 }
 _queue_thread: Optional[threading.Thread] = None
@@ -107,12 +129,15 @@ def _log_driver_event(msg: str) -> None:
 
 
 def sort_driver_queue(packages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Sorts packages according to the 9-tier priority install ordering."""
+    """Sorts packages according to category order and GPU priority."""
     def _sort_key(p: Dict[str, Any]):
         cat = p.get("category", "other")
-        order = PRIORITY_ORDER.get(cat, 99)
+        order = p.get("category_order")
+        if order is None:
+            order = PRIORITY_ORDER.get(cat, 99)
+        gpu_key = gpu_priority_key(p) if cat == "gpu" else (0, 0, "")
         name = p.get("display_name", "")
-        return (order, name)
+        return (order, gpu_key, name)
 
     return sorted(packages, key=_sort_key)
 
@@ -156,8 +181,8 @@ def _install_inf_package(inf_path: str, timeout: int = 180) -> Tuple[int, str]:
         )
         out = (res.stdout or res.stderr or "").strip()
         code = res.returncode
-        if code in (0, 3010) or "successfully added" in out.lower():
-            return (3010 if code == 3010 else 0), out
+        if code in (0, 3010, 1641) or "successfully added" in out.lower():
+            return (code if code in (3010, 1641) else 0), out
     except Exception as e:
         code = -1
         out = str(e)
@@ -197,6 +222,8 @@ def _format_driver_failure_reason(exit_code: int, method: str, out: str, match: 
         return "فایل اجرایی یا مسیر درایور در پوشه یافت نشد یا ناقص است."
     elif exit_code == -2:
         return "زمان مجاز برای پاسخ‌دهی نصاب به پایان رسید (تایم‌اوت)."
+    elif exit_code == -5:
+        return "پردازش نصب غیرمنتظره متوقف شد."
 
     confidence = match.get("confidence", "UNKNOWN")
     is_matched = match.get("is_matched", True)
@@ -216,6 +243,7 @@ def _format_driver_failure_reason(exit_code: int, method: str, out: str, match: 
 def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str, Any]:
     """
     Executes installation for a single validated DriverPackage:
+    - Dedicated GPU installer (NVIDIA, AMD, Intel) with display-settle pause
     - PnPUtil for INFs
     - ASUSSetup / Vendor Setup EXEs with elevated execution and silent switches
     - MSI packages via msiexec
@@ -233,22 +261,54 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
             "success": False,
             "exit_code": -1,
             "reboot_required": False,
+            "reboot": False,
             "message": f"فایل نصبی یافت نشد: {installer_path}",
         }
 
     _log_driver_event(f"Starting installation of [{category.upper()}] {pkg_name} using method '{method}' ({installer_path})")
 
     try:
+        # GPU Vendor Installer specialization (CONTRACT.md § 8)
+        if category == "gpu":
+            gpu_inst = get_gpu_installer(pkg)
+            if gpu_inst:
+                timeout_gpu = pkg.get("timeout_seconds") or 600
+                res = gpu_inst.install(pkg, timeout_seconds=timeout_gpu)
+                execute_gpu_settle_delay()
+
+                reboot = bool(res.get("reboot_required") or res.get("reboot"))
+                success = bool(res.get("success"))
+                exit_code = int(res.get("exit_code", 0 if success else -1))
+                msg = str(res.get("message") or "")
+
+                res_str = "needs_reboot" if reboot else ("success" if success else "failed")
+                record_driver_installation(
+                    fingerprint=fingerprint,
+                    category=category,
+                    package_name=pkg_name,
+                    installer_path=installer_path,
+                    driver_version=version,
+                    result=res_str,
+                    exit_code=exit_code,
+                    reboot_required=reboot,
+                    message=msg,
+                )
+                _log_driver_event(f"Completed [GPU] {pkg_name} -> Result: {res_str} (Exit: {exit_code})")
+                return {
+                    "success": success,
+                    "exit_code": exit_code,
+                    "reboot_required": reboot,
+                    "reboot": reboot,
+                    "message": msg,
+                }
+
         out = ""
         if method in ("pnputil", "inf_pnputil"):
-            # Official Windows best practice: if source_path is a directory containing INFs,
-            # run PnPUtil once on the whole tree with /subdirs /install. This installs base,
-            # extension, and companion component INFs atomically with correct dependency resolution.
             source_dir = pkg.get("source_path")
             if source_dir and os.path.isdir(source_dir) and pkg.get("inf_files"):
                 code, output = _install_inf_package(source_dir, timeout=timeout)
-                success = code in (0, 3010)
-                reboot = (code == 3010)
+                success = code in (0, 3010, 1641)
+                reboot = code in (3010, 1641)
                 exit_code = code
                 out = output
             else:
@@ -260,9 +320,9 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
                     except Exception as exc:
                         code, output = -1, str(exc)
                     results.append((code, f"{os.path.basename(inf_path)}: {output}"))
-                failed_codes = [code for code, _ in results if code not in (0, 3010)]
+                failed_codes = [code for code, _ in results if code not in (0, 3010, 1641)]
                 success = not failed_codes
-                reboot = any(code == 3010 for code, _ in results)
+                reboot = any(code in (3010, 1641) for code, _ in results)
                 exit_code = failed_codes[0] if failed_codes else (3010 if reboot else 0)
                 out = "\n".join(output for _, output in results)
             msg = "نصب INF با PnPUtil با موفقیت انجام شد." if success else _format_driver_failure_reason(exit_code, method, out, pkg.get("match", {}))
@@ -281,8 +341,8 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
                 "REBOOT=ReallySuppress",
             ]
             exit_code = _run_elevated_and_wait(cmd, work_dir, timeout)
-            success = exit_code in (0, 3010, 1638)
-            reboot = (exit_code == 3010)
+            success = exit_code in (0, 3010, 1641, 1638)
+            reboot = exit_code in (3010, 1641)
             msg = "بسته MSI با موفقیت نصب شد." if success else _format_driver_failure_reason(exit_code, method, "", pkg.get("match", {}))
 
         elif method == "script":
@@ -296,23 +356,27 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
                         "success": False,
                         "exit_code": -4,
                         "reboot_required": True,
+                        "reboot": True,
                         "message": "اسکریپت شامل فرمان ری‌استارت خودکار است و برای ایمنی اجرا نشد؛ نصب دستی را بررسی کنید.",
                     }
             except OSError as exc:
-                return {"success": False, "exit_code": -1, "reboot_required": False, "message": str(exc)}
+                return {"success": False, "exit_code": -1, "reboot_required": False, "reboot": False, "message": str(exc)}
             cmd = ["cmd.exe", "/c", installer_path]
             exit_code = _run_elevated_and_wait(cmd, work_dir, timeout)
-            success = exit_code in (0, 3010)
-            reboot = (exit_code == 3010)
+            success = exit_code in (0, 3010, 1641)
+            reboot = exit_code in (3010, 1641)
             msg = "اسکریپت درایور با موفقیت اجرا شد." if success else _format_driver_failure_reason(exit_code, method, "", pkg.get("match", {}))
 
         else:  # asus_setup or setup_exe
             work_dir = os.path.dirname(installer_path)
             cmd = [installer_path] + list(silent_args)
             exit_code = _run_elevated_and_wait(cmd, work_dir, timeout)
-            success = exit_code in (0, 3010, 1638)
-            reboot = (exit_code == 3010)
+            success = exit_code in (0, 3010, 1641, 1638)
+            reboot = exit_code in (3010, 1641)
             msg = "نصاب درایور با موفقیت اجرا و نصب شد." if success else _format_driver_failure_reason(exit_code, method, "", pkg.get("match", {}))
+
+        if category == "gpu":
+            execute_gpu_settle_delay()
 
         # Record to persistent installation history
         res_str = "needs_reboot" if reboot else ("success" if success else "failed")
@@ -334,24 +398,20 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
             "success": success,
             "exit_code": exit_code,
             "reboot_required": reboot,
+            "reboot": reboot,
             "message": msg,
         }
 
     except subprocess.TimeoutExpired:
         _log_driver_event(f"Timeout installing {pkg_name} after {timeout}s")
-        return {"success": False, "exit_code": -1, "reboot_required": False, "message": f"تایم‌اوت در نصب {pkg_name}."}
+        return {"success": False, "exit_code": -2, "reboot_required": False, "reboot": False, "message": f"تایم‌اوت در نصب {pkg_name}."}
     except Exception as e:
         _log_driver_event(f"Exception installing {pkg_name}: {e}")
-        return {"success": False, "exit_code": -1, "reboot_required": False, "message": f"خطا: {str(e)}"}
+        return {"success": False, "exit_code": -1, "reboot_required": False, "reboot": False, "message": f"خطا: {str(e)}"}
 
 
 def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
-    """Worker thread that executes the sorted driver queue.
-
-    The outer ``finally`` is intentional: a vendor installer, history writer,
-    hardware query, or unexpected Python error must never leave the UI seeing
-    an immortal ``is_running`` state.
-    """
+    """Worker thread that executes the sorted driver queue using DeploymentWorkerPool."""
     global _queue_state
     total = len(packages)
     with _queue_lock:
@@ -363,6 +423,7 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
     with _queue_lock:
         _queue_state["worker_alive"] = True
         _queue_state["last_update_time"] = time.time()
+        persist_queue_state_atomic(_queue_state)
 
     try:
         problems_before = set(_query_problematic_devices())
@@ -374,43 +435,50 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
                 if _queue_state["cancelled"]:
                     _log_driver_event("Installation queue was cancelled by user.")
                     return
-                if (
-                    idx < len(_queue_state["items"])
-                    and _queue_state["items"][idx].get("status") == "completed"
-                ):
-                    return
+                if idx < len(_queue_state["items"]):
+                    item_state = _queue_state["items"][idx]
+                    if item_state.get("status") in ("completed", "skipped"):
+                        return
+                    previous_status = item_state.get("status", "pending")
+                    current_previous_status = previous_status
+                    item_state["status"] = "installing"
+                    item_state["message"] = "در حال نصب..."
 
                 current_index = idx
                 _queue_state["current_index"] = idx
                 _queue_state["current_package"] = pkg.get("display_name")
+                _queue_state["current_file"] = pkg.get("display_name")
                 _queue_state["last_update_time"] = time.time()
-                if idx < len(_queue_state["items"]):
-                    previous_status = _queue_state["items"][idx].get("status", "pending")
-                    current_previous_status = previous_status
-                    _queue_state["items"][idx]["status"] = "installing"
-                    _queue_state["items"][idx]["message"] = "در حال نصب..."
+                _queue_state["active_items"] = pool.get_active_items()
+                _sync_current_package_display_locked()
+                persist_queue_state_atomic(_queue_state)
 
             install_error = None
             try:
                 res = _install_single_package(pkg)
                 if res.get("exit_code") == 1618:
-                    with _queue_lock:
-                        if idx < len(_queue_state["items"]):
-                            _queue_state["items"][idx]["message"] = (
-                                "Windows Installer مشغول نصب دیگری است؛ پس از پایان آن دوباره تلاش می‌شود."
-                            )
-                    if wait_for_windows_installer_idle(timeout_seconds=900):
-                        res = _install_single_package(pkg)
+                    retried = pool.handle_1618_retry(idx, pkg)
+                    if retried:
+                        with _queue_lock:
+                            if idx < len(_queue_state["items"]):
+                                item = _queue_state["items"][idx]
+                                item["status"] = "pending"
+                                item["is_barrier"] = True
+                                item["retry_count"] = pkg.get("retry_count", 1)
+                                item["message"] = f"Windows Installer در حال استفاده است؛ تلاش مجدد {item['retry_count']} از ۲..."
+                            _queue_state["active_items"] = pool.get_active_items()
+                            _sync_current_package_display_locked()
+                            _queue_state["last_update_time"] = time.time()
+                            persist_queue_state_atomic(_queue_state)
+                        return
             except Exception as exc:
                 install_error = exc
                 res = {"success": False, "exit_code": -5, "message": f"{type(exc).__name__}: {exc}"}
 
             with _queue_lock:
-                any_reboot = any_reboot or bool(res.get("reboot_required"))
+                any_reboot = any_reboot or bool(res.get("reboot_required") or res.get("reboot"))
                 if idx < len(_queue_state["items"]):
                     item = _queue_state["items"][idx]
-                    # Resume retries replace the earlier result instead of
-                    # double-counting it.
                     if previous_status == "failed":
                         _queue_state["failed"] = max(0, _queue_state["failed"] - 1)
 
@@ -432,7 +500,10 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
                     ((_queue_state["completed"] + _queue_state["failed"] +
                       _queue_state.get("skipped", 0)) / max(total, 1)) * 100.0, 1
                 )
+                _queue_state["active_items"] = pool.get_active_items()
+                _sync_current_package_display_locked()
                 _queue_state["last_update_time"] = time.time()
+                persist_queue_state_atomic(_queue_state)
 
             if install_error is not None:
                 raise install_error
@@ -441,7 +512,7 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
                     f"Driver package {pkg.get('display_name')} timed out (-2); "
                     "continuing with remaining queue items."
                 )
-            time.sleep(1.0)
+            time.sleep(0.5)
 
         def mark_external_wait(idx, pkg):
             nonlocal current_index, current_previous_status
@@ -449,20 +520,26 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
                 current_index = idx
                 _queue_state["current_index"] = idx
                 _queue_state["current_package"] = pkg.get("display_name")
+                _queue_state["current_file"] = pkg.get("display_name")
                 if idx < len(_queue_state["items"]):
                     current_previous_status = _queue_state["items"][idx].get("status", "pending")
                     _queue_state["items"][idx]["status"] = "installing"
                     _queue_state["items"][idx]["message"] = (
                         "در انتظار پایان نصب دستی یا Windows Installer خارجی..."
                     )
+                _queue_state["active_items"] = pool.get_active_items()
+                _sync_current_package_display_locked()
+                _queue_state["last_update_time"] = time.time()
+                persist_queue_state_atomic(_queue_state)
 
-        run_deployment(
+        pool = DeploymentWorkerPool(
             packages,
             run_one,
             double_speed=_queue_state.get("double_speed", False),
             resources_for=lambda pkg: approved_resources(pkg, driver=True),
             on_external_wait=mark_external_wait,
         )
+        pool.run()
 
         try:
             problems_after = set(_query_problematic_devices())
@@ -491,7 +568,9 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
         with _queue_lock:
             _queue_state["is_running"] = False
             _queue_state["worker_alive"] = False
+            _queue_state["active_items"] = []
             _queue_state["current_package"] = None
+            _queue_state["current_file"] = None
             _queue_state["end_time"] = time.time()
             _queue_state["last_update_time"] = time.time()
             _queue_state["resolved_devices_count"] = resolved
@@ -499,7 +578,8 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
 
             completed = _queue_state["completed"]
             failed = _queue_state["failed"]
-            processed = completed + failed + _queue_state.get("skipped", 0)
+            skipped = _queue_state.get("skipped", 0)
+            processed = completed + failed + skipped
             if not fatal_error and not _queue_state["cancelled"]:
                 _queue_state["progress_percent"] = 100.0
             else:
@@ -534,15 +614,35 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
                     " — یادتان نرود پس از پایان همهٔ کارها، سیستم را دستی ری‌استارت کنید."
                 )
             summary = _queue_state["summary_message"]
+            persist_queue_state_atomic(_queue_state)
 
         _log_driver_event(f"Queue finished: {summary}")
 
 
+def _sync_current_package_display_locked() -> None:
+    """Updates current_package and current_file according to CONTRACT.md § 10.2."""
+    active = _queue_state.get("active_items") or []
+    _queue_state["active_workers"] = len(active)
+    if len(active) == 1:
+        name = active[0].get("display_name")
+        _queue_state["current_package"] = name
+        _queue_state["current_file"] = name
+    elif len(active) >= 2:
+        names = [str(a.get("display_name") or "") for a in active[:2]]
+        combined = " • ".join(names)
+        _queue_state["current_package"] = combined
+        _queue_state["current_file"] = combined
+    elif not _queue_state.get("is_running"):
+        _queue_state["current_package"] = None
+        _queue_state["current_file"] = None
+
+
 _last_packages = []
+
 
 def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
                        double_speed: bool = False) -> Dict[str, Any]:
-    """Starts the sequential installation queue for selected packages, with resume support."""
+    """Starts the sequential or 2X installation queue for selected packages, with resume support."""
     global _queue_thread, _queue_state, _last_packages
 
     with _queue_lock:
@@ -572,22 +672,73 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
             _queue_state["fatal_error"] = ""
             _queue_state["start_time"] = time.time()
             _queue_state["last_update_time"] = time.time()
-            # Keep completed/failed counts, we will just skip them in the loop
             _queue_state["end_time"] = None
+            _queue_state["double_speed"] = double_speed is True
+            _queue_state["mode"] = "2X" if double_speed else "1X"
+            _queue_state["worker_count"] = 2 if double_speed else 1
+            persist_queue_state_atomic(_queue_state)
     else:
-        sorted_pkgs = sort_driver_queue(packages)
+        # Deduplicate APU+dGPU unified packages (CONTRACT.md § 8.2)
+        deduped = deduplicate_gpu_packages(packages)
+        sorted_pkgs = sort_driver_queue(deduped)
         _last_packages = sorted_pkgs
+
+        # Prepare items list and pre-mark up-to-date / skipped items
+        initial_items = []
+        skipped_count = 0
+        for p in sorted_pkgs:
+            match = p.get("match") or {}
+            match_status = match.get("status") or p.get("status")
+            recommendation = match.get("recommendation") or p.get("recommendation")
+            is_up_to_date = match_status == "up_to_date" or recommendation == "skip"
+
+            if is_up_to_date:
+                skipped_count += 1
+                initial_items.append({
+                    "package_id": p.get("package_id"),
+                    "display_name": p.get("display_name"),
+                    "category": p.get("category"),
+                    "category_fa": p.get("category_fa"),
+                    "installer_file": p.get("installer_file"),
+                    "status": "skipped",
+                    "worker_id": None,
+                    "message": "درایور موجود روی سیستم به‌روز است (رد شد).",
+                    "failure_reason": None,
+                    "exit_code": 0,
+                    "retry_count": 0,
+                })
+            else:
+                initial_items.append({
+                    "package_id": p.get("package_id"),
+                    "display_name": p.get("display_name"),
+                    "category": p.get("category"),
+                    "category_fa": p.get("category_fa"),
+                    "installer_file": p.get("installer_file"),
+                    "status": "pending",
+                    "worker_id": None,
+                    "message": "",
+                    "failure_reason": None,
+                    "exit_code": None,
+                    "retry_count": 0,
+                })
+
         with _queue_lock:
             _queue_state = {
+                "status": "ok",
                 "is_running": True,
                 "cancelled": False,
+                "mode": "2X" if double_speed else "1X",
+                "double_speed": double_speed is True,
+                "worker_count": 2 if double_speed else 1,
+                "active_workers": 0,
                 "total": len(sorted_pkgs),
                 "completed": 0,
                 "failed": 0,
-                "skipped": 0,
+                "skipped": skipped_count,
                 "current_index": 0,
                 "current_package": None,
-                "progress_percent": 0.0,
+                "current_file": None,
+                "progress_percent": round((skipped_count / max(len(sorted_pkgs), 1)) * 100.0, 1),
                 "start_time": time.time(),
                 "end_time": None,
                 "reboot_required": False,
@@ -596,22 +747,11 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
                 "last_update_time": time.time(),
                 "worker_alive": False,
                 "fatal_error": "",
-                "items": [
-                    {
-                        "package_id": p.get("package_id"),
-                        "display_name": p.get("display_name"),
-                        "category": p.get("category"),
-                        "category_fa": p.get("category_fa"),
-                        "installer_file": p.get("installer_file"),
-                        "status": "pending",
-                        "message": "",
-                    }
-                    for p in sorted_pkgs
-                ],
+                "active_items": [],
+                "items": initial_items,
             }
+            persist_queue_state_atomic(_queue_state)
 
-    with _queue_lock:
-        _queue_state["double_speed"] = double_speed is True
     _queue_thread = threading.Thread(
         target=_run_queue_thread,
         args=(sorted_pkgs,),
@@ -628,6 +768,7 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
             _queue_state["last_update_time"] = time.time()
             _queue_state["fatal_error"] = "thread_start_failed"
             _queue_state["summary_message"] = "شروع صف نصب ناموفق بود؛ دوباره تلاش کنید."
+            persist_queue_state_atomic(_queue_state)
         logger.exception("Unable to start driver queue")
         return {"success": False, "message": "شروع صف نصب ناموفق بود؛ دوباره تلاش کنید."}
 
@@ -647,9 +788,6 @@ def get_driver_queue_status() -> Dict[str, Any]:
     global _queue_state, _queue_thread
     with _queue_lock:
         worker_alive = bool(_queue_thread and _queue_thread.is_alive())
-        # A thread has an ident only after start(). The age check avoids
-        # misclassifying the tiny window between state initialization and
-        # Thread.start() as a crash.
         started_at = _queue_state.get("start_time") or time.time()
         worker_was_started_and_stopped = _queue_thread is None or (
             _queue_thread.ident is not None and not worker_alive
@@ -671,13 +809,21 @@ def get_driver_queue_status() -> Dict[str, Any]:
                     break
             _queue_state["is_running"] = False
             _queue_state["current_package"] = None
+            _queue_state["current_file"] = None
+            _queue_state["active_items"] = []
+            _queue_state["active_workers"] = 0
             _queue_state["end_time"] = time.time()
             _queue_state["fatal_error"] = "worker_thread_stopped"
             _queue_state["summary_message"] = (
                 "پردازش صف درایورها متوقف شد؛ برای بسته‌های باقی‌مانده «ادامه نصب» را بزنید."
             )
             _log_driver_event("Repaired stale queue state after worker thread stopped.")
+            persist_queue_state_atomic(_queue_state)
+
         _queue_state["worker_alive"] = worker_alive and _queue_state.get("is_running", False)
+        _queue_state["status"] = "ok"
+        _sync_current_package_display_locked()
+
         return copy.deepcopy(_queue_state)
 
 
@@ -689,5 +835,6 @@ def cancel_driver_queue() -> Dict[str, Any]:
             return {"success": False, "message": "هیچ صفی در حال اجرا نیست."}
         _queue_state["cancelled"] = True
         _queue_state["summary_message"] = "در حال لغو صف نصب..."
+        persist_queue_state_atomic(_queue_state)
 
     return {"success": True, "message": "دستور لغو ارسال شد."}
