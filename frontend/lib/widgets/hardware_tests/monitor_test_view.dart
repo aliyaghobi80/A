@@ -284,14 +284,15 @@ class _FullScreenMonitorPage extends StatefulWidget {
 
 class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
   late final FocusNode _focusNode;
+  bool _isFullScreenActive = false;
 
   @override
   void initState() {
     super.initState();
     _focusNode = FocusNode();
-    _enterFullScreen();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _enterFullScreen();
         _focusNode.requestFocus();
       }
     });
@@ -305,6 +306,8 @@ class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
   }
 
   Future<void> _enterFullScreen() async {
+    if (_isFullScreenActive) return;
+    _isFullScreenActive = true;
     widget.ctrl.toggleMonitorFullScreen(true);
     try {
       await _windowChannel.invokeMethod('setFullScreen', true);
@@ -314,7 +317,11 @@ class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
   }
 
   Future<void> _exitFullScreen() async {
-    widget.ctrl.toggleMonitorFullScreen(false);
+    if (!_isFullScreenActive) return;
+    _isFullScreenActive = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.ctrl.toggleMonitorFullScreen(false);
+    });
     try {
       await _windowChannel.invokeMethod('setFullScreen', false);
     } catch (_) {
@@ -324,7 +331,9 @@ class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
 
   void _close() {
     _exitFullScreen();
-    Navigator.of(context).pop();
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override

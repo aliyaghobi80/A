@@ -16,6 +16,7 @@ import 'services/backend_process_manager.dart';
 import 'services/settings_service.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
+import 'widgets/common/app_frame.dart';
 import 'widgets/common/app_sidebar.dart';
 import 'widgets/common/global_app_header.dart';
 import 'widgets/dialogs/exit_dialog.dart';
@@ -96,7 +97,9 @@ class MarkaziSystemCheckerApp extends StatelessWidget {
         builder: (context, child) {
           return Directionality(
             textDirection: textDirection,
-            child: child ?? const SizedBox.shrink(),
+            child: AppFrame(
+              child: child ?? const SizedBox.shrink(),
+            ),
           );
         },
         home: const SplashScreen(),

@@ -1,9 +1,11 @@
 #include "flutter_window.h"
 
 #include <chrono>
+#include <dwmapi.h>
 #include <optional>
 #include <string>
 #include <vector>
+#include <windowsx.h>
 
 #include <flutter/encodable_value.h>
 #include <flutter/method_channel.h>
@@ -11,6 +13,16 @@
 
 #include "flutter/generated_plugin_registrant.h"
 #include "startup_log.h"
+
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
+#ifndef DWMWA_BORDER_COLOR
+#define DWMWA_BORDER_COLOR 34
+#endif
+#ifndef DWMWA_CAPTION_COLOR
+#define DWMWA_CAPTION_COLOR 35
+#endif
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -54,6 +66,8 @@ void ApplyFullScreenMode(HWND hwnd, bool fullscreen) {
     ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
                    SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    MARGINS margins = {0, 0, 1, 0};
+    ::DwmExtendFrameIntoClientArea(hwnd, &margins);
     LogStartup("Exited native fullscreen mode");
   }
 }
@@ -113,6 +127,28 @@ void SetupWindowChannels(flutter::BinaryMessenger* messenger, HWND hwnd) {
       result->Success(flutter::EncodableValue(true));
     } else if (method == "isFullScreen") {
       result->Success(flutter::EncodableValue(g_is_window_fullscreen));
+    } else if (method == "setTheme") {
+      bool is_dark = true;
+      if (call.arguments()) {
+        if (const auto* b = std::get_if<bool>(call.arguments())) {
+          is_dark = *b;
+        } else if (const auto* map = std::get_if<flutter::EncodableMap>(call.arguments())) {
+          auto it = map->find(flutter::EncodableValue("isDark"));
+          if (it != map->end() && std::holds_alternative<bool>(it->second)) {
+            is_dark = std::get<bool>(it->second);
+          }
+        }
+      }
+      BOOL enable_dark = is_dark ? TRUE : FALSE;
+      ::DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                              &enable_dark, sizeof(enable_dark));
+      COLORREF caption_color = is_dark ? RGB(15, 23, 42) : RGB(248, 250, 252);
+      ::DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR,
+                              &caption_color, sizeof(caption_color));
+      COLORREF border_color = is_dark ? RGB(30, 41, 59) : RGB(226, 232, 240);
+      ::DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR,
+                              &border_color, sizeof(border_color));
+      result->Success(flutter::EncodableValue(true));
     } else if (method == "ensureInitialized" || method == "waitUntilReadyToShow") {
       result->Success(flutter::EncodableValue(true));
     } else {
@@ -152,6 +188,10 @@ bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
     return false;
   }
+
+  // Preserve native Windows drop shadows and Windows 11 rounded corners
+  MARGINS margins = {0, 0, 1, 0};
+  ::DwmExtendFrameIntoClientArea(GetHandle(), &margins);
 
   RECT frame = GetClientArea();
 
@@ -267,7 +307,91 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
   if (message == WM_DWMCOMPOSITIONCHANGED) {
     LogStartup("DWM composition reset detected; arming renderer recovery");
+    MARGINS margins = {0, 0, 1, 0};
+    ::DwmExtendFrameIntoClientArea(hwnd, &margins);
     ArmDisplayRecoveryWatchdog();
+  }
+
+  // Synchronously eliminate native caption and window borders
+  if (message == WM_NCCALCSIZE) {
+    if (wparam == TRUE) {
+      if (g_is_window_fullscreen) {
+        return 0;
+      }
+      if (::IsZoomed(hwnd)) {
+        HMONITOR monitor = ::MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi = {sizeof(mi)};
+        if (::GetMonitorInfo(monitor, &mi)) {
+          auto* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam);
+          params->rgrc[0] = mi.rcWork;
+        }
+        return 0;
+      }
+      return 0;
+    }
+    return 0;
+  }
+
+  // Native edge/corner resizing and Windows 11 Snap Layouts hover
+  if (message == WM_NCHITTEST) {
+    if (g_is_window_fullscreen) {
+      return HTCLIENT;
+    }
+
+    POINT pt = {GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+    RECT rc;
+    ::GetWindowRect(hwnd, &rc);
+
+    HMONITOR monitor = ::MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
+    double scale = (dpi == 0 ? 96.0 : dpi) / 96.0;
+
+    // 1. Edge & Corner Resizing (Only when not maximized)
+    if (!::IsZoomed(hwnd)) {
+      int border_thickness = static_cast<int>(8 * scale);
+      int corner_size = static_cast<int>(16 * scale);
+
+      bool left = pt.x >= rc.left && pt.x < rc.left + border_thickness;
+      bool right = pt.x <= rc.right && pt.x >= rc.right - border_thickness;
+      bool top = pt.y >= rc.top && pt.y < rc.top + border_thickness;
+      bool bottom = pt.y <= rc.bottom && pt.y >= rc.bottom - border_thickness;
+
+      if (top && pt.x < rc.left + corner_size) return HTTOPLEFT;
+      if (top && pt.x >= rc.right - corner_size) return HTTOPRIGHT;
+      if (bottom && pt.x < rc.left + corner_size) return HTBOTTOMLEFT;
+      if (bottom && pt.x >= rc.right - corner_size) return HTBOTTOMRIGHT;
+
+      if (top) return HTTOP;
+      if (bottom) return HTBOTTOM;
+      if (left) return HTLEFT;
+      if (right) return HTRIGHT;
+    }
+
+    // 2. Windows 11 Snap Layouts on Maximize Button Hover
+    int button_width = static_cast<int>(46 * scale);
+    int title_bar_height = static_cast<int>(32 * scale);
+
+    RECT max_btn_rc = {
+        rc.right - 2 * button_width,
+        rc.top,
+        rc.right - button_width,
+        rc.top + title_bar_height
+    };
+
+    if (::PtInRect(&max_btn_rc, pt)) {
+      return HTMAXBUTTON;
+    }
+
+    return HTCLIENT;
+  }
+
+  if (message == WM_NCLBUTTONUP && wparam == HTMAXBUTTON) {
+    if (::IsZoomed(hwnd)) {
+      ::ShowWindow(hwnd, SW_RESTORE);
+    } else {
+      ::ShowWindow(hwnd, SW_MAXIMIZE);
+    }
+    return 0;
   }
 
   // Give Flutter, including plugins, an opportunity to handle window messages.
@@ -287,6 +411,24 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+    case WM_SIZE:
+      if (flutter_controller_ && g_markazi_window_channel) {
+        if (wparam == SIZE_MAXIMIZED) {
+          g_markazi_window_channel->InvokeMethod("onWindowMaximize", nullptr);
+          if (g_window_manager_channel) {
+            g_window_manager_channel->InvokeMethod("onWindowMaximize", nullptr);
+          }
+        } else if (wparam == SIZE_RESTORED) {
+          g_markazi_window_channel->InvokeMethod("onWindowRestore", nullptr);
+          if (g_window_manager_channel) {
+            g_window_manager_channel->InvokeMethod("onWindowRestore", nullptr);
+          }
+        }
+      }
+      // IMPORTANT: Do NOT return early here. Fall through so that
+      // Win32Window::MessageHandler can execute MoveWindow on child_content_.
+      break;
+
     case WM_DISPLAYCHANGE:
       if (flutter_controller_) {
         flutter_controller_->ForceRedraw();

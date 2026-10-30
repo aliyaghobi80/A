@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../controllers/theme_language_controller.dart';
+import '../../services/install_state_service.dart';
+import '../../theme/app_theme.dart';
+import '../dialogs/exit_dialog.dart';
 
-/// Custom in-app title bar embedding window controls (minimize, maximize/restore, close),
-/// window dragging, double-click to maximize, dark/light theme styling, and RTL alignment.
+/// Custom in-app title bar embedding Windows 11 style window controls (minimize,
+/// maximize/restore, close), window dragging, double-click to maximize,
+/// dark/light theme synchronization, focus/blur dimming, and active queue protection.
 class CustomTitleBar extends StatefulWidget {
   final String? title;
   final String? logoAsset;
@@ -14,6 +18,8 @@ class CustomTitleBar extends StatefulWidget {
   final VoidCallback? onClose;
   final double height;
   final bool showWindowControls;
+  final bool? overrideMaximized;
+  final bool? isFocused;
 
   const CustomTitleBar({
     super.key,
@@ -22,13 +28,31 @@ class CustomTitleBar extends StatefulWidget {
     this.onMinimize,
     this.onMaximize,
     this.onClose,
-    this.height = 38.0,
+    this.height = 32.0,
     this.showWindowControls = true,
-  });
+    bool? isMaximized,
+    this.isFocused,
+  }) : overrideMaximized = isMaximized;
 
   /// Method channels for native window manipulation (markazi/window and window_manager)
   static const MethodChannel _windowChannel = MethodChannel('markazi/window');
   static const MethodChannel _wmChannel = MethodChannel('window_manager');
+
+  /// Asynchronously queries whether the native OS window is currently maximized.
+  static Future<bool> isMaximized() async {
+    try {
+      final bool? isMax =
+          await _windowChannel.invokeMethod<bool>('isMaximized');
+      if (isMax != null) return isMax;
+    } catch (_) {
+      try {
+        final bool? isMax =
+            await _wmChannel.invokeMethod<bool>('isMaximized');
+        if (isMax != null) return isMax;
+      } catch (_) {}
+    }
+    return false;
+  }
 
   /// Native window actions
   static Future<void> minimize() async {
@@ -116,24 +140,131 @@ class CustomTitleBar extends StatefulWidget {
     }
   }
 
+  /// Synchronize DWM window attributes (immersive dark mode, caption colors) with the active theme
+  static Future<void> setTheme({required bool isDark}) async {
+    try {
+      await _windowChannel.invokeMethod('setTheme', {'isDark': isDark});
+    } catch (_) {
+      try {
+        await _wmChannel.invokeMethod('setTheme', {'isDark': isDark});
+      } catch (_) {}
+    }
+  }
+
   /// Ratified contract layout specification:
-  /// In RTL: Start is Right (branding & title), End is Left (window controls / caption controls).
-  /// In LTR: Start is Left (branding & title), End is Right (window controls / caption controls).
+  /// Controls are ALWAYS at the top-right corner (Windows desktop convention, even in RTL layouts).
+  /// Logo and Title are ALWAYS at the top-left corner, coordinating with the right sidebar.
   static Map<String, String> getTitleBarLayout({required bool isRtl}) {
-    return isRtl
-        ? {'right': 'branding_and_title', 'left': 'caption_controls'}
-        : {'left': 'branding_and_title', 'right': 'caption_controls'};
+    return const {
+      'left': 'branding_and_title',
+      'right': 'caption_controls',
+    };
   }
 
   @override
   State<CustomTitleBar> createState() => _CustomTitleBarState();
 }
 
-class _CustomTitleBarState extends State<CustomTitleBar> {
+class _CustomTitleBarState extends State<CustomTitleBar>
+    with WidgetsBindingObserver {
   bool _isMaximized = false;
+  bool _isWindowFocused = true;
   bool _isMinimizeHovered = false;
   bool _isMaximizeHovered = false;
   bool _isCloseHovered = false;
+  Worker? _themeWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    if (widget.overrideMaximized != null) {
+      _isMaximized = widget.overrideMaximized!;
+    }
+    if (widget.isFocused != null) {
+      _isWindowFocused = widget.isFocused!;
+    }
+    CustomTitleBar._windowChannel.setMethodCallHandler(_handleWindowMethodCall);
+    CustomTitleBar._wmChannel.setMethodCallHandler(_handleWindowMethodCall);
+    _syncWindowState();
+
+    if (Get.isRegistered<ThemeLanguageController>()) {
+      final themeCtrl = Get.find<ThemeLanguageController>();
+      _themeWorker = ever(themeCtrl.themeMode, (mode) {
+        CustomTitleBar.setTheme(isDark: mode == ThemeMode.dark);
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant CustomTitleBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.overrideMaximized != null &&
+        widget.overrideMaximized != oldWidget.overrideMaximized) {
+      _isMaximized = widget.overrideMaximized!;
+    }
+    if (widget.isFocused != null && widget.isFocused != oldWidget.isFocused) {
+      _isWindowFocused = widget.isFocused!;
+    }
+  }
+
+  @override
+  void dispose() {
+    CustomTitleBar._windowChannel.setMethodCallHandler(null);
+    CustomTitleBar._wmChannel.setMethodCallHandler(null);
+    _themeWorker?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    _syncWindowState();
+  }
+
+  Future<void> _syncWindowState() async {
+    try {
+      final isMax = await CustomTitleBar.isMaximized();
+      if (mounted && _isMaximized != isMax) {
+        setState(() {
+          _isMaximized = isMax;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<dynamic> _handleWindowMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case 'onWindowFocus':
+        if (mounted && !_isWindowFocused) setState(() => _isWindowFocused = true);
+        break;
+      case 'onWindowBlur':
+        if (mounted && _isWindowFocused) setState(() => _isWindowFocused = false);
+        break;
+      case 'onWindowMaximize':
+      case 'onWindowMaximized':
+        if (mounted && !_isMaximized) setState(() => _isMaximized = true);
+        break;
+      case 'onWindowUnmaximize':
+      case 'onWindowUnmaximized':
+      case 'onWindowRestore':
+      case 'onWindowRestored':
+        if (mounted && _isMaximized) setState(() => _isMaximized = false);
+        break;
+    }
+    return null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final bool focused = state == AppLifecycleState.resumed;
+    if (_isWindowFocused != focused && mounted) {
+      setState(() {
+        _isWindowFocused = focused;
+      });
+    }
+  }
 
   void _handleMinimize() {
     if (widget.onMinimize != null) {
@@ -144,18 +275,24 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   }
 
   void _handleToggleMaximize() {
+    final wasMaximized = _isMaximized;
     setState(() {
       _isMaximized = !_isMaximized;
     });
     if (widget.onMaximize != null) {
       widget.onMaximize!();
     } else {
-      CustomTitleBar.toggleMaximize(isMaximizedHint: _isMaximized);
+      CustomTitleBar.toggleMaximize(isMaximizedHint: wasMaximized);
     }
   }
 
-  void _handleClose() {
-    if (widget.onClose != null) {
+  void _handleClose(BuildContext context) {
+    final isInstalling = Get.isRegistered<InstallStateService>() &&
+        (InstallStateService.to.isDriverRunning.value ||
+            InstallStateService.to.isSoftwareRunning.value);
+    if (isInstalling) {
+      ExitDialog.show(context);
+    } else if (widget.onClose != null) {
       widget.onClose!();
     } else {
       CustomTitleBar.close();
@@ -164,25 +301,25 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-    // Theme matching colors
-    final backgroundColor = isDark
-        ? const Color(0xFF0F172A) // slate-900
-        : const Color(0xFFF8FAFC); // slate-50
-    final borderBottomColor = isDark
-        ? const Color(0xFF1E293B) // slate-800
-        : const Color(0xFFE2E8F0); // slate-200
-    final textColor = isDark
-        ? const Color(0xFFF1F5F9)
-        : const Color(0xFF0F172A);
+    // Synchronize native DWM frame attributes with active theme
+    CustomTitleBar.setTheme(isDark: isDark);
+
+    // Theme matching surface and border colors
+    final backgroundColor =
+        isDark ? AppTheme.darkSurface : AppTheme.lightSurface;
+    final borderBottomColor =
+        isDark ? AppTheme.darkBorder : AppTheme.lightBorder;
+    final textColor =
+        isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary;
     final buttonHoverColor = isDark
         ? Colors.white.withValues(alpha: 0.08)
         : Colors.black.withValues(alpha: 0.05);
     const closeHoverColor = Color(0xFFE81123); // Windows red hover
 
-    // Persian title by default, or localized
+    // Localized title resolution
     String resolvedTitle = widget.title ?? 'سامانه بررسی و نصب مرکزی';
     if (widget.title == null && Get.isRegistered<ThemeLanguageController>()) {
       final langCtrl = Get.find<ThemeLanguageController>();
@@ -191,48 +328,55 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       }
     }
 
-    return Container(
-      key: const ValueKey('custom-title-bar-root'),
-      height: widget.height,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border(
-          bottom: BorderSide(
-            color: borderBottomColor,
-            width: 1.0,
+    final bool effectiveFocused = widget.isFocused ?? _isWindowFocused;
+    final bool effectiveMaximized = widget.overrideMaximized ?? _isMaximized;
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Container(
+        key: const ValueKey('custom-title-bar-root'),
+        height: widget.height,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          border: Border(
+            bottom: BorderSide(
+              color: borderBottomColor,
+              width: 1.0,
+            ),
           ),
         ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Branding and Title (Placed at Row start: Right in RTL, Left in LTR)
-          _buildBranding(
-            textColor: textColor,
-            title: resolvedTitle,
-          ),
-
-          // Central draggable region
-          Expanded(
-            child: GestureDetector(
-              key: const ValueKey('custom-title-bar-drag-region'),
-              behavior: HitTestBehavior.opaque,
-              onPanStart: (_) => CustomTitleBar.startDragging(),
-              onDoubleTap: _handleToggleMaximize,
-              child: Container(color: Colors.transparent),
-            ),
-          ),
-
-          // Window controls (Placed at Row end: Left in RTL, Right in LTR)
-          if (widget.showWindowControls)
-            _buildWindowControls(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Top-left branding and title (Windows standard top-left position)
+            _buildBranding(
               textColor: textColor,
-              hoverColor: buttonHoverColor,
-              closeHoverColor: closeHoverColor,
-              isRtl: isRtl,
+              title: resolvedTitle,
+              isFocused: effectiveFocused,
             ),
-        ],
+
+            // Central draggable region
+            Expanded(
+              child: GestureDetector(
+                key: const ValueKey('custom-title-bar-drag-region'),
+                behavior: HitTestBehavior.opaque,
+                onPanStart: (_) => CustomTitleBar.startDragging(),
+                onDoubleTap: _handleToggleMaximize,
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+
+            // Top-right window controls (Windows standard top-right position)
+            if (widget.showWindowControls)
+              _buildWindowControls(
+                textColor: textColor,
+                hoverColor: buttonHoverColor,
+                closeHoverColor: closeHoverColor,
+                isMaximized: effectiveMaximized,
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -240,45 +384,52 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   Widget _buildBranding({
     required Color textColor,
     required String title,
+    required bool isFocused,
   }) {
+    final double brandingOpacity = isFocused ? 1.0 : 0.55;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onPanStart: (_) => CustomTitleBar.startDragging(),
       onDoubleTap: _handleToggleMaximize,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12.0),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Logo
-            Image.asset(
-              widget.logoAsset ?? 'assets/logo/logo.png',
-              key: const ValueKey('custom-title-bar-logo'),
-              width: 18,
-              height: 18,
-              errorBuilder: (context, error, stackTrace) => Icon(
-                Icons.computer_rounded,
-                size: 18,
-                color: textColor.withValues(alpha: 0.8),
+        child: Opacity(
+          key: const ValueKey('custom-title-bar-branding-opacity'),
+          opacity: brandingOpacity,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Logo
+              Image.asset(
+                widget.logoAsset ?? 'assets/logo/logo.png',
+                key: const ValueKey('custom-title-bar-logo'),
+                width: 18,
+                height: 18,
+                errorBuilder: (context, error, stackTrace) => Icon(
+                  Icons.computer_rounded,
+                  size: 18,
+                  color: textColor.withValues(alpha: 0.8),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            // Title text
-            Text(
-              title,
-              key: const ValueKey('custom-title-bar-title'),
-              style: TextStyle(
-                fontFamily: 'Vazirmatn',
-                fontSize: 12.0,
-                fontWeight: FontWeight.w600,
-                color: textColor,
-                letterSpacing: 0.2,
+              const SizedBox(width: 8),
+              // Title text
+              Text(
+                title,
+                key: const ValueKey('custom-title-bar-title'),
+                style: TextStyle(
+                  fontFamily: 'Vazirmatn',
+                  fontSize: 12.0,
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                  letterSpacing: 0.2,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -288,30 +439,21 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     required Color textColor,
     required Color hoverColor,
     required Color closeHoverColor,
-    required bool isRtl,
+    required bool isMaximized,
   }) {
-    // In RTL, standard desktop layout places the window controls on the left side,
-    // with Close at the outer edge (far left), Maximize in the center, and Minimize on the inner side.
-    // In LTR, Minimize is inner (left), Maximize is center, Close is outer (far right).
-    final buttons = isRtl
-        ? [
-            _buildCloseButton(textColor: textColor, hoverColor: closeHoverColor),
-            _buildMaximizeButton(textColor: textColor, hoverColor: hoverColor),
-            _buildMinimizeButton(textColor: textColor, hoverColor: hoverColor),
-          ]
-        : [
-            _buildMinimizeButton(textColor: textColor, hoverColor: hoverColor),
-            _buildMaximizeButton(textColor: textColor, hoverColor: hoverColor),
-            _buildCloseButton(textColor: textColor, hoverColor: closeHoverColor),
-          ];
-
-    return Directionality(
-      textDirection: TextDirection.ltr,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: buttons,
-      ),
+    // Windows convention: Minimize (inner left), Maximize (center), Close (outer right)
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMinimizeButton(textColor: textColor, hoverColor: hoverColor),
+        _buildMaximizeButton(
+          textColor: textColor,
+          hoverColor: hoverColor,
+          isMaximized: isMaximized,
+        ),
+        _buildCloseButton(textColor: textColor, hoverColor: closeHoverColor),
+      ],
     );
   }
 
@@ -343,6 +485,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   Widget _buildMaximizeButton({
     required Color textColor,
     required Color hoverColor,
+    required bool isMaximized,
   }) {
     return MouseRegion(
       onEnter: (_) => setState(() => _isMaximizeHovered = true),
@@ -355,12 +498,14 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           width: 46.0,
           alignment: Alignment.center,
           color: _isMaximizeHovered ? hoverColor : Colors.transparent,
-          child: _isMaximized
+          child: isMaximized
               ? CustomPaint(
+                  key: const ValueKey('window-control-restore-icon'),
                   size: const Size(10, 10),
-                  painter: _RestoreIconPainter(color: textColor),
+                  painter: RestoreIconPainter(color: textColor),
                 )
               : Container(
+                  key: const ValueKey('window-control-maximize-icon'),
                   width: 10.0,
                   height: 10.0,
                   decoration: BoxDecoration(
@@ -385,7 +530,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       child: GestureDetector(
         key: const ValueKey('window-control-close'),
         behavior: HitTestBehavior.opaque,
-        onTap: _handleClose,
+        onTap: () => _handleClose(context),
         child: Container(
           width: 46.0,
           alignment: Alignment.center,
@@ -402,9 +547,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 }
 
 /// Custom painter for the Windows restore window icon (two overlapping squares)
-class _RestoreIconPainter extends CustomPainter {
+class RestoreIconPainter extends CustomPainter {
   final Color color;
-  const _RestoreIconPainter({required this.color});
+  const RestoreIconPainter({required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -415,18 +560,20 @@ class _RestoreIconPainter extends CustomPainter {
 
     // Back square (offset up and right)
     canvas.drawRect(
-      Rect.fromLTWH(size.width * 0.25, 0, size.width * 0.75, size.height * 0.75),
+      Rect.fromLTWH(
+          size.width * 0.25, 0, size.width * 0.75, size.height * 0.75),
       paint,
     );
 
     // Front square (down and left)
     canvas.drawRect(
-      Rect.fromLTWH(0, size.height * 0.25, size.width * 0.75, size.height * 0.75),
+      Rect.fromLTWH(
+          0, size.height * 0.25, size.width * 0.75, size.height * 0.75),
       paint,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _RestoreIconPainter oldDelegate) =>
+  bool shouldRepaint(covariant RestoreIconPainter oldDelegate) =>
       oldDelegate.color != color;
 }
