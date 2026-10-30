@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:bitsdojo_window/bitsdojo_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
@@ -57,6 +58,17 @@ void main() async {
   Get.put(QcController(), permanent: true);
 
   runApp(const MarkaziSystemCheckerApp());
+
+  // bitsdojo_window: reveal and size the window after the first Flutter frame.
+  // The native runner hides it on startup (BDW_HIDE_ON_STARTUP) so the user
+  // never sees the window before content is ready.
+  doWhenWindowReady(() {
+    appWindow.minSize = const Size(1100, 700);
+    appWindow.size = const Size(1366, 768);
+    appWindow.alignment = Alignment.center;
+    appWindow.title = 'Markazi System Checker';
+    appWindow.show();
+  });
 }
 
 class MarkaziSystemCheckerApp extends StatelessWidget {

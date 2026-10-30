@@ -1,5 +1,5 @@
 // frontend/lib/widgets/common/custom_title_bar.dart
-import 'package:flutter/gestures.dart';
+import 'package:bitsdojo_window/bitsdojo_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -43,9 +43,9 @@ class CustomTitleBar extends StatefulWidget {
     this.isFocused,
   }) : overrideMaximized = isMaximized;
 
-  /// Method channels for native window manipulation (markazi/window and window_manager)
+  /// Method channel fallback for DWM theme sync (immersive dark mode, caption colors).
+  /// Window control actions use bitsdojo_window's appWindow directly.
   static const MethodChannel _windowChannel = MethodChannel('markazi/window');
-  static const MethodChannel _wmChannel = MethodChannel('window_manager');
 
   /// Asynchronously queries whether the native OS window is currently maximized.
   static Future<bool> isMaximized() async {
@@ -53,45 +53,39 @@ class CustomTitleBar extends StatefulWidget {
       final bool? isMax =
           await _windowChannel.invokeMethod<bool>('isMaximized');
       if (isMax != null) return isMax;
-    } catch (_) {
-      try {
-        final bool? isMax =
-            await _wmChannel.invokeMethod<bool>('isMaximized');
-        if (isMax != null) return isMax;
-      } catch (_) {}
-    }
+    } catch (_) {}
+    try {
+      return appWindow.isMaximized;
+    } catch (_) {}
     return false;
   }
 
-  /// Native window actions
+  /// Native window actions — delegate to bitsdojo_window and _windowChannel
   static Future<void> minimize() async {
     try {
+      appWindow.minimize();
+    } catch (_) {}
+    try {
       await _windowChannel.invokeMethod('minimize');
-    } catch (_) {
-      try {
-        await _wmChannel.invokeMethod('minimize');
-      } catch (_) {}
-    }
+    } catch (_) {}
   }
 
   static Future<void> maximize() async {
     try {
+      appWindow.maximize();
+    } catch (_) {}
+    try {
       await _windowChannel.invokeMethod('maximize');
-    } catch (_) {
-      try {
-        await _wmChannel.invokeMethod('maximize');
-      } catch (_) {}
-    }
+    } catch (_) {}
   }
 
   static Future<void> unmaximize() async {
     try {
+      appWindow.restore();
+    } catch (_) {}
+    try {
       await _windowChannel.invokeMethod('unmaximize');
-    } catch (_) {
-      try {
-        await _wmChannel.invokeMethod('unmaximize');
-      } catch (_) {}
-    }
+    } catch (_) {}
   }
 
   static Future<void> toggleMaximize({bool? isMaximizedHint}) async {
@@ -110,54 +104,41 @@ class CustomTitleBar extends StatefulWidget {
       }
     } catch (_) {
       try {
-        if (isMaximizedHint == true) {
-          await _wmChannel.invokeMethod('unmaximize');
-        } else {
-          await _wmChannel.invokeMethod('maximize');
-        }
+        appWindow.maximizeOrRestore();
       } catch (_) {}
     }
   }
 
   static Future<void> close() async {
     try {
+      appWindow.close();
+    } catch (_) {}
+    try {
       await _windowChannel.invokeMethod('close');
-    } catch (_) {
-      try {
-        await _wmChannel.invokeMethod('close');
-      } catch (_) {}
-    }
+    } catch (_) {}
   }
 
+  /// startDragging: triggers bitsdojo_window native drag and _windowChannel
   static Future<void> startDragging() async {
     try {
+      appWindow.startDragging();
+    } catch (_) {}
+    try {
       await _windowChannel.invokeMethod('startDragging');
-    } catch (_) {
-      try {
-        await _wmChannel.invokeMethod('startDragging');
-      } catch (_) {}
-    }
+    } catch (_) {}
   }
 
   static Future<void> setFullScreen(bool fullscreen) async {
     try {
       await _windowChannel.invokeMethod('setFullScreen', fullscreen);
-    } catch (_) {
-      try {
-        await _wmChannel.invokeMethod('setFullScreen', fullscreen);
-      } catch (_) {}
-    }
+    } catch (_) {}
   }
 
   /// Synchronize DWM window attributes (immersive dark mode, caption colors) with the active theme
   static Future<void> setTheme({required bool isDark}) async {
     try {
       await _windowChannel.invokeMethod('setTheme', {'isDark': isDark});
-    } catch (_) {
-      try {
-        await _wmChannel.invokeMethod('setTheme', {'isDark': isDark});
-      } catch (_) {}
-    }
+    } catch (_) {}
   }
 
   /// Ratified contract layout specification:
@@ -194,7 +175,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
       _isWindowFocused = widget.isFocused!;
     }
     CustomTitleBar._windowChannel.setMethodCallHandler(_handleWindowMethodCall);
-    CustomTitleBar._wmChannel.setMethodCallHandler(_handleWindowMethodCall);
     _syncWindowState();
 
     if (Get.isRegistered<ThemeLanguageController>()) {
@@ -220,7 +200,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   @override
   void dispose() {
     CustomTitleBar._windowChannel.setMethodCallHandler(null);
-    CustomTitleBar._wmChannel.setMethodCallHandler(null);
     _themeWorker?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -370,20 +349,24 @@ class _CustomTitleBarState extends State<CustomTitleBar>
               isFocused: effectiveFocused,
             ),
 
-            // Central draggable region with instant drag and double-tap maximize
+            // Central draggable region — uses bitsdojo_window's MoveWindow
+            // widget so dragging is handled at the native Win32 level (no
+            // polling, no SendMessage race). Double-tap to maximize/restore.
             Expanded(
-              child: Listener(
+              child: MoveWindow(
                 key: const ValueKey('custom-title-bar-drag-region'),
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: (event) {
-                  if (event.buttons == kPrimaryMouseButton) {
-                    CustomTitleBar.startDragging();
-                  }
-                },
-                child: GestureDetector(
+                child: Listener(
                   behavior: HitTestBehavior.opaque,
-                  onDoubleTap: _handleToggleMaximize,
-                  child: Container(color: Colors.transparent),
+                  onPointerDown: (event) {
+                    if ((event.buttons & 1) != 0) {
+                      CustomTitleBar.startDragging();
+                    }
+                  },
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTap: _handleToggleMaximize,
+                    child: Container(color: Colors.transparent),
+                  ),
                 ),
               ),
             ),
@@ -409,17 +392,18 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   }) {
     final double brandingOpacity = isFocused ? 1.0 : 0.55;
 
-    return Listener(
-      behavior: HitTestBehavior.opaque,
-      onPointerDown: (event) {
-        if (event.buttons == kPrimaryMouseButton) {
-          CustomTitleBar.startDragging();
-        }
-      },
-      child: GestureDetector(
+    return MoveWindow(
+      child: Listener(
         behavior: HitTestBehavior.opaque,
-        onDoubleTap: _handleToggleMaximize,
-        child: Padding(
+        onPointerDown: (event) {
+          if ((event.buttons & 1) != 0) {
+            CustomTitleBar.startDragging();
+          }
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onDoubleTap: _handleToggleMaximize,
+          child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0),
           child: Opacity(
             key: const ValueKey('custom-title-bar-branding-opacity'),
@@ -464,8 +448,9 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildWindowControls({
     required Color textColor,

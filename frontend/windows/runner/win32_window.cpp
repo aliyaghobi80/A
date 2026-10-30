@@ -140,8 +140,12 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  // WS_POPUP removes the native caption/frame entirely.
+  // WS_THICKFRAME retains resizable borders and DWM drop shadow.
+  // WS_MINIMIZEBOX / WS_MAXIMIZEBOX keep taskbar button and Windows snap.
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
+      window_class, title.c_str(),
+      WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
       Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
       Scale(size.width, scale_factor), Scale(size.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
@@ -185,6 +189,13 @@ Win32Window::MessageHandler(HWND hwnd,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
   switch (message) {
+    case WM_NCCALCSIZE:
+      // When wParam is TRUE, returning 0 makes the entire window rect the
+      // client rect, eliminating the native caption/frame completely while
+      // keeping DWM border, drop shadow, and resize handles via WS_THICKFRAME.
+      if (wparam) { return 0; }
+      break;
+
     case WM_GETMINMAXINFO: {
       auto minMaxInfo = reinterpret_cast<MINMAXINFO*>(lparam);
       HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);

@@ -468,7 +468,7 @@ void main() {
     });
 
     testWidgets(
-        'Receiving window_manager channel notifications synchronizes state identically',
+        'Receiving onWindowMaximized and onWindowRestored method calls via markazi/window synchronizes state',
         (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -479,11 +479,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Simulate window_manager channel sending onWindowMaximize
+      // Simulate native Win32 dispatching onWindowMaximized via markazi/window
       await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
-        'window_manager',
+        'markazi/window',
         const StandardMethodCodec().encodeMethodCall(
-          const MethodCall('onWindowMaximize'),
+          const MethodCall('onWindowMaximized'),
         ),
         (data) {},
       );
@@ -491,11 +491,11 @@ void main() {
       expect(find.byKey(const ValueKey('window-control-restore-icon')), findsOneWidget);
       expect(find.byKey(const ValueKey('window-control-maximize-icon')), findsNothing);
 
-      // Simulate window_manager channel sending onWindowUnmaximize
+      // Simulate native Win32 dispatching onWindowRestored via markazi/window
       await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
-        'window_manager',
+        'markazi/window',
         const StandardMethodCodec().encodeMethodCall(
-          const MethodCall('onWindowUnmaximize'),
+          const MethodCall('onWindowRestored'),
         ),
         (data) {},
       );
@@ -566,15 +566,9 @@ void main() {
       expect(opacity.opacity, 0.55);
     });
 
-    test('CustomTitleBar.isMaximized queries markazi/window and falls back to window_manager', () async {
+    test('CustomTitleBar.isMaximized queries markazi/window and handles fallback gracefully', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
         const MethodChannel('markazi/window'),
-        (call) async {
-          throw PlatformException(code: 'UNAVAILABLE');
-        },
-      );
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-        const MethodChannel('window_manager'),
         (call) async {
           if (call.method == 'isMaximized') return true;
           return null;
@@ -583,6 +577,18 @@ void main() {
 
       final result = await CustomTitleBar.isMaximized();
       expect(result, isTrue);
+
+      // When markazi/window throws UNAVAILABLE, it falls back to bitsdojo_window appWindow.isMaximized
+      // which safely returns false in non-desktop/headless test environments.
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('markazi/window'),
+        (call) async {
+          throw PlatformException(code: 'UNAVAILABLE');
+        },
+      );
+
+      final fallbackResult = await CustomTitleBar.isMaximized();
+      expect(fallbackResult, isFalse);
     });
   });
 }
