@@ -43,8 +43,11 @@ class TestQueueManagerV2(unittest.TestCase):
         self.test_dir = tempfile.mkdtemp(prefix="test_qm2_")
         self._orig_queue_state = copy.deepcopy(queue_manager._queue_state)
         self._orig_queue_thread = queue_manager._queue_thread
+        self.history_patch = patch("drivers.queue_manager.record_driver_installation")
+        self.mock_history = self.history_patch.start()
 
     def tearDown(self):
+        self.history_patch.stop()
         with queue_manager._queue_lock:
             queue_manager._queue_state = self._orig_queue_state
             queue_manager._queue_thread = self._orig_queue_thread
