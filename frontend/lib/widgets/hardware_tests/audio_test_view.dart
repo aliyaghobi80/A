@@ -17,7 +17,7 @@ class AudioTestView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top Navigation Breadcrumb
+          // Top Navigation Breadcrumb & Windows Sound Settings Link
           Row(
             children: [
               OutlinedButton.icon(
@@ -29,18 +29,66 @@ class AudioTestView extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 14),
-              Text(
-                'تست صدا، تفکیک هدفون و فرکانس بیس',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+              Expanded(
+                child: Text(
+                  'تست صدا، تفکیک هدفون و فرکانس بیس',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  ),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => ctrl.openWindowsSoundSettings(),
+                icon: const Icon(Icons.settings_suggest_rounded, size: 16),
+                label: const Text('تنظیمات صدای ویندوز'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                  foregroundColor: isDark ? Colors.white : Colors.black87,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  elevation: 0,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+
+          // Reactive Playback Error Banner
+          Obx(() {
+            if (ctrl.audioErrorMessage.isEmpty) return const SizedBox.shrink();
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withValues(alpha: isDark ? 0.15 : 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFEF4444)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, size: 18, color: Color(0xFFEF4444)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      ctrl.audioErrorMessage.value,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFFEF4444),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFFEF4444)),
+                    onPressed: () => ctrl.audioErrorMessage.value = '',
+                    tooltip: 'بستن پیام خطا',
+                  ),
+                ],
+              ),
+            );
+          }),
 
           // Volume & Stop Control Bar
           Container(
@@ -177,6 +225,71 @@ class AudioTestView extends StatelessWidget {
             ],
           ),
 
+          const SizedBox(height: 14),
+
+          // Distinct Channel Test Sound: Sequenced Stereo Chime Card
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF06B6D4).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.compare_arrows_rounded, color: Color(0xFF06B6D4), size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'آزمون توالی و تفکیک جهت استریو (Stereo Chime Sequence)',
+                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'پخش دو زنگ ملایم در گوش چپ، ۵۰۰ میلی‌ثانیه سکوت، سپس دو زنگ در گوش راست جهت اطمینان از جهت قرارگیری هدفون.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Obx(() {
+                  final isPlayingChime =
+                      ctrl.isAudioPlaying.value && ctrl.currentAudioKind.value == 'chime';
+                  return ElevatedButton.icon(
+                    onPressed: () => ctrl.playAudioTone(kind: 'chime', duration: 2.8),
+                    icon: Icon(
+                      isPlayingChime ? Icons.waves_rounded : Icons.play_arrow_rounded,
+                      size: 16,
+                    ),
+                    label: Text(isPlayingChime ? 'در حال پخش...' : 'پخش توالی چپ/راست'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF06B6D4),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+
           const SizedBox(height: 16),
 
           // Bass Frequency Test Card
@@ -213,7 +326,7 @@ class AudioTestView extends StatelessWidget {
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'صدای فرکانس پایین و تن‌های مرجع را با ولوم ملایم پخش کنید.',
+                          'تن‌های مرجع، فرکانس‌های بم هدفون و نویز صورتی فیلترشده را با ولوم امن تست کنید.',
                           style: TextStyle(fontSize: 11.5, color: Colors.grey),
                         ),
                       ],
@@ -228,12 +341,27 @@ class AudioTestView extends StatelessWidget {
                     OutlinedButton.icon(
                       onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 440.0),
                       icon: const Icon(Icons.music_note_rounded, size: 16),
-                      label: const Text('تن استاندارد ۴۴۰ هرتز (Concert Pitch A4)'),
+                      label: const Text('تن استاندارد ۴۴۰ هرتز (Concert A4)'),
                     ),
                     OutlinedButton.icon(
                       onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 1000.0),
                       icon: const Icon(Icons.tune_rounded, size: 16),
-                      label: const Text('تن مرجع ۱۰۰۰ هرتز (1 kHz Reference)'),
+                      label: const Text('تن مرجع ۱۰۰۰ هرتز (1 kHz Both)'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => ctrl.playAudioTone(kind: 'left', frequency: 1000.0),
+                      icon: const Icon(Icons.tune_rounded, size: 16),
+                      label: const Text('تن ۱۰۰۰ هرتز چپ (1 kHz Left)'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => ctrl.playAudioTone(kind: 'right', frequency: 1000.0),
+                      icon: const Icon(Icons.tune_rounded, size: 16),
+                      label: const Text('تن ۱۰۰۰ هرتز راست (1 kHz Right)'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 40.0),
+                      icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                      label: const Text('ساب‌بیس ۴۰ هرتز (40 Hz)'),
                     ),
                     OutlinedButton.icon(
                       onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 60.0),
@@ -251,18 +379,18 @@ class AudioTestView extends StatelessWidget {
                       label: const Text('بیس ۱۰۰ هرتز (100 Hz)'),
                     ),
                     ElevatedButton.icon(
-                      onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 40.0, sweep: true),
+                      onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 40.0, sweep: true, duration: 3.0),
                       icon: const Icon(Icons.waves_rounded, size: 16),
-                      label: const Text('پویش پیوسته بیس (۴۰ تا ۱۲۰ هرتز Sweep)'),
+                      label: const Text('پویش پیوسته بیس (۲۰ تا ۱۲۰ هرتز Sweep)'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFF59E0B),
                         foregroundColor: Colors.white,
                       ),
                     ),
                     ElevatedButton.icon(
-                      onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 500.0),
+                      onPressed: () => ctrl.playAudioTone(kind: 'pink_noise', pinkNoise: true, duration: 3.0),
                       icon: const Icon(Icons.graphic_eq_rounded, size: 16),
-                      label: const Text('نویز صورتی (Pink Noise 1/f)'),
+                      label: const Text('نویز صورتی فیلترشده (Pink Noise 1/f)'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFEC4899),
                         foregroundColor: Colors.white,

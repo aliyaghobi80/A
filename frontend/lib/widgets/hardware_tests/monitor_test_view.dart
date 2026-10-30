@@ -312,20 +312,22 @@ class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
     try {
       await _windowChannel.invokeMethod('setFullScreen', true);
     } catch (_) {
-      // Gracefully degrade if the channel is not available.
+      try {
+        const MethodChannel('window_manager').invokeMethod('setFullScreen', true);
+      } catch (_) {}
     }
   }
 
   Future<void> _exitFullScreen() async {
     if (!_isFullScreenActive) return;
     _isFullScreenActive = false;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.ctrl.toggleMonitorFullScreen(false);
-    });
+    widget.ctrl.toggleMonitorFullScreen(false);
     try {
       await _windowChannel.invokeMethod('setFullScreen', false);
     } catch (_) {
-      // Gracefully degrade if the channel is not available.
+      try {
+        const MethodChannel('window_manager').invokeMethod('setFullScreen', false);
+      } catch (_) {}
     }
   }
 
@@ -340,45 +342,52 @@ class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: MouseRegion(
-        cursor: SystemMouseCursors.none,
-        child: Focus(
-          focusNode: _focusNode,
-          autofocus: true,
-          onKeyEvent: (node, event) {
-            if (event is KeyDownEvent) {
-              if (event.logicalKey == LogicalKeyboardKey.escape) {
-                _close();
-                return KeyEventResult.handled;
-              } else if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
-                  event.logicalKey == LogicalKeyboardKey.arrowUp ||
-                  event.logicalKey == LogicalKeyboardKey.space) {
-                widget.ctrl.nextMonitorColor();
-                return KeyEventResult.handled;
-              } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-                  event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                widget.ctrl.prevMonitorColor();
-                return KeyEventResult.handled;
+      body: PopScope(
+        canPop: true,
+        onPopInvokedWithResult: (didPop, _) {
+          _exitFullScreen();
+        },
+        child: MouseRegion(
+          cursor: SystemMouseCursors.none,
+          child: Focus(
+            focusNode: _focusNode,
+            autofocus: true,
+            onKeyEvent: (node, event) {
+              if (event is KeyDownEvent) {
+                if (event.logicalKey == LogicalKeyboardKey.escape) {
+                  _close();
+                  return KeyEventResult.handled;
+                } else if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
+                    event.logicalKey == LogicalKeyboardKey.arrowUp ||
+                    event.logicalKey == LogicalKeyboardKey.space) {
+                  widget.ctrl.nextMonitorColor();
+                  return KeyEventResult.handled;
+                } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+                    event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  widget.ctrl.prevMonitorColor();
+                  return KeyEventResult.handled;
+                }
               }
-            }
-            return KeyEventResult.ignored;
-          },
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => widget.ctrl.nextMonitorColor(),
-            onSecondaryTap: () => widget.ctrl.prevMonitorColor(),
-            child: Obx(() {
-              final idx = widget.ctrl.monitorIndex.value;
-              final item = HardwareTestController.monitorColors[idx];
-              final c = Color(item['color'] as int);
+              return KeyEventResult.ignored;
+            },
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => widget.ctrl.nextMonitorColor(),
+              onSecondaryTap: () => widget.ctrl.prevMonitorColor(),
+              child: Obx(() {
+                final idx = widget.ctrl.monitorIndex.value;
+                final item = HardwareTestController.monitorColors[idx];
+                final c = Color(item['color'] as int);
 
-              // Pure static solid color: zero animation, zero gradients, zero overlays
-              return Container(
-                color: c,
-                width: double.infinity,
-                height: double.infinity,
-              );
-            }),
+                // Pure static solid color: zero animation, zero gradients, zero overlays
+                return Container(
+                  key: const ValueKey('monitor-fullscreen-color-canvas'),
+                  color: c,
+                  width: double.infinity,
+                  height: double.infinity,
+                );
+              }),
+            ),
           ),
         ),
       ),

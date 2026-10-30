@@ -34,6 +34,7 @@ class DriverInstallController extends GetxController {
   final RxString driverFolder = ''.obs;
   final RxBool isScanning = false.obs;
   final RxBool isBatchInstalling = false.obs;
+  RxBool get isBatchRunning => isBatchInstalling;
   final RxBool doubleSpeed = false.obs;
   final Rx<DriverBatchStatus> batchStatus = DriverBatchStatus.empty().obs;
   final Rx<DriverScanResult> scanResult = DriverScanResult.empty().obs;
@@ -317,7 +318,10 @@ class DriverInstallController extends GetxController {
     await scanDrivers(context, folderPath: folderPath);
   }
 
-  Future<void> installSelectedDrivers(BuildContext context) async {
+  Future<void> installSelectedDrivers(
+    BuildContext context, {
+    bool bypassConfirmation = true,
+  }) async {
     if (selectedPackageIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -331,20 +335,28 @@ class DriverInstallController extends GetxController {
 
     final selectedIds = Set<String>.from(selectedPackageIds).toList();
     final selectedCount = selectedIds.length;
-    final confirmed = await _showInstallConfirmationDialog(
-      context,
-      title: 'تأیید نصب درایورهای انتخاب‌شده',
-      message:
-          'تعداد $selectedCount بسته درایور در صف نصب خودکار قرار خواهند گرفت.',
-      packageIds: selectedIds,
-    );
+    final bool confirmed;
+    if (bypassConfirmation) {
+      confirmed = true;
+    } else {
+      confirmed = (await _showInstallConfirmationDialog(
+        context,
+        title: 'تأیید نصب درایورهای انتخاب‌شده',
+        message:
+            'تعداد $selectedCount بسته درایور در صف نصب خودکار قرار خواهند گرفت.',
+        packageIds: selectedIds,
+      )) ?? false;
+    }
 
     if (confirmed == true && context.mounted) {
       await _executeDriverQueue(context, packageIds: selectedIds);
     }
   }
 
-  Future<void> installAllDrivers(BuildContext context) async {
+  Future<void> installAllDrivers(
+    BuildContext context, {
+    bool bypassConfirmation = true,
+  }) async {
     final pkgs = scanResult.value.packages;
     final targetList = pkgs;
 
@@ -359,13 +371,18 @@ class DriverInstallController extends GetxController {
       return;
     }
 
-    final confirmed = await _showInstallConfirmationDialog(
-      context,
-      title: 'تأیید نصب همه درایورها',
-      message:
-          'این ${targetList.length} بسته به ترتیب اجرا می‌شوند. سازگاری بسته‌های با مشخصات نامشخص توسط نصاب سازنده بررسی خواهد شد.',
-      packageIds: targetList.map((p) => p.packageId).toList(),
-    );
+    final bool confirmed;
+    if (bypassConfirmation) {
+      confirmed = true;
+    } else {
+      confirmed = (await _showInstallConfirmationDialog(
+        context,
+        title: 'تأیید نصب همه درایورها',
+        message:
+            'این ${targetList.length} بسته به ترتیب اجرا می‌شوند. سازگاری بسته‌های با مشخصات نامشخص توسط نصاب سازنده بررسی خواهد شد.',
+        packageIds: targetList.map((p) => p.packageId).toList(),
+      )) ?? false;
+    }
 
     if (confirmed == true && context.mounted) {
       await _executeDriverQueue(

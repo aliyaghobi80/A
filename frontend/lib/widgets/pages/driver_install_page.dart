@@ -9,7 +9,6 @@ import '../../theme/app_theme.dart';
 import '../common/design_components.dart';
 import '../common/instant_option_tile.dart';
 import '../common/deployment_flow_panel.dart';
-import '../common/queue_preview_modal.dart';
 
 class DriverInstallPage extends StatefulWidget {
   const DriverInstallPage({super.key});
@@ -486,12 +485,15 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
               // Advanced Mode Toggle
               SizedBox(
                 width: 290,
-                child: InstantOptionTile(
-                  value: ctrl.doubleSpeed,
-                  enabled: !isBatchRunning,
-                  title: '2X',
-                  subtitle: 'دو نصب سازگار هم‌زمان',
-                  semanticLabel: 'حالت نصب دو برابر درایورها',
+                child: Material(
+                  color: Colors.transparent,
+                  child: InstantOptionTile(
+                    value: ctrl.doubleSpeed,
+                    enabled: !isBatchRunning,
+                    title: '2X',
+                    subtitle: 'دو نصب سازگار هم‌زمان',
+                    semanticLabel: 'حالت نصب دو برابر درایورها',
+                  ),
                 ),
               ),
               OutlinedButton.icon(
@@ -517,21 +519,13 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
               // One primary queue action keeps the toolbar predictable: the
               // select-all checkbox controls whether this means all or a subset.
               ElevatedButton.icon(
+                key: const ValueKey('driver-auto-install-button'),
                 onPressed: (isBatchRunning || selectedIds.isEmpty)
                     ? null
                     : () {
-                        final selectedPkgs = scanRes.packages
-                            .where((p) => selectedIds.contains(p.packageId))
-                            .toList();
-                        QueuePreviewModal.showDriverPreview(
-                          context: context,
-                          packages: selectedPkgs.isNotEmpty
-                              ? selectedPkgs
-                              : scanRes.packages,
-                          isDark: isDark,
-                          accentColor: accent,
-                          doubleSpeed: ctrl.doubleSpeed.value,
-                          onConfirm: () => ctrl.installSelectedDrivers(context),
+                        ctrl.installSelectedDrivers(
+                          context,
+                          bypassConfirmation: true,
                         );
                       },
                 icon: const Icon(Icons.auto_mode_rounded, size: 16),

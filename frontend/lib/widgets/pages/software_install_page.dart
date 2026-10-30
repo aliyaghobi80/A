@@ -11,7 +11,6 @@ import '../common/design_components.dart';
 import '../common/deployment_flow_panel.dart';
 import '../common/instant_option_tile.dart';
 import '../common/queue_card.dart';
-import '../common/queue_preview_modal.dart';
 
 class SoftwareInstallPage extends StatelessWidget {
   const SoftwareInstallPage({super.key});
@@ -399,25 +398,17 @@ class SoftwareInstallPage extends StatelessWidget {
                         ),
                       ),
                       ElevatedButton.icon(
+                        key: const ValueKey('software-auto-install-button'),
                         onPressed:
                             isBatchRunning ||
                                 isBatchUninstalling ||
                                 installTargetIds.isEmpty
                             ? null
                             : () {
-                                final targets = readyPackages
-                                    .where((p) => installTargetIds.contains(p.id))
-                                    .toList();
-                                QueuePreviewModal.showSoftwarePreview(
-                                  context: context,
-                                  packages: targets.isNotEmpty ? targets : readyPackages,
-                                  isDark: isDark,
-                                  accentColor: accent,
-                                  doubleSpeed: softwareCtrl.doubleSpeed.value,
-                                  onConfirm: () => softwareCtrl.startAutoInstallAll(
-                                    context,
-                                    targetPackageIds: installTargetIds.toList(),
-                                  ),
+                                softwareCtrl.startAutoInstallAll(
+                                  context,
+                                  targetPackageIds: installTargetIds.toList(),
+                                  bypassConfirmation: true,
                                 );
                               },
                         icon: isBatchRunning
@@ -443,25 +434,31 @@ class SoftwareInstallPage extends StatelessWidget {
                       ),
                       SizedBox(
                         width: 290,
-                        child: InstantOptionTile(
-                          value: softwareCtrl.includeActivation,
-                          enabled:
-                              !isBatchRunning && softwareCtrl.activationAllowed,
-                          title: 'KMS',
-                          subtitle: softwareCtrl.activationAllowed
-                              ? 'فعال‌سازی اختیاری'
-                              : 'برای Windows Home غیرفعال است',
-                          semanticLabel: 'فعال‌سازی اختیاری KMS',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InstantOptionTile(
+                            value: softwareCtrl.includeActivation,
+                            enabled:
+                                !isBatchRunning && softwareCtrl.activationAllowed,
+                            title: 'KMS',
+                            subtitle: softwareCtrl.activationAllowed
+                                ? 'فعال‌سازی اختیاری'
+                                : 'برای Windows Home غیرفعال است',
+                            semanticLabel: 'فعال‌سازی اختیاری KMS',
+                          ),
                         ),
                       ),
                       SizedBox(
                         width: 290,
-                        child: InstantOptionTile(
-                          value: softwareCtrl.doubleSpeed,
-                          enabled: !isBatchRunning,
-                          title: '2X',
-                          subtitle: 'دو نصب سازگار هم‌زمان',
-                          semanticLabel: 'حالت نصب دو برابر',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InstantOptionTile(
+                            value: softwareCtrl.doubleSpeed,
+                            enabled: !isBatchRunning,
+                            title: '2X',
+                            subtitle: 'دو نصب سازگار هم‌زمان',
+                            semanticLabel: 'حالت نصب دو برابر',
+                          ),
                         ),
                       ),
                     ],

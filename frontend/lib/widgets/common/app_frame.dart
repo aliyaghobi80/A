@@ -24,6 +24,21 @@ class AppFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // If there is no ancestor Overlay (such as when mounted at GetMaterialApp.builder),
+    // provide a root Overlay so that tooltips and menus in CustomTitleBar resolve correctly.
+    if (Overlay.maybeOf(context) == null) {
+      return Overlay(
+        initialEntries: [
+          OverlayEntry(
+            builder: (innerContext) => _buildBody(innerContext),
+          ),
+        ],
+      );
+    }
+    return _buildBody(context);
+  }
+
+  Widget _buildBody(BuildContext context) {
     // If HardwareTestController is registered in GetX, observe monitor test fullscreen state reactively
     if (Get.isRegistered<HardwareTestController>()) {
       final hwCtrl = Get.find<HardwareTestController>();

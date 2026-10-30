@@ -1,11 +1,24 @@
-// frontend/lib/controllers/hardware_test_controller.dart
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../services/api_service.dart';
+import '../services/winmm_audio_player.dart';
 
 class HardwareTestController extends GetxController {
-  final ApiService _api = ApiService();
+  final ApiService _api;
+  final WinmmAudioPlayer _audioPlayer;
+
+  HardwareTestController({
+    ApiService? api,
+    ApiService? apiService,
+    WinmmAudioPlayer? audioPlayer,
+  })  : _api = api ?? apiService ?? ApiService(),
+        _audioPlayer = audioPlayer ??
+            (Get.isRegistered<WinmmAudioPlayer>()
+                ? Get.find<WinmmAudioPlayer>()
+                : Get.put(WinmmAudioPlayer(), permanent: true));
 
   // Active view: 'hub', 'monitor', 'audio', 'mic', 'webcam', 'keyboard', 'mouse'
   final activeSubTest = 'hub'.obs;
@@ -73,41 +86,135 @@ class HardwareTestController extends GetxController {
   // =============================================================
   // 2. AUDIO & HEADPHONE TEST
   // =============================================================
-  final audioVolume = 0.18.obs;
+  final audioVolume = 0.20.obs;
   final isAudioPlaying = false.obs;
   final currentAudioKind = ''.obs;
+  final audioErrorMessage = ''.obs;
   Timer? _audioTimer;
+
+  WinmmAudioPlayer get audioPlayer => _audioPlayer;
+
+  /// Resolves the bundled audio asset path corresponding to the test parameters.
+  String resolveAudioAsset({
+    required String kind,
+    double frequency = 440.0,
+    bool sweep = false,
+    bool pinkNoise = false,
+  }) {
+    if (kind == 'chime' || kind == 'channel_id_chime') {
+      return 'assets/audio/channel_id_chime.wav';
+    }
+    if (pinkNoise || kind == 'pink_noise') {
+      return 'assets/audio/pink_noise.wav';
+    }
+    if (sweep || kind == 'sweep') {
+      return 'assets/audio/bass_sweep_20_120hz.wav';
+    }
+    if (frequency <= 45.0) {
+      return 'assets/audio/bass_40hz.wav';
+    }
+    if (frequency <= 70.0) {
+      return 'assets/audio/bass_60hz.wav';
+    }
+    if (frequency <= 90.0) {
+      return 'assets/audio/bass_80hz.wav';
+    }
+    if (frequency <= 150.0) {
+      return 'assets/audio/bass_100hz.wav';
+    }
+    if ((frequency - 1000.0).abs() < 100.0) {
+      if (kind == 'left') return 'assets/audio/sine_1khz_left.wav';
+      if (kind == 'right') return 'assets/audio/sine_1khz_right.wav';
+      return 'assets/audio/sine_1khz_both.wav';
+    }
+    // Default 440 Hz standard
+    if (kind == 'left') return 'assets/audio/sine_440hz_left.wav';
+    if (kind == 'right') return 'assets/audio/sine_440hz_right.wav';
+    return 'assets/audio/sine_440hz_both.wav';
+  }
 
   Future<void> playAudioTone({
     required String kind,
     double frequency = 440.0,
-    double duration = 2.4,
+    double duration = 2.5,
     bool sweep = false,
+    bool pinkNoise = false,
+    String? customAsset,
   }) async {
-    stopAudio();
+    await stopAudio();
+    audioErrorMessage.value = '';
     isAudioPlaying.value = true;
     currentAudioKind.value = kind;
 
-    await _api.playAudioTone(
-      kind: kind,
-      frequency: frequency,
-      duration: duration,
-      volume: audioVolume.value,
-      sweep: sweep,
-    );
+    final assetPath = customAsset ??
+        resolveAudioAsset(
+          kind: kind,
+          frequency: frequency,
+          sweep: sweep,
+          pinkNoise: pinkNoise,
+        );
 
-    _audioTimer?.cancel();
-    _audioTimer = Timer(Duration(milliseconds: (duration * 1000).toInt() + 150), () {
+    final channelRouting = (kind == 'left' || kind == 'right') ? kind : 'both';
+    final dur = Duration(milliseconds: (duration * 1000).toInt());
+
+    try {
+      await _audioPlayer.playAsset(
+        assetPath,
+        volume: audioVolume.value,
+        channel: channelRouting,
+        duration: dur,
+      );
+
+      _audioTimer?.cancel();
+      _audioTimer = Timer(dur + const Duration(milliseconds: 100), () {
+        isAudioPlaying.value = false;
+        currentAudioKind.value = '';
+      });
+    } catch (e) {
+      debugPrint('[HardwareTestController] Audio playback error: $e');
+      audioErrorMessage.value = 'خطا در پخش صدا: $e';
       isAudioPlaying.value = false;
       currentAudioKind.value = '';
-    });
+      // Attempt backend fallback if available
+      try {
+        final res = await _api.playAudioTone(
+          kind: channelRouting,
+          frequency: frequency,
+          duration: duration,
+          volume: audioVolume.value,
+          sweep: sweep,
+        );
+        if (res['status'] == 'ok') {
+          audioErrorMessage.value = '';
+          isAudioPlaying.value = true;
+          _audioTimer?.cancel();
+          _audioTimer = Timer(dur + const Duration(milliseconds: 100), () {
+            isAudioPlaying.value = false;
+            currentAudioKind.value = '';
+          });
+        }
+      } catch (_) {}
+    }
   }
 
   Future<void> stopAudio() async {
     _audioTimer?.cancel();
     isAudioPlaying.value = false;
     currentAudioKind.value = '';
-    await _api.stopAudioTone();
+    _audioPlayer.stop();
+    try {
+      await _api.stopAudioTone();
+    } catch (_) {}
+  }
+
+  Future<void> openWindowsSoundSettings() async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('cmd.exe', ['/c', 'start', 'ms-settings:sound']);
+      }
+    } catch (e) {
+      audioErrorMessage.value = 'عدم دسترسی به تنظیمات صدای ویندوز: $e';
+    }
   }
 
   // =============================================================
@@ -338,6 +445,7 @@ class HardwareTestController extends GetxController {
   @override
   void onClose() {
     _audioTimer?.cancel();
+    _audioPlayer.stop();
     _micPollTimer?.cancel();
     _mouseResetTimer?.cancel();
     super.onClose();

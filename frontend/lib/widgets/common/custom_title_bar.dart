@@ -1,7 +1,10 @@
 // frontend/lib/widgets/common/custom_title_bar.dart
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import '../../controllers/driver_install_controller.dart';
+import '../../controllers/software_controller.dart';
 import '../../controllers/theme_language_controller.dart';
 import '../../services/install_state_service.dart';
 import '../../theme/app_theme.dart';
@@ -20,6 +23,12 @@ class CustomTitleBar extends StatefulWidget {
   final bool showWindowControls;
   final bool? overrideMaximized;
   final bool? isFocused;
+
+  /// Build timestamp identifier from environment (passed via --dart-define)
+  static const String buildTimestamp = String.fromEnvironment(
+    'BUILD_TIMESTAMP',
+    defaultValue: 'dev',
+  );
 
   const CustomTitleBar({
     super.key,
@@ -287,9 +296,14 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   }
 
   void _handleClose(BuildContext context) {
-    final isInstalling = Get.isRegistered<InstallStateService>() &&
-        (InstallStateService.to.isDriverRunning.value ||
-            InstallStateService.to.isSoftwareRunning.value);
+    final isInstalling = (Get.isRegistered<InstallStateService>() &&
+            (InstallStateService.to.isDriverRunning.value ||
+                InstallStateService.to.isSoftwareRunning.value)) ||
+        (Get.isRegistered<SoftwareController>() &&
+            Get.find<SoftwareController>().isBatchInstalling.value) ||
+        (Get.isRegistered<DriverInstallController>() &&
+            (Get.find<DriverInstallController>().isBatchRunning.value ||
+                Get.find<DriverInstallController>().isBatchInstalling.value));
     if (isInstalling) {
       ExitDialog.show(context);
     } else if (widget.onClose != null) {
@@ -356,14 +370,21 @@ class _CustomTitleBarState extends State<CustomTitleBar>
               isFocused: effectiveFocused,
             ),
 
-            // Central draggable region
+            // Central draggable region with instant drag and double-tap maximize
             Expanded(
-              child: GestureDetector(
+              child: Listener(
                 key: const ValueKey('custom-title-bar-drag-region'),
                 behavior: HitTestBehavior.opaque,
-                onPanStart: (_) => CustomTitleBar.startDragging(),
-                onDoubleTap: _handleToggleMaximize,
-                child: Container(color: Colors.transparent),
+                onPointerDown: (event) {
+                  if (event.buttons == kPrimaryMouseButton) {
+                    CustomTitleBar.startDragging();
+                  }
+                },
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onDoubleTap: _handleToggleMaximize,
+                  child: Container(color: Colors.transparent),
+                ),
               ),
             ),
 
@@ -388,47 +409,58 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   }) {
     final double brandingOpacity = isFocused ? 1.0 : 0.55;
 
-    return GestureDetector(
+    return Listener(
       behavior: HitTestBehavior.opaque,
-      onPanStart: (_) => CustomTitleBar.startDragging(),
-      onDoubleTap: _handleToggleMaximize,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0),
-        child: Opacity(
-          key: const ValueKey('custom-title-bar-branding-opacity'),
-          opacity: brandingOpacity,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Logo
-              Image.asset(
-                widget.logoAsset ?? 'assets/logo/logo.png',
-                key: const ValueKey('custom-title-bar-logo'),
-                width: 18,
-                height: 18,
-                errorBuilder: (context, error, stackTrace) => Icon(
-                  Icons.computer_rounded,
-                  size: 18,
-                  color: textColor.withValues(alpha: 0.8),
+      onPointerDown: (event) {
+        if (event.buttons == kPrimaryMouseButton) {
+          CustomTitleBar.startDragging();
+        }
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onDoubleTap: _handleToggleMaximize,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+          child: Opacity(
+            key: const ValueKey('custom-title-bar-branding-opacity'),
+            opacity: brandingOpacity,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Logo
+                Image.asset(
+                  widget.logoAsset ?? 'assets/logo/logo.png',
+                  key: const ValueKey('custom-title-bar-logo'),
+                  width: 18,
+                  height: 18,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.computer_rounded,
+                    size: 18,
+                    color: textColor.withValues(alpha: 0.8),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Title text
-              Text(
-                title,
-                key: const ValueKey('custom-title-bar-title'),
-                style: TextStyle(
-                  fontFamily: 'Vazirmatn',
-                  fontSize: 12.0,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                  letterSpacing: 0.2,
+                const SizedBox(width: 8),
+                // Title text with build timestamp tooltip
+                Tooltip(
+                  key: const ValueKey('custom-title-bar-build-tooltip'),
+                  message: 'Build: ${CustomTitleBar.buildTimestamp}',
+                  child: Text(
+                    title,
+                    key: const ValueKey('custom-title-bar-title'),
+                    style: TextStyle(
+                      fontFamily: 'Vazirmatn',
+                      fontSize: 12.0,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                      letterSpacing: 0.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -442,18 +474,24 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     required bool isMaximized,
   }) {
     // Windows convention: Minimize (inner left), Maximize (center), Close (outer right)
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildMinimizeButton(textColor: textColor, hoverColor: hoverColor),
-        _buildMaximizeButton(
-          textColor: textColor,
-          hoverColor: hoverColor,
-          isMaximized: isMaximized,
-        ),
-        _buildCloseButton(textColor: textColor, hoverColor: closeHoverColor),
-      ],
+    // Control buttons row wrapped in Directionality.ltr so Minimize, Maximize/Restore,
+    // and Close buttons always remain anchored to top-right corner.
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Row(
+        key: const ValueKey('custom-title-bar-controls-row'),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildMinimizeButton(textColor: textColor, hoverColor: hoverColor),
+          _buildMaximizeButton(
+            textColor: textColor,
+            hoverColor: hoverColor,
+            isMaximized: isMaximized,
+          ),
+          _buildCloseButton(textColor: textColor, hoverColor: closeHoverColor),
+        ],
+      ),
     );
   }
 

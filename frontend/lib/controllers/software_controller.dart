@@ -1388,6 +1388,7 @@ class SoftwareController extends GetxController {
   Future<void> startAutoInstallAll(
     BuildContext context, {
     List<String>? targetPackageIds,
+    bool bypassConfirmation = true,
   }) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
@@ -1432,9 +1433,13 @@ class SoftwareController extends GetxController {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
+    final bool confirmed;
+    if (bypassConfirmation) {
+      confirmed = true;
+    } else {
+      confirmed = (await showDialog<bool>(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF131D33) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
@@ -1584,7 +1589,8 @@ class SoftwareController extends GetxController {
           ),
         ],
       ),
-    );
+    )) ?? false;
+    }
 
     if (confirmed == true) {
       isBatchInstalling.value = true;

@@ -130,10 +130,20 @@ def play_audio_tone(
     played = False
     if winsound:
         try:
-            winsound.PlaySound(
-                wav_bytes,
-                winsound.SND_MEMORY | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
-            )
+            snd_sync = getattr(winsound, "SND_SYNC", 0)
+            snd_memory = getattr(winsound, "SND_MEMORY", 4)
+            snd_nodefault = getattr(winsound, "SND_NODEFAULT", 2)
+            flags = snd_memory | snd_sync | snd_nodefault
+
+            def _worker():
+                try:
+                    winsound.PlaySound(wav_bytes, flags)
+                except Exception:
+                    pass
+
+            with _playback_lock:
+                _active_playback_thread = threading.Thread(target=_worker, daemon=True)
+                _active_playback_thread.start()
             played = True
         except Exception as e:
             return {
