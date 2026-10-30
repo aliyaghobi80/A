@@ -10,6 +10,8 @@ import '../../theme/app_theme.dart';
 import '../common/design_components.dart';
 import '../common/deployment_flow_panel.dart';
 import '../common/instant_option_tile.dart';
+import '../common/queue_card.dart';
+import '../common/queue_preview_modal.dart';
 
 class SoftwareInstallPage extends StatelessWidget {
   const SoftwareInstallPage({super.key});
@@ -82,17 +84,25 @@ class SoftwareInstallPage extends StatelessWidget {
       final installTargetIds = hasSelection ? selectedReadyIds : readyIds;
       final filteredPackages = visiblePackages;
 
+      final hasBottomBar = isBatchRunning ||
+          (batchStatus.items.isNotEmpty && batchStatus.total > 0);
+
       return LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 750;
 
-          return SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: isNarrow ? 12 : 20,
-              vertical: 16,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    isNarrow ? 12 : 20,
+                    16,
+                    isNarrow ? 12 : 20,
+                    hasBottomBar ? 110 : 16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 1. Header Toolbar (Responsive Wrap)
                 Container(
@@ -244,6 +254,31 @@ class SoftwareInstallPage extends StatelessWidget {
                     isDark: isDark,
                     accentColor: accent,
                   ),
+                  const SizedBox(height: 8),
+                  ...batchStatus.items.map((item) {
+                    final pkg = packages.firstWhereOrNull(
+                      (p) =>
+                          p.id == item.id ||
+                          (p.relativePath.isNotEmpty &&
+                              p.relativePath == item.relativePath),
+                    );
+                    return SoftwareQueueCard(
+                      item: item,
+                      package: pkg,
+                      isDark: isDark,
+                      accentColor: accent,
+                      onRetry: () {
+                        if (pkg != null) {
+                          softwareCtrl.installPackageSilent(context, pkg);
+                        } else {
+                          softwareCtrl.startAutoInstallAll(
+                            context,
+                            targetPackageIds: [item.id],
+                          );
+                        }
+                      },
+                    );
+                  }),
                   const SizedBox(height: 12),
                 ],
 
@@ -369,10 +404,22 @@ class SoftwareInstallPage extends StatelessWidget {
                                 isBatchUninstalling ||
                                 installTargetIds.isEmpty
                             ? null
-                            : () => softwareCtrl.startAutoInstallAll(
-                                context,
-                                targetPackageIds: installTargetIds.toList(),
-                              ),
+                            : () {
+                                final targets = readyPackages
+                                    .where((p) => installTargetIds.contains(p.id))
+                                    .toList();
+                                QueuePreviewModal.showSoftwarePreview(
+                                  context: context,
+                                  packages: targets.isNotEmpty ? targets : readyPackages,
+                                  isDark: isDark,
+                                  accentColor: accent,
+                                  doubleSpeed: softwareCtrl.doubleSpeed.value,
+                                  onConfirm: () => softwareCtrl.startAutoInstallAll(
+                                    context,
+                                    targetPackageIds: installTargetIds.toList(),
+                                  ),
+                                );
+                              },
                         icon: isBatchRunning
                             ? const SizedBox(
                                 width: 18,
@@ -481,9 +528,41 @@ class SoftwareInstallPage extends StatelessWidget {
                 ],
               ],
             ),
-          );
-        },
+          ),
+        ),
+          if (hasBottomBar)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: FixedCumulativeProgressBar(
+                isRunning: isBatchRunning,
+                progressPercent: batchStatus.progressPercent,
+                completed: batchStatus.completed,
+                total: batchStatus.total,
+                failed: batchStatus.failed,
+                skipped: batchStatus.skipped,
+                interrupted: batchStatus.interrupted,
+                startTime: batchStatus.startTime,
+                doubleSpeed: softwareCtrl.doubleSpeed.value,
+                currentItemName: batchStatus.currentItemName,
+                activeItemNames: batchStatus.items
+                    .where((i) => i.status == 'installing')
+                    .map((i) => i.friendlyDescription)
+                    .toList(),
+                onCancel: () =>
+                    softwareCtrl.cancelBatchInstallInteractive(context),
+                onResume: () =>
+                    softwareCtrl.startAutoInstallAll(context),
+                isDark: isDark,
+                accentColor: accent,
+                typeName: 'نرم‌افزار',
+              ),
+            ),
+        ],
       );
+    },
+  );
     });
   }
 

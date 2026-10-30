@@ -61,14 +61,6 @@ class TestHubView extends StatelessWidget {
         gradientColors: const [Color(0xFFEC4899), Color(0xFFBE185D)],
         badgeText: 'کلیک و اسکرول',
       ),
-      _TestCardItem(
-        id: 'report',
-        title: 'کارنامه و گزارش تست‌ها',
-        subtitle: 'مشاهده رویدادهای ثبت‌شده در این نشست، تفکیک موارد موفق و ناموفق و کپی گزارش برای فاکتور یا مشتری',
-        icon: Icons.assignment_turned_in_rounded,
-        gradientColors: const [Color(0xFF14B8A6), Color(0xFF0F766E)],
-        badgeText: 'خروجی متنی / لاگ',
-      ),
     ];
 
     return SingleChildScrollView(
@@ -174,21 +166,6 @@ class TestHubView extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Quick Summary Stats
-                Obx(() {
-                  final total = ctrl.totalTestsCount;
-                  final passed = ctrl.passedTestsCount;
-                  final failed = ctrl.failedTestsCount;
-                  return Row(
-                    children: [
-                      _buildHeaderStat('کل رویدادها', '$total', isDark, null),
-                      const SizedBox(width: 12),
-                      _buildHeaderStat('موفق', '$passed', isDark, const Color(0xFF10B981)),
-                      const SizedBox(width: 12),
-                      _buildHeaderStat('نیازمند بررسی', '$failed', isDark, const Color(0xFFEF4444)),
-                    ],
-                  );
-                }),
               ],
             ),
           ),
@@ -212,42 +189,6 @@ class TestHubView extends StatelessWidget {
                 }).toList(),
               );
             },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderStat(String label, String value, bool isDark, Color? color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F172A) : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: color ?? (isDark ? Colors.white : Colors.black87),
-              fontFamily: 'monospace',
-            ),
-          ),
-          const SizedBox(height: 1),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-            ),
           ),
         ],
       ),

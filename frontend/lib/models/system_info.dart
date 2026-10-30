@@ -2105,24 +2105,28 @@ class BatchInstallItem {
   final String name;
   final String filename;
   final String relativePath;
-  final String status; // queued, installing, completed, failed, skipped
+  final String status; // queued, pending, installing, completed, failed, skipped, interrupted
   final String message;
+  final String? errorMessage;
   final String installedVersion;
   final int? exitCode;
   final String? orchestratorAction;
   final String? installerType;
+  final dynamic rawStage;
 
   BatchInstallItem({
     required this.id,
     required this.name,
     this.filename = '',
     this.relativePath = '',
-    this.status = 'queued',
+    this.status = 'pending',
     this.message = '',
+    this.errorMessage,
     this.installedVersion = '',
     this.exitCode,
     this.orchestratorAction,
     this.installerType,
+    this.rawStage,
   });
 
   factory BatchInstallItem.fromJson(Map<String, dynamic> json) {
@@ -2131,20 +2135,34 @@ class BatchInstallItem {
       name: json['name'] ?? '',
       filename: json['filename'] ?? '',
       relativePath: json['relative_path'] ?? '',
-      status: json['status'] ?? 'queued',
-      message: json['message'] ?? '',
+      status: (json['status'] ?? 'pending') as String,
+      message: (json['message'] ?? json['error_message'] ?? '') as String,
+      errorMessage: (json['error_message'] ?? json['message']) as String?,
       installedVersion: json['installed_version'] ?? '',
       exitCode: json['exit_code'] as int?,
       orchestratorAction: json['orchestrator_action'] as String?,
       installerType: json['installer_type'] as String?,
+      rawStage: json['stage'],
     );
   }
 
   bool get isOrchestrator =>
       orchestratorAction != null && orchestratorAction!.isNotEmpty;
 
+  /// Whether the item is waiting to be installed (supports pending and queued synonymously).
+  bool get isPending => status == 'pending' || status == 'queued';
+
   /// Returns stage index: 1 = Prerequisites & Activation, 2 = Software, 3 = Device Settings
   int get stage {
+    if (rawStage is int) {
+      return rawStage as int;
+    }
+    if (rawStage is String) {
+      final s = (rawStage as String).toLowerCase();
+      if (s == 'prerequisites' || s == 'activation') return 1;
+      if (s == 'software' || s == 'installing') return 2;
+      if (s == 'settings' || s == 'done') return 3;
+    }
     if (orchestratorAction == 'office_extract' ||
         orchestratorAction == 'office_shortcuts' ||
         orchestratorAction == 'kms_activate' ||
@@ -2160,6 +2178,9 @@ class BatchInstallItem {
     }
     return 2;
   }
+
+  String get stageString =>
+      rawStage is String ? (rawStage as String) : stageNameFa;
 
   String get stageNameFa {
     switch (stage) {
@@ -2201,6 +2222,10 @@ class BatchInstallItem {
 }
 
 class BatchInstallStatus {
+  final int stateRevision;
+  final double? serverTime;
+  final double? startTime;
+  final double? endTime;
   final bool doubleSpeed;
   final bool includeActivation;
   final bool isRunning;
@@ -2209,6 +2234,7 @@ class BatchInstallStatus {
   final int completed;
   final int failed;
   final int skipped;
+  final int interrupted;
   final bool rebootRequired;
   final String? currentItemName;
   final int currentItemIndex;
@@ -2217,6 +2243,10 @@ class BatchInstallStatus {
   final String summaryMessage;
 
   BatchInstallStatus({
+    this.stateRevision = 1,
+    this.serverTime,
+    this.startTime,
+    this.endTime,
     this.doubleSpeed = false,
     this.includeActivation = false,
     required this.isRunning,
@@ -2225,6 +2255,7 @@ class BatchInstallStatus {
     this.completed = 0,
     this.failed = 0,
     this.skipped = 0,
+    this.interrupted = 0,
     this.rebootRequired = false,
     this.currentItemName,
     this.currentItemIndex = 0,
@@ -2233,10 +2264,17 @@ class BatchInstallStatus {
     this.summaryMessage = '',
   });
 
-  factory BatchInstallStatus.empty() => BatchInstallStatus(isRunning: false);
+  factory BatchInstallStatus.empty() => BatchInstallStatus(
+        stateRevision: 1,
+        isRunning: false,
+      );
 
   factory BatchInstallStatus.fromJson(Map<String, dynamic> json) {
     return BatchInstallStatus(
+      stateRevision: json['state_revision'] as int? ?? 1,
+      serverTime: (json['server_time'] as num?)?.toDouble(),
+      startTime: (json['start_time'] as num?)?.toDouble(),
+      endTime: (json['end_time'] as num?)?.toDouble(),
       doubleSpeed: json['double_speed'] == true,
       includeActivation: json['include_activation'] == true,
       isRunning: json['is_running'] as bool? ?? false,
@@ -2245,6 +2283,7 @@ class BatchInstallStatus {
       completed: json['completed'] as int? ?? 0,
       failed: json['failed'] as int? ?? 0,
       skipped: json['skipped'] as int? ?? 0,
+      interrupted: json['interrupted'] as int? ?? 0,
       rebootRequired: json['reboot_required'] as bool? ?? false,
       currentItemName: json['current_item_name'] as String?,
       currentItemIndex: json['current_item_index'] as int? ?? 0,
@@ -2275,7 +2314,8 @@ class BatchInstallStatus {
       (it) =>
           it.status == 'completed' ||
           it.status == 'failed' ||
-          it.status == 'skipped',
+          it.status == 'skipped' ||
+          it.status == 'interrupted',
     );
   }
 
@@ -2386,8 +2426,9 @@ class DriverInstallItem {
   final String relativePath;
   final String type;
   final String fileSizeDisplay;
-  final String status; // queued, installing, completed, failed, skipped
+  final String status; // queued, pending, installing, completed, failed, skipped, interrupted
   final String message;
+  final String? errorMessage;
   final int? exitCode;
   final String? packageId;
   final String? displayName;
@@ -2403,8 +2444,9 @@ class DriverInstallItem {
     this.relativePath = '',
     this.type = 'exe',
     this.fileSizeDisplay = '',
-    this.status = 'queued',
+    this.status = 'pending',
     this.message = '',
+    this.errorMessage,
     this.exitCode,
     this.packageId,
     this.displayName,
@@ -2416,7 +2458,12 @@ class DriverInstallItem {
     this.elapsedSeconds,
   });
 
+  /// Whether the item is waiting to be installed (supports pending and queued synonymously).
+  bool get isPending => status == 'pending' || status == 'queued';
+
   factory DriverInstallItem.fromJson(Map<String, dynamic> json) {
+    final msg = (json['message'] ?? json['error_message'] ?? '') as String;
+    final err = (json['error_message'] ?? json['message'] ?? json['failure_reason']) as String?;
     return DriverInstallItem(
       filename:
           json['filename'] ??
@@ -2426,12 +2473,13 @@ class DriverInstallItem {
       relativePath: json['relative_path'] ?? '',
       type: json['type'] ?? 'exe',
       fileSizeDisplay: json['file_size_display'] ?? '',
-      status: json['status'] ?? 'queued',
-      message: json['message'] ?? '',
+      status: (json['status'] ?? 'pending') as String,
+      message: msg,
+      errorMessage: err,
       exitCode: json['exit_code'] as int?,
       packageId: json['package_id'] as String?,
       displayName: json['display_name'] as String?,
-      failureReason: json['failure_reason'] as String?,
+      failureReason: (json['failure_reason'] ?? json['error_message']) as String?,
       category: json['category'] as String? ?? '',
       workerId: json['worker_id'] as int?,
       retryCount: json['retry_count'] as int? ?? 0,
@@ -2442,6 +2490,10 @@ class DriverInstallItem {
 }
 
 class DriverBatchStatus {
+  final int stateRevision;
+  final double? serverTime;
+  final double? startTime;
+  final double? endTime;
   final bool doubleSpeed;
   final bool isRunning;
   final bool cancelled;
@@ -2449,6 +2501,7 @@ class DriverBatchStatus {
   final int completed;
   final int failed;
   final int skipped;
+  final int interrupted;
   final String? currentFile;
   final int currentIndex;
   final double progressPercent;
@@ -2464,6 +2517,10 @@ class DriverBatchStatus {
   final String fatalError;
 
   DriverBatchStatus({
+    this.stateRevision = 1,
+    this.serverTime,
+    this.startTime,
+    this.endTime,
     this.doubleSpeed = false,
     required this.isRunning,
     this.cancelled = false,
@@ -2471,6 +2528,7 @@ class DriverBatchStatus {
     this.completed = 0,
     this.failed = 0,
     this.skipped = 0,
+    this.interrupted = 0,
     this.currentFile,
     this.currentIndex = 0,
     this.progressPercent = 0.0,
@@ -2486,11 +2544,18 @@ class DriverBatchStatus {
     this.fatalError = '',
   });
 
-  factory DriverBatchStatus.empty() => DriverBatchStatus(isRunning: false);
+  factory DriverBatchStatus.empty() => DriverBatchStatus(
+        stateRevision: 1,
+        isRunning: false,
+      );
 
   factory DriverBatchStatus.fromJson(Map<String, dynamic> json) {
     final rawActiveItems = json['active_items'] as List<dynamic>? ?? [];
     return DriverBatchStatus(
+      stateRevision: json['state_revision'] as int? ?? 1,
+      serverTime: (json['server_time'] as num?)?.toDouble(),
+      startTime: (json['start_time'] as num?)?.toDouble(),
+      endTime: (json['end_time'] as num?)?.toDouble(),
       doubleSpeed: json['double_speed'] == true,
       isRunning: json['is_running'] as bool? ?? false,
       cancelled: json['cancelled'] as bool? ?? false,
@@ -2498,6 +2563,7 @@ class DriverBatchStatus {
       completed: json['completed'] as int? ?? 0,
       failed: json['failed'] as int? ?? 0,
       skipped: json['skipped'] as int? ?? 0,
+      interrupted: json['interrupted'] as int? ?? 0,
       currentFile: (json['current_file'] ?? json['current_package']) as String?,
       currentIndex: json['current_index'] as int? ?? 0,
       progressPercent: (json['progress_percent'] as num?)?.toDouble() ?? 0.0,

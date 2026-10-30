@@ -114,6 +114,31 @@ Queue items are strictly sorted by priority before execution:
    - USB 3.x / Thunderbolt (`usb`)
 7. **Utility & Hotkeys** (`other`): OEM helper software, hotkey utilities (Parallel-Safe if switched, Barrier if unswitched).
 
+## Software deployment rules
+
+- Software scanning never executes a file. Scanning supports synthetic/mock
+  fixtures for `H:\PROGRAM\` in automated test environments where `H:\` is not mounted.
+- Deduplicate adjacent folder and `.rar` archive with identical names (prefer
+  the extracted folder, prevent redundant archive extraction).
+- Sort software installation queue strictly by package weight (lightweight utilities
+  first: WinRAR, Firefox, VLC, KMPlayer, FDM before Chrome, Acrobat Reader, and Office).
+- System runtimes (Visual C++ Redistributables, .NET Framework, DirectX) must
+  always be installed before any dependent applications.
+- Enforce strict allowlist for Microsoft Office: execute only `Setup_Office 2024.cmd`
+  as a strict barrier with extended watchdog (600s). Exclude `Activator.cmd`,
+  `Uninstall.cmd`, and older setup scripts (`Setup_Office 2021.cmd`, etc.) from automatic queueing.
+- Windows 10/11 Home deployment restrictions: Office installation is disabled on Home;
+  deploy desktop shortcuts only and keep policy reason visible.
+- Manage KMS v6 strictly under activation rules (`activation_tools.py`), never as
+  an ordinary software queue item.
+- Exclude Windows Update Blocker (WUB) from automatic batch selection.
+- Ignore directories or paths containing `"آموزش"` during package scanning.
+- Zero guessed switches policy: unswitched installers run via GUI autopilot as
+  strict barriers with empty `[]` `silent_args`.
+- Apply 2X concurrency exclusively to verified parallel-safe standalone EXEs; enforce
+  serial barrier execution on Worker 1 for MSI, Office, runtimes, and unswitched installers.
+- Cache scan results and minimize inter-package delays unless child processes are running.
+
 ## Teamwork rules
 
 - **Single file ownership**: Each file has exactly one owning subagent. No two agents may edit the same file concurrently.
@@ -131,10 +156,30 @@ Queue items are strictly sorted by priority before execution:
 - Persian pages are RTL, but numbers, versions, serials, paths, and calculator
   inputs are explicitly LTR.
 - Keep primary actions at least 44 px high and avoid duplicate actions.
+- Single permanent singleton `InstallStateService` (`Get.put(..., permanent: true)`):
+  Acts as the sole source of truth for software and driver queue state across all pages.
+  Individual pages consume state reactively and do not manage polling lifecycles.
+- Monotonic revisioning and timestamp ordering: Backend status endpoints must provide
+  monotonic integer `state_revision` and POSIX `server_time`. UI drops any status
+  payload where `state_revision` is strictly lower than the latest applied revision.
+- Adaptive non-overlapping polling: Replaces fixed overlapping interval timers with
+  a single active polling loop (500ms–800ms during active installations; 3000ms–5000ms when idle).
+- Network resilience: Preserve last valid queue state across network/HTTP errors or
+  timeouts, displaying a non-intrusive Persian reconnection notice
+  («اتصال به سرویس قطع شد؛ در حال تلاش مجدد») without blanking or resetting item cards.
+- Strict item state machine: Forward-only transitions (`pending` → `installing` →
+  `completed` / `failed` / `skipped` / `interrupted`). Rollback to `pending` is permitted
+  exclusively for Error 1618 retry (capped at 2 retries).
+- Atomic persistence: Driver queue state (`driver_queue_state.json`) and software batch
+  state (`software_queue_state.json`) are persisted atomically to `%LOCALAPPDATA%\MarkaziSystemChecker\`.
+- Interrupted task reconciliation: Backend startup reconciles any unfinalized `installing`
+  items to `interrupted` without automatic re-execution.
+- Granular UI updates: Use immutable models, stable widget keys (`ValueKey`), and
+  granular `Obx` rebuilding only modified fields.
+- App settings navigation: Expand `ThemeLanguageController.setNavIndex` clamp to
+  `index >= 0 && index <= 7` so the SettingsPage opens reliably from the sidebar.
 - Driver selection is one source of truth in `DriverInstallController`; “select
   all” must toggle every currently scanned package on and off.
-- Use stable item IDs/keys for stateful queues and poll active operations for
-  real-time status instead of requiring a manual rescan.
 - The backend owns `system_info_cache.json`; the Flutter UI uses separately
   named cache files. Persist JSON with serialized/atomic replacement so startup
   scans, force refreshes, and renderer recovery cannot corrupt or overwrite a
@@ -152,6 +197,46 @@ Queue items are strictly sorted by priority before execution:
   add a fixed minimum delay; only expose retry after genuine repeated failure.
 - Check narrow desktop layouts as well as the normal technician workstation
   size. Prefer `Wrap`/`LayoutBuilder` over fixed-width rows.
+
+## Custom in-app title bar rules
+
+- Integrate custom title bar using `window_manager` on pub.dev.
+- Embed controls (minimize, maximize/restore, close) directly into Flutter UI matching
+  dark/light themes and RTL alignment (logo and title on the right, controls on the left).
+- Support window dragging, double-click to maximize/restore, hover states (red close hover),
+  and native Windows 11 snap layouts.
+- Completely hide the title bar in fullscreen test modes.
+- Preserve native runner display recovery watchdog (`kDisplayRecoveryTimeoutMs = 8000`),
+  low-power GPU preference, and `--display-recovery-from` in `main.cpp` and `flutter_window.cpp`.
+
+## Hardware diagnostic tests rules
+
+- **Monitor & Pixel Test**: True fullscreen covering entire screen including taskbar
+  and title bar (game-style fullscreen via `window_manager.setFullScreen(true)`); pure static
+  solid colors (Black, White, Red, Green, Blue, secondary) with zero animations, gradients,
+  shadows, or overlays during test; hide mouse cursor; show instructions only prior to
+  entering fullscreen; navigate with arrow keys (`→`, `↑` for next; `←`, `↓` for prev) and
+  `Esc` to exit and restore exact previous window geometry, state, and DPI across multi-monitor setups.
+- **Keyboard Test**: Responsive key layout using `LayoutBuilder` / `FittedBox` scaled to
+  viewport width; physical keycode detection via `PhysicalKeyboardKey` (differentiating
+  Left/Right Shift/Ctrl/Alt, Numpad, Win, Menu, PrtSc, Pause); graceful handling and technician
+  guidance for OS-intercepted keys; maintain key hit counter and reset button.
+- **Audio & Headphones Test**: Synthesize standalone in-memory WAV tones (440Hz, 1kHz, sweep,
+  pink noise) without external files or copyright dependencies; Left, Right, Both channel buttons;
+  safe default volume (20%) with volume slider; audio output device selection and mute warning.
+- **Microphone Test**: Real-time waveform/level meter, loopback recording controls (record,
+  stop, playback, progress, re-record); save recordings strictly to temporary storage (`%TEMP%`)
+  with automatic cleanup on exit; detect Windows privacy restrictions and provide direct link
+  to `ms-settings:privacy-microphone`.
+- **Webcam Test**: In-app live video preview via `camera_windows`, eliminating external
+  Windows Camera app launch; device selector, mirror toggle, resolution picker, and temporary
+  snapshot capture; link to `ms-settings:privacy-webcam`.
+- **Mouse Test**: Detect and visually reflect button hold for Left, Middle, Right, and Side
+  buttons until release; draggable mouse indicator; double-click detection (< 300ms);
+  scroll tracking; cursor movement tracking; suppress context menu on right click.
+- **Removed Report & Health Card Subtest**: Completely delete the unused "Health Card & Hardware Report"
+  page, menu item, route, controller, and associated export/print/PDF/CSV code; decouple and
+  preserve the top QC Report button.
 
 ## Activation and storage rules
 
@@ -180,7 +265,7 @@ Queue items are strictly sorted by priority before execution:
 
 ## Release version
 
-Keep these values synchronized: `frontend/pubspec.yaml`,
-`backend/api_server.py`, `installer/setup.iss`, and `build_production.py`.
-Production artifacts belong in `dist/` and must include the installer, portable
-directory, and versioned ZIP.
+Keep these values synchronized: `frontend/pubspec.yaml` (`1.1.45+46`),
+`backend/api_server.py` (`1.1.45`, API Contract `5`), `installer/setup.iss` (`1.1.45`),
+and `build_production.py` (`1.1.45`). Production artifacts belong in `dist/` and must
+include the installer, portable directory, and versioned ZIP.

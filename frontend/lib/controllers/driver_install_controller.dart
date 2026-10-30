@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../models/system_info.dart';
 import '../services/api_service.dart';
 import '../services/folder_picker_service.dart';
+import '../services/install_state_service.dart';
 import 'system_info_controller.dart';
 
 Set<String> toggledSelectAll(Set<String> current, Set<String> selectable) {
@@ -23,6 +24,13 @@ class DriverInstallController extends GetxController {
 
   final ApiService _apiService;
 
+  InstallStateService get _installService =>
+      InstallStateService.ensureInitialized(apiService: _apiService);
+  Worker? _driverStatusWorker;
+  Worker? _driverRunningWorker;
+  int _lastDriverCompletedCount = 0;
+  bool _wasDriverRunning = false;
+
   final RxString driverFolder = ''.obs;
   final RxBool isScanning = false.obs;
   final RxBool isBatchInstalling = false.obs;
@@ -37,7 +45,6 @@ class DriverInstallController extends GetxController {
       <ScannedDriverFile>[].obs; // For backwards compatibility
 
   Timer? _pollTimer;
-  bool _pollInFlight = false;
   bool _syncInFlight = false;
   int _emptyQueueSnapshots = 0;
   int _scanGeneration = 0;
@@ -52,6 +59,16 @@ class DriverInstallController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _driverStatusWorker = ever(_installService.driverStatus, (DriverBatchStatus status) {
+      if (!isClosed) {
+        _handleDriverStatusUpdate(status);
+      }
+    });
+    _driverRunningWorker = ever(_installService.isDriverRunning, (bool running) {
+      if (!isClosed) {
+        isBatchInstalling.value = running;
+      }
+    });
     _loadInitialConfig();
     synchronizeDriverBatchState();
   }
@@ -59,7 +76,10 @@ class DriverInstallController extends GetxController {
   @override
   void onClose() {
     _scanGeneration++;
+    _driverStatusWorker?.dispose();
+    _driverRunningWorker?.dispose();
     _pollTimer?.cancel();
+    _pollTimer = null;
     super.onClose();
   }
 
@@ -94,9 +114,7 @@ class DriverInstallController extends GetxController {
         if (effective.folderPath.isNotEmpty) {
           driverFolder.value = effective.folderPath;
         }
-        if (_pollTimer?.isActive != true) {
-          _startDriverBatchPolling(null);
-        }
+        _startDriverBatchPolling(null);
       } else {
         isBatchInstalling.value = false;
       }
@@ -110,6 +128,7 @@ class DriverInstallController extends GetxController {
   }
 
   DriverBatchStatus _applyDriverBatchStatus(DriverBatchStatus status) {
+    _installService.applyDriverStatus(status);
     if (batchStatus.value.isRunning &&
         !status.isRunning &&
         status.total == 0 &&
@@ -131,7 +150,11 @@ class DriverInstallController extends GetxController {
     if (!preserveLastCompleted) {
       batchStatus.value = status;
     }
-    return preserveLastCompleted ? batchStatus.value : status;
+    final effective = preserveLastCompleted ? batchStatus.value : status;
+    if (effective.isRunning) {
+      _installService.notifyQueueStarted();
+    }
+    return effective;
   }
 
   void toggleAdvancedMode() {
@@ -636,68 +659,42 @@ class DriverInstallController extends GetxController {
     }
   }
 
+  void _handleDriverStatusUpdate(DriverBatchStatus status) {
+    batchStatus.value = status;
+    isBatchInstalling.value = status.isRunning;
+    doubleSpeed.value = status.doubleSpeed;
+    if (status.folderPath.isNotEmpty) {
+      driverFolder.value = status.folderPath;
+    }
+
+    if (status.completed > _lastDriverCompletedCount) {
+      final newlyCompleted = status.completed - _lastDriverCompletedCount;
+      _lastDriverCompletedCount = status.completed;
+      try {
+        if (Get.isRegistered<SystemInfoController>()) {
+          Get.find<SystemInfoController>().recordDriverInstall(
+            newlyCompleted,
+          );
+        }
+      } catch (_) {}
+    }
+
+    if (_wasDriverRunning && !status.isRunning) {
+      _wasDriverRunning = false;
+      isBatchInstalling.value = false;
+      unawaited(_refreshAfterCompletedQueue(status));
+      if (status.rebootRequired) {
+        _showRebootRequiredDialog();
+      }
+    } else if (status.isRunning) {
+      _wasDriverRunning = true;
+    }
+  }
+
   void _startDriverBatchPolling(ScaffoldMessengerState? scaffoldMessenger) {
     _pollTimer?.cancel();
-    int lastCompletedCount = batchStatus.value.completed;
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
-      timer,
-    ) async {
-      if (_pollInFlight || isClosed) return;
-      _pollInFlight = true;
-      try {
-        final status = await _apiService.getDriverQueueStatus();
-        if (isClosed || timer != _pollTimer) return;
-        final effective = _applyDriverBatchStatus(status);
-        doubleSpeed.value = effective.doubleSpeed;
-
-        // Update the session counters in real time, but do not launch a full
-        // WMI/hardware refresh after every package. That refresh used to pile
-        // up exactly while graphics installers were resetting the display.
-        if (effective.completed > lastCompletedCount) {
-          final newlyCompleted = effective.completed - lastCompletedCount;
-          lastCompletedCount = effective.completed;
-          try {
-            if (Get.isRegistered<SystemInfoController>()) {
-              Get.find<SystemInfoController>().recordDriverInstall(
-                newlyCompleted,
-              );
-            }
-          } catch (_) {}
-        }
-
-        if (!effective.isRunning) {
-          timer.cancel();
-          isBatchInstalling.value = false;
-
-          // Let Windows finish rebuilding the display stack, then refresh the
-          // hardware and folder once. GPU queues receive a longer settle time.
-          unawaited(_refreshAfterCompletedQueue(effective));
-
-          if (scaffoldMessenger != null &&
-              effective.summaryMessage.isNotEmpty) {
-            scaffoldMessenger.showSnackBar(
-              SnackBar(
-                content: Text(effective.summaryMessage),
-                backgroundColor: effective.failed == 0
-                    ? const Color(0xFF0D9488)
-                    : const Color(0xFFF59E0B),
-                duration: const Duration(seconds: 7),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
-
-          // If reboot is required, show reboot dialog
-          if (effective.rebootRequired) {
-            _showRebootRequiredDialog();
-          }
-        }
-      } catch (e) {
-        debugPrint('[DriverInstallController] Queue poll error: $e');
-      } finally {
-        _pollInFlight = false;
-      }
-    });
+    _pollTimer = null;
+    _installService.notifyQueueStarted();
   }
 
   Future<void> _refreshAfterCompletedQueue(DriverBatchStatus status) async {

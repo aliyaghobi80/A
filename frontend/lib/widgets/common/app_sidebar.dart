@@ -221,10 +221,6 @@ class AppSidebar extends StatelessWidget {
                       index: 3,
                       icon: Icons.fact_check_rounded,
                       title: l10n.isPersian ? 'تست قطعات' : 'Hardware Tests',
-                      badgeCount: hardwareCtrl.totalTestsCount > 0
-                          ? hardwareCtrl.totalTestsCount
-                          : null,
-                      badgeColor: const Color(0xFF43A047),
                       isDark: isDark,
                       themeCtrl: themeCtrl,
                       isCompact: isCompact,
@@ -634,11 +630,6 @@ class AppSidebar extends StatelessWidget {
         'title': l10n.isPersian ? 'موس و اسکرول' : 'Mouse & Scroll',
         'icon': Icons.mouse_rounded,
       },
-      {
-        'id': 'report',
-        'title': l10n.isPersian ? 'کارنامه و گزارش' : 'Test Report',
-        'icon': Icons.assignment_turned_in_rounded,
-      },
     ];
 
     return Column(
@@ -717,24 +708,6 @@ class AppSidebar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (hardwareCtrl.totalTestsCount > 0)
-                    Container(
-                      margin: const EdgeInsetsDirectional.only(end: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF43A047).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF43A047).withValues(alpha: 0.5)),
-                      ),
-                      child: Text(
-                        '${hardwareCtrl.totalTestsCount}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF66BB6A),
-                        ),
-                      ),
-                    ),
                   Icon(
                     isExpanded
                         ? Icons.keyboard_arrow_up_rounded

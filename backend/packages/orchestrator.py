@@ -66,7 +66,7 @@ def _find_kms_archives(packages_dir: str) -> List[str]:
         return []
 
     root_dir = os.path.realpath(os.path.abspath(packages_dir))
-    ignored = {"backend", "build", "dist", ".git", "node_modules", "logs"}
+    ignored = {"backend", "build", "dist", ".git", "node_modules", "logs", "آموزش"}
     candidates: List[str] = []
     for current_root, directories, files in os.walk(root_dir, followlinks=False):
         try:
@@ -75,11 +75,15 @@ def _find_kms_archives(packages_dir: str) -> List[str]:
         except ValueError:
             directories[:] = []
             continue
+        if "آموزش" in current_root:
+            directories[:] = []
+            continue
 
         directories[:] = [
             directory
             for directory in directories
             if directory.lower() not in ignored
+            and "آموزش" not in directory
             and not directory.startswith(".markazi_kms_")
             and not os.path.islink(os.path.join(current_root, directory))
             and not os.path.isjunction(os.path.join(current_root, directory))
@@ -88,6 +92,8 @@ def _find_kms_archives(packages_dir: str) -> List[str]:
             directories[:] = []
 
         for filename in files:
+            if "آموزش" in filename:
+                continue
             archive_path = os.path.join(current_root, filename)
             extension = os.path.splitext(filename)[1].lower()
             if extension in _ARCHIVE_EXTENSIONS and _looks_like_kms_archive(
@@ -197,12 +203,12 @@ def is_office_already_extracted(packages_dir: str) -> bool:
     try:
         for entry in os.listdir(packages_dir):
             full_path = os.path.join(packages_dir, entry)
-            if os.path.isdir(full_path) and "office" in entry.lower():
+            if os.path.isdir(full_path) and "office" in entry.lower() and "آموزش" not in entry:
                 # Check if it contains setup files
                 for root, _, files in os.walk(full_path):
                     for f in files:
                         f_lower = f.lower()
-                        if f_lower in ("setup.exe", "install.exe", "setup.cmd", "office.cmd", "install.cmd", "configuration.xml"):
+                        if f_lower in ("setup.exe", "install.exe", "setup.cmd", "office.cmd", "install.cmd", "configuration.xml") or f_lower.startswith("setup_office"):
                             logger.info(f"[Orchestrator] Office already extracted in: {full_path}")
                             return True
                 # If the folder exists and has at least 3 files, consider it extracted
@@ -250,11 +256,17 @@ def ensure_office_extracted(packages_dir: str) -> Dict[str, Any]:
     # Find Office archive
     archive_candidates = []
     try:
+        existing_dirs = {e.lower() for e in os.listdir(packages_dir) if os.path.isdir(os.path.join(packages_dir, e))}
         for entry in os.listdir(packages_dir):
+            if "آموزش" in entry:
+                continue
             entry_lower = entry.lower()
             if "office" in entry_lower:
-                _, ext = os.path.splitext(entry_lower)
+                base, ext = os.path.splitext(entry_lower)
                 if ext in (".rar", ".zip", ".7z"):
+                    if base in existing_dirs:
+                        logger.info(f"[Orchestrator] Skipping archive {entry} because adjacent folder {base} exists.")
+                        continue
                     archive_candidates.append(os.path.join(packages_dir, entry))
     except Exception as e:
         logger.warning(f"[Orchestrator] Error searching for Office archive: {e}")
@@ -526,7 +538,7 @@ def _find_activation_commands(
         return []
 
     search_root = os.path.realpath(os.path.abspath(search_dir))
-    ignored = {"backend", "build", "dist", ".git", "node_modules", "logs"}
+    ignored = {"backend", "build", "dist", ".git", "node_modules", "logs", "آموزش"}
     candidates: List[str] = []
     for root, directories, files in os.walk(search_root, followlinks=False):
         try:
@@ -535,11 +547,15 @@ def _find_activation_commands(
         except ValueError:
             directories[:] = []
             continue
+        if "آموزش" in root:
+            directories[:] = []
+            continue
 
         directories[:] = [
             directory
             for directory in directories
             if directory.lower() not in ignored
+            and "آموزش" not in directory
             and not os.path.islink(os.path.join(root, directory))
             and not os.path.isjunction(os.path.join(root, directory))
         ]
@@ -547,6 +563,8 @@ def _find_activation_commands(
             directories[:] = []
 
         for filename in files:
+            if "آموزش" in filename:
+                continue
             if filename.lower() not in accepted_names:
                 continue
             candidate = os.path.abspath(os.path.join(root, filename))

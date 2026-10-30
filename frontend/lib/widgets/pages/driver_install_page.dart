@@ -8,6 +8,8 @@ import '../../models/system_info.dart';
 import '../../theme/app_theme.dart';
 import '../common/design_components.dart';
 import '../common/instant_option_tile.dart';
+import '../common/deployment_flow_panel.dart';
+import '../common/queue_preview_modal.dart';
 
 class DriverInstallPage extends StatefulWidget {
   const DriverInstallPage({super.key});
@@ -45,17 +47,25 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
           .length;
       final upToDate = totalDrivers - needsInstall;
 
+      final hasBottomBar = isBatchRunning ||
+          (batchStatus.items.isNotEmpty && batchStatus.total > 0);
+
       return LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 780;
 
-          return SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: isNarrow ? 12 : 20,
-              vertical: 16,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    isNarrow ? 12 : 20,
+                    16,
+                    isNarrow ? 12 : 20,
+                    hasBottomBar ? 110 : 16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 1. Header Toolbar (Repository Path + USB Sources + Scan)
                 _buildHeaderToolbar(
@@ -150,9 +160,38 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                   ),
               ],
             ),
-          );
-        },
+          ),
+        ),
+          if (hasBottomBar)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: FixedCumulativeProgressBar(
+                isRunning: isBatchRunning,
+                progressPercent: batchStatus.progressPercent,
+                completed: batchStatus.completed,
+                total: batchStatus.total,
+                failed: batchStatus.failed,
+                skipped: batchStatus.skipped,
+                interrupted: batchStatus.interrupted,
+                startTime: batchStatus.startTime,
+                doubleSpeed: driverCtrl.doubleSpeed.value,
+                currentItemName: batchStatus.currentFile,
+                activeItemNames: batchStatus.effectiveActiveItems
+                    .map((i) => i.displayName)
+                    .toList(),
+                onCancel: () => driverCtrl.cancelDriverAutoInstall(context),
+                onResume: () => driverCtrl.resumeDriverAutoInstall(context),
+                isDark: isDark,
+                accentColor: accent,
+                typeName: 'درایور',
+              ),
+            ),
+        ],
       );
+    },
+  );
     });
   }
 
@@ -480,7 +519,21 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
               ElevatedButton.icon(
                 onPressed: (isBatchRunning || selectedIds.isEmpty)
                     ? null
-                    : () => ctrl.installSelectedDrivers(context),
+                    : () {
+                        final selectedPkgs = scanRes.packages
+                            .where((p) => selectedIds.contains(p.packageId))
+                            .toList();
+                        QueuePreviewModal.showDriverPreview(
+                          context: context,
+                          packages: selectedPkgs.isNotEmpty
+                              ? selectedPkgs
+                              : scanRes.packages,
+                          isDark: isDark,
+                          accentColor: accent,
+                          doubleSpeed: ctrl.doubleSpeed.value,
+                          onConfirm: () => ctrl.installSelectedDrivers(context),
+                        );
+                      },
                 icon: const Icon(Icons.auto_mode_rounded, size: 16),
                 label: Text(
                   ctrl.areAllInstallableSelected

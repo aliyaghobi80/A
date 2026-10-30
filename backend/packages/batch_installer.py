@@ -40,12 +40,16 @@ def _is_winrar_package(package: Dict[str, Any]) -> bool:
 # Global batch install state
 _batch_lock = threading.Lock()
 _batch_state: Dict[str, Any] = {
+    "api_contract_version": 5,
+    "state_revision": 1,
+    "server_time": time.time(),
     "is_running": False,
     "cancelled": False,
     "total": 0,
     "completed": 0,
     "failed": 0,
     "skipped": 0,
+    "interrupted": 0,
     "reboot_required": False,
     "current_item_name": None,
     "current_item_index": 0,
@@ -56,6 +60,111 @@ _batch_state: Dict[str, Any] = {
     "summary_message": "",
 }
 _batch_thread: Optional[threading.Thread] = None
+
+_VALID_TRANSITIONS = {
+    "pending": {"installing", "skipped", "interrupted", "queued"},
+    "queued": {"installing", "skipped", "interrupted", "pending"},
+    "installing": {"completed", "failed", "interrupted", "pending", "skipped"},
+    "completed": set(),
+    "failed": {"pending", "queued"},
+    "skipped": set(),
+    "interrupted": {"pending", "queued"},
+}
+
+
+def _can_transition(current_status: str, new_status: str, is_1618_retry: bool = False) -> bool:
+    """Validate item state machine transitions according to CONTRACT.md § 2.5."""
+    if current_status == new_status:
+        return True
+    if current_status == "installing" and new_status in ("pending", "queued"):
+        return is_1618_retry
+    allowed = _VALID_TRANSITIONS.get(current_status, set())
+    return new_status in allowed
+
+
+def _get_software_state_filepath(local_app_data: Optional[str] = None) -> str:
+    app_data = local_app_data if local_app_data is not None else (os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA"))
+    if app_data:
+        return os.path.abspath(os.path.join(app_data, "MarkaziSystemChecker", "software_queue_state.json"))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "software_queue_state.json"))
+
+
+def persist_software_state_atomic(state_dict: dict, file_path: Optional[str] = None) -> str:
+    """Atomically persist software queue state to disk using tmp file and os.replace."""
+    if not file_path:
+        file_path = _get_software_state_filepath()
+    file_path = os.path.abspath(file_path)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    temp_path = f"{file_path}.tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(state_dict, f, ensure_ascii=False, indent=2)
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except OSError:
+            pass
+    os.replace(temp_path, file_path)
+    return file_path
+
+
+def _bump_revision_locked(persist: bool = True) -> int:
+    """Increment monotonic state_revision and update server_time."""
+    current = _batch_state.get("state_revision", 0)
+    _batch_state["state_revision"] = max(1, current + 1)
+    _batch_state["server_time"] = time.time()
+    _batch_state["api_contract_version"] = 5
+    if persist:
+        try:
+            persist_software_state_atomic(_batch_state)
+        except Exception as exc:
+            logger.debug(f"[BatchInstall] Failed to persist state: {exc}")
+    return _batch_state["state_revision"]
+
+
+def reconcile_startup_software_queue(file_path: Optional[str] = None) -> None:
+    """Load persisted queue state upon startup and reconcile unfinalized installing items."""
+    global _batch_state
+    path = file_path or _get_software_state_filepath()
+    if not os.path.isfile(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        if not isinstance(saved, dict):
+            return
+
+        with _batch_lock:
+            if saved.get("is_running"):
+                logger.warning("[BatchInstall] Startup reconciliation: unfinalized queue detected; reconciling to interrupted.")
+                items = saved.get("items", [])
+                interrupted_count = 0
+                for item in items:
+                    status = item.get("status")
+                    if status in ("installing", "queued", "pending"):
+                        item["status"] = "interrupted"
+                        item["message"] = "فرآیند نصب به دلیل بسته شدن یا راه‌اندازی مجدد سرویس متوقف شد."
+                        interrupted_count += 1
+                saved["is_running"] = False
+                saved["cancelled"] = True
+                saved["interrupted"] = interrupted_count
+                saved["summary_message"] = "فرآیند قبلی به دلیل بسته شدن ناگهانی سرویس متوقف شد."
+                saved["state_revision"] = max(1, saved.get("state_revision", 0) + 1)
+                saved["server_time"] = time.time()
+                saved["api_contract_version"] = 5
+                persist_software_state_atomic(saved, path)
+
+            _batch_state.update(saved)
+            _batch_state["state_revision"] = max(1, _batch_state.get("state_revision", 1))
+            _batch_state["server_time"] = time.time()
+            _batch_state["api_contract_version"] = 5
+    except Exception as exc:
+        logger.debug(f"[BatchInstall] Startup reconciliation skipped: {exc}")
+
+
+try:
+    reconcile_startup_software_queue()
+except Exception:
+    pass
 
 
 def _active_batch_response_locked() -> Dict[str, Any]:
@@ -68,6 +177,9 @@ def _active_batch_response_locked() -> Dict[str, Any]:
     snapshot lets the client adopt the existing session immediately.
     """
     status = copy.deepcopy(_batch_state)
+    status["state_revision"] = max(1, status.get("state_revision", 1))
+    status["server_time"] = time.time()
+    status["api_contract_version"] = 5
     return {
         "success": True,
         "already_running": True,
@@ -87,7 +199,7 @@ def _mark_batch_worker_failed_locked(reason: str) -> None:
         if status == "installing":
             item["status"] = "failed"
             item["message"] = reason
-        elif status == "queued":
+        elif status in ("queued", "pending"):
             item["status"] = "skipped"
             item["message"] = "به علت توقف غیرمنتظره صف اجرا نشد."
 
@@ -95,6 +207,7 @@ def _mark_batch_worker_failed_locked(reason: str) -> None:
     _batch_state["completed"] = sum(1 for item in items if item.get("status") == "completed")
     _batch_state["failed"] = sum(1 for item in items if item.get("status") == "failed")
     _batch_state["skipped"] = sum(1 for item in items if item.get("status") == "skipped")
+    _batch_state["interrupted"] = sum(1 for item in items if item.get("status") == "interrupted")
     _batch_state["is_running"] = False
     _batch_state["current_item_name"] = None
     _batch_state["end_time"] = now
@@ -103,6 +216,7 @@ def _mark_batch_worker_failed_locked(reason: str) -> None:
         "صف نصب به‌طور غیرمنتظره متوقف شد؛ کنترل‌ها آزاد شدند. "
         "جزئیات مرحله ناموفق را بررسی و دوباره تلاش کنید."
     )
+    _bump_revision_locked()
 
 
 def _repair_dead_worker_locked() -> None:
@@ -140,15 +254,20 @@ def _home_office_shortcuts_result() -> Dict[str, Any]:
 
 
 def _reset_state():
-    """Reset batch state to initial values."""
+    """Reset batch state to initial values while preserving monotonic revision."""
     global _batch_state
+    rev = max(1, _batch_state.get("state_revision", 0) + 1)
     _batch_state = {
+        "api_contract_version": 5,
+        "state_revision": rev,
+        "server_time": time.time(),
         "is_running": False,
         "cancelled": False,
         "total": 0,
         "completed": 0,
         "failed": 0,
         "skipped": 0,
+        "interrupted": 0,
         "reboot_required": False,
         "current_item_name": None,
         "current_item_index": 0,
@@ -176,15 +295,21 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
         with _batch_lock:
             if _batch_state["cancelled"]:
                 for j in range(idx, len(_batch_state["items"])):
-                    if _batch_state["items"][j]["status"] == "queued":
+                    if _batch_state["items"][j]["status"] in ("queued", "pending"):
                         _batch_state["items"][j]["status"] = "skipped"
                         _batch_state["items"][j]["message"] = "لغو شده توسط کاربر"
                         _batch_state["skipped"] += 1
+                _bump_revision_locked()
                 return
 
             _batch_state["current_item_index"] = idx
             _batch_state["current_item_name"] = _batch_state["items"][idx].get("name", item_info.get("id"))
-            _batch_state["items"][idx]["status"] = "installing"
+            current_st = _batch_state["items"][idx].get("status", "pending")
+            if _can_transition(current_st, "installing"):
+                _batch_state["items"][idx]["status"] = "installing"
+                _bump_revision_locked()
+            else:
+                logger.warning(f"[BatchInstall] Illegal transition ignored: {current_st} -> installing")
 
         action = item_info.get("orchestrator_action")
         pkg_id = item_info.get("id", "")
@@ -317,11 +442,20 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
                         retry_count += 1
                         backoff = 3.0 if retry_count == 1 else 7.0
                         with _batch_lock:
-                            _batch_state["items"][idx]["message"] = (
+                            # Rollback to pending exclusively on Error 1618 retry
+                            item_dict = _batch_state["items"][idx]
+                            item_dict["status"] = "pending"
+                            item_dict["is_barrier"] = True
+                            item_dict["retry_count"] = retry_count
+                            item_dict["message"] = (
                                 f"Windows Installer در حال استفاده است؛ تلاش مجدد {retry_count} از ۲..."
                             )
+                            _bump_revision_locked()
                         time.sleep(backoff)
                         if wait_for_windows_installer_idle(timeout_seconds=900):
+                            with _batch_lock:
+                                _batch_state["items"][idx]["status"] = "installing"
+                                _bump_revision_locked()
                             result = silent_install_package(
                                 item_info.get("relative_path") or pkg_id or item_info.get("filename"),
                                 custom_dir=custom_dir,
@@ -344,6 +478,7 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
 
         with _batch_lock:
             item = _batch_state["items"][idx]
+            current_status = item.get("status", "pending")
             item["message"] = result.get("message", "")
             item["installed_version"] = result.get("installed_version", "")
             item["exit_code"] = result.get("exit_code", -1)
@@ -352,17 +487,26 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
             )
 
             if result.get("skipped"):
-                item["status"] = "skipped"
-                _batch_state["skipped"] += 1
+                new_status = "skipped"
             elif result.get("success"):
-                item["status"] = "completed"
-                _batch_state["completed"] += 1
+                new_status = "completed"
             else:
-                item["status"] = "failed"
-                _batch_state["failed"] += 1
+                new_status = "failed"
+
+            if _can_transition(current_status, new_status):
+                item["status"] = new_status
+                if new_status == "completed":
+                    _batch_state["completed"] += 1
+                elif new_status == "skipped":
+                    _batch_state["skipped"] += 1
+                else:
+                    _batch_state["failed"] += 1
+            else:
+                logger.warning(f"[BatchInstall] Illegal transition ignored: {current_status} -> {new_status}")
 
             processed = sum(_batch_state[key] for key in ("completed", "failed", "skipped"))
             _batch_state["progress_percent"] = round((processed / max(1, _batch_state["total"])) * 100, 1)
+            _bump_revision_locked()
 
         if result.get("exit_code") == -2:
             logger.warning(f"[BatchInstall] Item {pkg_id} timed out; continuing with remaining queue items.")
@@ -375,6 +519,7 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
             _batch_state["items"][idx]["message"] = (
                 "در انتظار پایان نصب دستی یا Windows Installer خارجی..."
             )
+            _bump_revision_locked()
 
     run_deployment(
         items_to_run,
@@ -405,6 +550,7 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
             _batch_state["summary_message"] = f"عملیات پایان یافت: {completed} موفق، {failed} ناموفق، {skipped} رد شده (در {elapsed} ثانیه)"
         if completed > 0 or _batch_state["reboot_required"]:
             _batch_state["summary_message"] += " — یادتان نرود پس از پایان کارها، سیستم را دستی ری‌استارت کنید."
+        _bump_revision_locked()
 
     logger.info(f"[BatchInstall] Batch complete: {_batch_state['summary_message']}")
 
@@ -721,6 +867,7 @@ def start_batch_install(
         _batch_state["cancelled"] = False
         _batch_state["total"] = len(queue_items)
         _batch_state["items"] = copy.deepcopy(queue_items)
+        _bump_revision_locked()
         # Clear the previous completed worker before publishing the new
         # running state. The status endpoint treats a non-alive published
         # worker as crashed; keeping the old thread here would create a small
@@ -763,7 +910,11 @@ def get_batch_status() -> Dict[str, Any]:
     """Returns current batch install progress and status."""
     with _batch_lock:
         _repair_dead_worker_locked()
-        return copy.deepcopy(_batch_state)
+        snapshot = copy.deepcopy(_batch_state)
+        snapshot["state_revision"] = max(1, snapshot.get("state_revision", 1))
+        snapshot["server_time"] = time.time()
+        snapshot["api_contract_version"] = 5
+        return snapshot
 
 
 def cancel_batch_install() -> Dict[str, Any]:
@@ -772,4 +923,5 @@ def cancel_batch_install() -> Dict[str, Any]:
         if not _batch_state["is_running"]:
             return {"success": False, "message": "هیچ عملیات نصب خودکاری در حال اجرا نیست."}
         _batch_state["cancelled"] = True
+        _bump_revision_locked()
     return {"success": True, "message": "دستور لغو ارسال شد. آیتم‌های باقی‌مانده رد خواهند شد."}

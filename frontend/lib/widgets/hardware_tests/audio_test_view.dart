@@ -57,17 +57,17 @@ class AudioTestView extends StatelessWidget {
                 const Icon(Icons.volume_up_rounded, size: 20, color: Color(0xFF8B5CF6)),
                 const SizedBox(width: 10),
                 const Text(
-                  'سطح ولوم آزمایشی:',
+                  'سطح ولوم آزمایشی (پیش‌فرض ۲۰٪):',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Obx(() {
                     return Slider(
-                      value: ctrl.audioVolume.value,
-                      min: 0.05,
-                      max: 0.40,
-                      divisions: 7,
+                      value: ctrl.audioVolume.value.clamp(0.01, 0.60),
+                      min: 0.01,
+                      max: 0.60,
+                      divisions: 59,
                       label: '${(ctrl.audioVolume.value * 100).toInt()}%',
                       activeColor: const Color(0xFF8B5CF6),
                       onChanged: (val) => ctrl.audioVolume.value = val,
@@ -96,6 +96,32 @@ class AudioTestView extends StatelessWidget {
                     backgroundColor: const Color(0xFFEF4444),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Mute Warning Banner & Safety Guidance
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.12 : 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+              ),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.volume_off_rounded, size: 16, color: Color(0xFFF59E0B)),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'هشدار ایمنی: در صورت عدم شنیدن صدا، کلید سخت‌افزاری Mute کیبورد، جک هدفون یا اسلایدر ولوم ویندوز را بررسی فرمایید.',
+                    style: TextStyle(fontSize: 11.5, color: Color(0xFFD97706), fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -182,12 +208,12 @@ class AudioTestView extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'تست فرکانس بم و بیس (Low Frequency)',
+                          'تست فرکانس بم، زیر و نویز مرجع',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'صدای فرکانس پایین را با ولوم ملایم پخش کنید؛ دیافراگم نباید صدای خش‌خش یا تق‌تق داشته باشد.',
+                          'صدای فرکانس پایین و تن‌های مرجع را با ولوم ملایم پخش کنید.',
                           style: TextStyle(fontSize: 11.5, color: Colors.grey),
                         ),
                       ],
@@ -199,6 +225,16 @@ class AudioTestView extends StatelessWidget {
                   spacing: 10,
                   runSpacing: 10,
                   children: [
+                    OutlinedButton.icon(
+                      onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 440.0),
+                      icon: const Icon(Icons.music_note_rounded, size: 16),
+                      label: const Text('تن استاندارد ۴۴۰ هرتز (Concert Pitch A4)'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 1000.0),
+                      icon: const Icon(Icons.tune_rounded, size: 16),
+                      label: const Text('تن مرجع ۱۰۰۰ هرتز (1 kHz Reference)'),
+                    ),
                     OutlinedButton.icon(
                       onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 60.0),
                       icon: const Icon(Icons.play_arrow_rounded, size: 16),
@@ -223,91 +259,16 @@ class AudioTestView extends StatelessWidget {
                         foregroundColor: Colors.white,
                       ),
                     ),
+                    ElevatedButton.icon(
+                      onPressed: () => ctrl.playAudioTone(kind: 'both', frequency: 500.0),
+                      icon: const Icon(Icons.graphic_eq_rounded, size: 16),
+                      label: const Text('نویز صورتی (Pink Noise 1/f)'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEC4899),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
                   ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Result Recording Bar
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'ثبت نتیجه تست صدا و هدفون',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        'آیا صدای کانال چپ و راست به‌درستی تفکیک شدند و صدای بیس بدون لرزش غیرعادی بود؟',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    ctrl.recordResult(
-                      testName: 'تست صدا و تفکیک هدفون',
-                      status: 'passed',
-                      details: 'کانال چپ، راست، استریو و فرکانس بیس بدون نویز و با تفکیک صحیح شنیده شدند.',
-                    );
-                    Get.snackbar(
-                      'ثبت شد',
-                      'سلامت خروجی صدا در کارنامه ثبت شد.',
-                      snackPosition: SnackPosition.BOTTOM,
-                      backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.9),
-                      colorText: Colors.white,
-                      duration: const Duration(seconds: 2),
-                    );
-                  },
-                  icon: const Icon(Icons.check_rounded, size: 16),
-                  label: const Text('خروجی صدا سالم است (موفق)'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    ctrl.recordResult(
-                      testName: 'تست صدا و تفکیک هدفون',
-                      status: 'failed',
-                      details: 'عدم پخش صدا از یکی از کانال‌ها، جابه‌جایی چپ/راست یا نویز غیرعادی گزارش شد.',
-                    );
-                    Get.snackbar(
-                      'ثبت شد',
-                      'ایراد خروجی صدا در کارنامه ثبت شد.',
-                      snackPosition: SnackPosition.BOTTOM,
-                      backgroundColor: const Color(0xFFEF4444).withValues(alpha: 0.9),
-                      colorText: Colors.white,
-                      duration: const Duration(seconds: 2),
-                    );
-                  },
-                  icon: const Icon(Icons.error_outline_rounded, size: 16),
-                  label: const Text('ایراد در خروجی صدا'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFEF4444),
-                    side: const BorderSide(color: Color(0xFFEF4444)),
-                  ),
                 ),
               ],
             ),

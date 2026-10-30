@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../controllers/hardware_test_controller.dart';
-import '../../models/hardware_test_result.dart';
 import '../../theme/app_theme.dart';
 
 const _windowChannel = MethodChannel('markazi/window');
@@ -259,170 +258,6 @@ class MonitorTestView extends StatelessWidget {
                   ),
                 ),
               ),
-
-              const SizedBox(height: 16),
-
-              // ── Pass / Fail evaluation ──
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1E293B)
-                      : const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark
-                        ? const Color(0xFF334155)
-                        : const Color(0xFFCBD5E1),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'ثبت نتیجه تست مانیتور',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'آیا در رنگ‌های مشکی، سفید یا RGB نقطه‌ی خاموش، پیکسل گیرکرده یا هاله مشاهده شد؟',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark
-                            ? AppTheme.darkTextSecondary
-                            : AppTheme.lightTextSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Reactive session result feedback
-                    Obx(() {
-                      HardwareTestResult? lastResult;
-                      for (final r in ctrl.testResults) {
-                        if (r.testName == 'تست مانیتور و پیکسل سوخته' ||
-                            r.testName == 'تست مانیتور و پیکسل') {
-                          lastResult = r;
-                          break;
-                        }
-                      }
-                      if (lastResult == null) return const SizedBox.shrink();
-
-                      final isPassed = lastResult.isPassed;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: (isPassed
-                                  ? const Color(0xFF10B981)
-                                  : const Color(0xFFEF4444))
-                              .withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: (isPassed
-                                    ? const Color(0xFF10B981)
-                                    : const Color(0xFFEF4444))
-                                .withValues(alpha: 0.4),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isPassed
-                                  ? Icons.check_circle_rounded
-                                  : Icons.cancel_rounded,
-                              size: 16,
-                              color: isPassed
-                                  ? const Color(0xFF10B981)
-                                  : const Color(0xFFEF4444),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              isPassed
-                                  ? 'نتیجه ثبت‌شده: پنل سالم (موفق)'
-                                  : 'نتیجه ثبت‌شده: دارای ایراد (نیازمند بررسی)',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: isPassed
-                                    ? const Color(0xFF10B981)
-                                    : const Color(0xFFEF4444),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        SizedBox(
-                          height: 44,
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              ctrl.recordResult(
-                                testName: 'تست مانیتور و پیکسل سوخته',
-                                status: 'passed',
-                                details:
-                                    '۹ الگوی رنگ اصلی بررسی شد؛ پنل سالم و بدون هرگونه پیکسل سوخته، گیرکرده یا هاله نوری تأیید گردید.',
-                              );
-                              Get.snackbar(
-                                'ثبت شد',
-                                'سلامت مانیتور در کارنامه ثبت شد.',
-                                snackPosition: SnackPosition.BOTTOM,
-                                backgroundColor: const Color(0xFF10B981)
-                                    .withValues(alpha: 0.9),
-                                colorText: Colors.white,
-                                duration: const Duration(seconds: 2),
-                              );
-                            },
-                            icon:
-                                const Icon(Icons.check_rounded, size: 18),
-                            label: const Text('پنل سالم است (موفق)'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B981),
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          height: 44,
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              ctrl.recordResult(
-                                testName: 'تست مانیتور و پیکسل سوخته',
-                                status: 'failed',
-                                details:
-                                    'پیکسل معیوب (روشن/خاموش/گیرکرده)، هاله یا لکه غیرعادی در نمایشگر مشاهده شد.',
-                              );
-                              Get.snackbar(
-                                'ثبت شد',
-                                'ایراد مانیتور جهت بررسی در کارنامه ثبت شد.',
-                                snackPosition: SnackPosition.BOTTOM,
-                                backgroundColor: const Color(0xFFEF4444)
-                                    .withValues(alpha: 0.9),
-                                colorText: Colors.white,
-                                duration: const Duration(seconds: 2),
-                              );
-                            },
-                            icon: const Icon(Icons.error_outline_rounded,
-                                size: 18),
-                            label: const Text('ایراد مشاهده شد (نیازمند بررسی)'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFFEF4444),
-                              side:
-                                  const BorderSide(color: Color(0xFFEF4444)),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         );
@@ -432,9 +267,11 @@ class MonitorTestView extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Full-screen monitor page — pure solid color, no overlays at all.
-// ESC exits. Arrow keys / Space / Click cycle colours.
-// Uses MethodChannel to enter true OS-level fullscreen.
+// Full-screen monitor page — pure static solid color, zero animations, zero
+// gradients, zero overlays. Mouse cursor hidden during test.
+// ESC exits and restores window geometry.
+// ArrowRight / ArrowUp / Space / Left click -> Next color.
+// ArrowLeft / ArrowDown / Right click -> Prev color.
 // ─────────────────────────────────────────────────────────────────────────────
 class _FullScreenMonitorPage extends StatefulWidget {
   final HardwareTestController ctrl;
@@ -468,6 +305,7 @@ class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
   }
 
   Future<void> _enterFullScreen() async {
+    widget.ctrl.toggleMonitorFullScreen(true);
     try {
       await _windowChannel.invokeMethod('setFullScreen', true);
     } catch (_) {
@@ -476,6 +314,7 @@ class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
   }
 
   Future<void> _exitFullScreen() async {
+    widget.ctrl.toggleMonitorFullScreen(false);
     try {
       await _windowChannel.invokeMethod('setFullScreen', false);
     } catch (_) {
@@ -492,43 +331,46 @@ class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Focus(
-        focusNode: _focusNode,
-        autofocus: true,
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent) {
-            if (event.logicalKey == LogicalKeyboardKey.escape) {
-              _close();
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-                event.logicalKey == LogicalKeyboardKey.arrowDown ||
-                event.logicalKey == LogicalKeyboardKey.space) {
-              widget.ctrl.nextMonitorColor();
-              return KeyEventResult.handled;
-            } else if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
-                event.logicalKey == LogicalKeyboardKey.arrowUp) {
-              widget.ctrl.prevMonitorColor();
-              return KeyEventResult.handled;
+      body: MouseRegion(
+        cursor: SystemMouseCursors.none,
+        child: Focus(
+          focusNode: _focusNode,
+          autofocus: true,
+          onKeyEvent: (node, event) {
+            if (event is KeyDownEvent) {
+              if (event.logicalKey == LogicalKeyboardKey.escape) {
+                _close();
+                return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
+                  event.logicalKey == LogicalKeyboardKey.arrowUp ||
+                  event.logicalKey == LogicalKeyboardKey.space) {
+                widget.ctrl.nextMonitorColor();
+                return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+                  event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                widget.ctrl.prevMonitorColor();
+                return KeyEventResult.handled;
+              }
             }
-          }
-          return KeyEventResult.ignored;
-        },
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => widget.ctrl.nextMonitorColor(),
-          onSecondaryTap: () => widget.ctrl.prevMonitorColor(),
-          child: Obx(() {
-            final idx = widget.ctrl.monitorIndex.value;
-            final item = HardwareTestController.monitorColors[idx];
-            final c = Color(item['color'] as int);
+            return KeyEventResult.ignored;
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => widget.ctrl.nextMonitorColor(),
+            onSecondaryTap: () => widget.ctrl.prevMonitorColor(),
+            child: Obx(() {
+              final idx = widget.ctrl.monitorIndex.value;
+              final item = HardwareTestController.monitorColors[idx];
+              final c = Color(item['color'] as int);
 
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              color: c,
-              width: double.infinity,
-              height: double.infinity,
-            );
-          }),
+              // Pure static solid color: zero animation, zero gradients, zero overlays
+              return Container(
+                color: c,
+                width: double.infinity,
+                height: double.infinity,
+              );
+            }),
+          ),
         ),
       ),
     );

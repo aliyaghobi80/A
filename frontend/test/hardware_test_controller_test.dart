@@ -1,10 +1,9 @@
 // frontend/test/hardware_test_controller_test.dart
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markazi_system_checker/controllers/hardware_test_controller.dart';
-import 'package:markazi_system_checker/models/hardware_test_result.dart';
 
 void main() {
-  group('HardwareTestController & HardwareTestResult Tests', () {
+  group('HardwareTestController Unit Tests', () {
     late HardwareTestController controller;
 
     setUp(() {
@@ -14,10 +13,9 @@ void main() {
     test('initial state is correct', () {
       expect(controller.activeSubTest.value, 'hub');
       expect(controller.isAccordionExpanded.value, false);
-      expect(controller.testResults.isEmpty, true);
-      expect(controller.totalTestsCount, 0);
-      expect(controller.passedTestsCount, 0);
-      expect(controller.failedTestsCount, 0);
+      expect(controller.totalKeyHits.value, 0);
+      expect(controller.keyHits.isEmpty, true);
+      expect(controller.heldMouseButtons.isEmpty, true);
     });
 
     test('selectSubTest updates active view', () {
@@ -33,8 +31,11 @@ void main() {
       controller.selectSubTest('mouse');
       expect(controller.activeSubTest.value, 'mouse');
 
-      controller.selectSubTest('report');
-      expect(controller.activeSubTest.value, 'report');
+      controller.selectSubTest('webcam');
+      expect(controller.activeSubTest.value, 'webcam');
+
+      controller.selectSubTest('mic');
+      expect(controller.activeSubTest.value, 'mic');
     });
 
     test('toggleAccordion flips accordion state', () {
@@ -43,68 +44,6 @@ void main() {
       expect(controller.isAccordionExpanded.value, true);
       controller.toggleAccordion();
       expect(controller.isAccordionExpanded.value, false);
-    });
-
-    test('recordResult tracks passed and failed tests accurately', () {
-      controller.recordResult(
-        testName: 'مانیتور و صفحه نمایش',
-        status: 'passed',
-        details: 'بدون پیکسل سوخته',
-      );
-
-      controller.recordResult(
-        testName: 'اسپیکر و هدفون',
-        status: 'failed',
-        details: 'کانال چپ صدا ندارد',
-      );
-
-      controller.recordResult(
-        testName: 'میکروفون',
-        status: 'passed',
-        details: 'تست ضبط و پخش لوپ‌بک موفق',
-      );
-
-      expect(controller.totalTestsCount, 3);
-      expect(controller.passedTestsCount, 2);
-      expect(controller.failedTestsCount, 1);
-
-      // Most recent result is first
-      expect(controller.testResults.first.testName, 'میکروفون');
-      expect(controller.testResults.first.isPassed, true);
-      expect(controller.testResults.first.localizedStatus, 'موفق');
-
-      expect(controller.testResults[1].testName, 'اسپیکر و هدفون');
-      expect(controller.testResults[1].isFailed, true);
-      expect(controller.testResults[1].localizedStatus, 'نیازمند بررسی');
-    });
-
-    test('getFormattedReport contains Persian branding and summary', () {
-      controller.recordResult(
-        testName: 'کیبورد',
-        status: 'passed',
-        details: 'تمام کلیدها سالم هستند',
-      );
-
-      final report = controller.getFormattedReport();
-      expect(report.contains('مرکزی سیستم چکر'), true);
-      expect(report.contains('کیبورد'), true);
-      expect(report.contains('تأییدیه فنی کامپیوتر مرکزی'), true);
-      expect(report.contains('کل تست‌ها: 1'), true);
-      expect(report.contains('موفق: 1'), true);
-      expect(report.contains('نیازمند بررسی: 0'), true);
-    });
-
-    test('clearResults removes all test records', () {
-      controller.recordResult(
-        testName: 'موس',
-        status: 'passed',
-        details: 'کلیک‌ها و اسکرول سالم',
-      );
-      expect(controller.totalTestsCount, 1);
-
-      controller.clearResults();
-      expect(controller.totalTestsCount, 0);
-      expect(controller.testResults.isEmpty, true);
     });
 
     test('monitor test color navigation cycles through 9 patterns', () {
@@ -124,41 +63,75 @@ void main() {
       expect(controller.monitorIndex.value, 0); // Wraps back to 0
     });
 
-    test('mouse test counters increment properly', () {
-      expect(controller.mouseLeftClicks.value, 0);
-      controller.onMouseButton('left');
-      expect(controller.mouseLeftClicks.value, 1);
+    test('keyboard key hits and hit counters track accurately', () {
+      expect(controller.totalKeyHits.value, 0);
+      expect(controller.testedKeys.contains('KeyA'), false);
 
-      expect(controller.mouseRightClicks.value, 0);
-      controller.onMouseButton('right');
-      expect(controller.mouseRightClicks.value, 1);
+      controller.onKeyDown('KeyA', 'A');
+      expect(controller.activeKeys.contains('KeyA'), true);
+      expect(controller.testedKeys.contains('KeyA'), true);
+      expect(controller.keyHits['KeyA'], 1);
+      expect(controller.totalKeyHits.value, 1);
+      expect(controller.lastKeyLabel.value, 'A');
 
-      expect(controller.mouseMiddleClicks.value, 0);
-      controller.onMouseButton('middle');
-      expect(controller.mouseMiddleClicks.value, 1);
+      controller.onKeyUp('KeyA');
+      expect(controller.activeKeys.contains('KeyA'), false);
+      expect(controller.testedKeys.contains('KeyA'), true);
 
-      controller.resetMouse();
-      expect(controller.mouseLeftClicks.value, 0);
-      expect(controller.mouseRightClicks.value, 0);
-      expect(controller.mouseMiddleClicks.value, 0);
+      // Second press on KeyA increments count
+      controller.onKeyDown('KeyA', 'A');
+      expect(controller.keyHits['KeyA'], 2);
+      expect(controller.totalKeyHits.value, 2);
+
+      controller.resetKeyboard();
+      expect(controller.testedKeys.isEmpty, true);
+      expect(controller.activeKeys.isEmpty, true);
+      expect(controller.keyHits.isEmpty, true);
+      expect(controller.totalKeyHits.value, 0);
     });
 
-    test('HardwareTestResult serialization round-trip', () {
-      final now = DateTime(2026, 10, 28, 14, 30);
-      final r1 = HardwareTestResult(
-        testName: 'وب‌کم',
-        status: 'passed',
-        details: 'دوربین بدون نویز',
-        timestamp: now,
-      );
+    test('mouse 5-button hold, drag, and double click detection', () {
+      // 1. Left button down (bit 1)
+      controller.onPointerDown(1, const Offset(100, 100));
+      expect(controller.heldMouseButtons.contains(1), true);
+      expect(controller.mouseLeftClicks.value, 1);
 
-      final json = r1.toJson();
-      final r2 = HardwareTestResult.fromJson(json);
+      // 2. Dragging while held
+      controller.onPointerMove(const Offset(110, 110), hasButtons: true);
+      expect(controller.isMouseDragging.value, true);
+      expect(controller.mouseMoveCount.value, 1);
 
-      expect(r2.testName, 'وب‌کم');
-      expect(r2.status, 'passed');
-      expect(r2.details, 'دوربین بدون نویز');
-      expect(r2.timestamp.toIso8601String(), now.toIso8601String());
+      // 3. Pointer up
+      controller.onPointerUp(0);
+      expect(controller.heldMouseButtons.contains(1), false);
+      expect(controller.isMouseDragging.value, false);
+
+      // 4. Side 1 (bit 8) and Side 2 (bit 16)
+      controller.onPointerDown(8, const Offset(50, 50));
+      expect(controller.heldMouseButtons.contains(8), true);
+      expect(controller.mouseSide1Clicks.value, 1);
+      controller.onPointerUp(0);
+
+      controller.onPointerDown(16, const Offset(50, 50));
+      expect(controller.heldMouseButtons.contains(16), true);
+      expect(controller.mouseSide2Clicks.value, 1);
+      controller.onPointerUp(0);
+
+      // 5. Fast double click (< 300ms) on Left
+      controller.onPointerDown(1, const Offset(100, 100));
+      controller.onPointerUp(0);
+      controller.onPointerDown(1, const Offset(100, 100));
+      controller.onPointerUp(0);
+      expect(controller.mouseDoubleClicks.value, 1);
+
+      // 6. Reset
+      controller.resetMouse();
+      expect(controller.mouseLeftClicks.value, 0);
+      expect(controller.mouseSide1Clicks.value, 0);
+      expect(controller.mouseSide2Clicks.value, 0);
+      expect(controller.mouseDoubleClicks.value, 0);
+      expect(controller.mouseMoveCount.value, 0);
+      expect(controller.heldMouseButtons.isEmpty, true);
     });
   });
 }

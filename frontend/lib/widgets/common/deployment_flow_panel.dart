@@ -646,3 +646,363 @@ class _DeploymentFlowPanelState extends State<DeploymentFlowPanel> {
     );
   }
 }
+
+
+/// Fixed Sticky Bottom Cumulative Progress Bar for deployment pages.
+///
+/// Displayed at the bottom of Software and Driver installation pages.
+/// Shows:
+/// - Overall percentage ([progressPercent])
+/// - Completed count vs total count (`تکمیل شده: X از Y`)
+/// - Active elapsed time counter
+/// - Concurrency mode indicator (`1X متوالی` / `2X موازی`)
+/// - Stop / Cancel button (if active) and Resume button (if interrupted)
+/// - Touch targets >= 44px
+class FixedCumulativeProgressBar extends StatefulWidget {
+  final bool isRunning;
+  final double progressPercent;
+  final int completed;
+  final int total;
+  final int failed;
+  final int skipped;
+  final int interrupted;
+  final double? startTime;
+  final double? elapsedSeconds;
+  final bool doubleSpeed;
+  final String? currentItemName;
+  final List<String> activeItemNames;
+  final VoidCallback? onCancel;
+  final VoidCallback? onResume;
+  final bool isDark;
+  final Color accentColor;
+  final String typeName; // 'نرم‌افزار' or 'درایور'
+
+  const FixedCumulativeProgressBar({
+    super.key,
+    required this.isRunning,
+    required this.progressPercent,
+    required this.completed,
+    required this.total,
+    this.failed = 0,
+    this.skipped = 0,
+    this.interrupted = 0,
+    this.startTime,
+    this.elapsedSeconds,
+    this.doubleSpeed = false,
+    this.currentItemName,
+    this.activeItemNames = const [],
+    this.onCancel,
+    this.onResume,
+    required this.isDark,
+    required this.accentColor,
+    this.typeName = 'مورد',
+  });
+
+  @override
+  State<FixedCumulativeProgressBar> createState() => _FixedCumulativeProgressBarState();
+}
+
+class _FixedCumulativeProgressBarState extends State<FixedCumulativeProgressBar> {
+  // Timer for ticking elapsed seconds during active installation
+  double _localElapsed = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateElapsed();
+  }
+
+  @override
+  void didUpdateWidget(FixedCumulativeProgressBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _updateElapsed();
+  }
+
+  void _updateElapsed() {
+    if (widget.elapsedSeconds != null && widget.elapsedSeconds! > 0) {
+      _localElapsed = widget.elapsedSeconds!;
+    } else if (widget.startTime != null && widget.startTime! > 0) {
+      final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
+      final diff = now - widget.startTime!;
+      _localElapsed = diff > 0 ? diff : 0.0;
+    }
+  }
+
+  String _formatElapsed(double seconds) {
+    final s = seconds.round();
+    final m = s ~/ 60;
+    final rem = s % 60;
+    if (m == 0) return '${rem}s';
+    return '${m}m ${rem.toString().padLeft(2, '0')}s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final accent = widget.accentColor;
+    final isRunning = widget.isRunning;
+    final total = widget.total;
+    final completed = widget.completed;
+    final failed = widget.failed;
+    final percent = widget.progressPercent.clamp(0.0, 100.0);
+    final doubleSpeed = widget.doubleSpeed;
+
+    final Color statusColor = isRunning
+        ? accent
+        : (failed == 0 ? const Color(0xFF10B981) : const Color(0xFFF59E0B));
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        key: const ValueKey('fixed-bottom-progress-bar'),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0F172A) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          border: Border(
+            top: BorderSide(
+              color: statusColor.withValues(alpha: isDark ? 0.45 : 0.3),
+              width: 1.5,
+            ),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Percentage, Counts, Elapsed Timer, Concurrency Mode & Actions
+            Row(
+              children: [
+                // Live status icon / spinner
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: isRunning
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: statusColor,
+                            ),
+                          )
+                        : Icon(
+                            failed == 0
+                                ? Icons.check_circle_rounded
+                                : Icons.info_outline_rounded,
+                            color: statusColor,
+                            size: 20,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+
+                // Overall Percentage Chip
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      '${percent.toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+
+                // Item Counts: "تکمیل شده: X از Y"
+                Expanded(
+                  child: Row(
+                    children: [
+                      Text(
+                        'تکمیل شده: $completed از $total ${widget.typeName}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? const Color(0xFFF1F5F9)
+                              : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      if (failed > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '$failed ناموفق',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFEF4444),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                // Active Elapsed Time Counter
+                if (_localElapsed > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.timer_outlined, size: 14, color: Color(0xFF64748B)),
+                        const SizedBox(width: 4),
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            _formatElapsed(_localElapsed),
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+
+                // Concurrency Mode Badge: 1X متوالی / 2X موازی
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (doubleSpeed ? const Color(0xFF0D9488) : const Color(0xFF0284C7))
+                        .withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: (doubleSpeed ? const Color(0xFF0D9488) : const Color(0xFF0284C7))
+                          .withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        doubleSpeed ? Icons.bolt_rounded : Icons.lock_clock_rounded,
+                        size: 14,
+                        color: doubleSpeed ? const Color(0xFF0D9488) : const Color(0xFF0284C7),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        doubleSpeed ? '۲X موازی' : '۱X متوالی',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: doubleSpeed ? const Color(0xFF0D9488) : const Color(0xFF0284C7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+
+                // Action Button: Stop / Cancel (if running) or Resume
+                if (isRunning && widget.onCancel != null)
+                  ElevatedButton.icon(
+                    onPressed: widget.onCancel,
+                    icon: const Icon(Icons.stop_rounded, size: 16),
+                    label: const Text('توقف عملیات'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFEF4444),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  )
+                else if (!isRunning && (failed > 0 || widget.interrupted > 0) && widget.onResume != null)
+                  ElevatedButton.icon(
+                    onPressed: widget.onResume,
+                    icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                    label: const Text('ادامه صف نصب'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Middle: Cumulative Linear Progress Bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: total > 0 ? (percent / 100.0).clamp(0.0, 1.0) : null,
+                minHeight: 6,
+                backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+              ),
+            ),
+
+            // Bottom Subtitle: Active items / current installation info
+            if (isRunning) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.activeItemNames.length >= 2
+                          ? 'در حال اجرای ۲ مورد هم‌زمان: ${widget.activeItemNames.join(' • ')}'
+                          : (widget.currentItemName?.isNotEmpty == true
+                              ? 'در حال نصب: ${widget.currentItemName}'
+                              : 'در حال اجرای گام‌های استقرار سیستم...'),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

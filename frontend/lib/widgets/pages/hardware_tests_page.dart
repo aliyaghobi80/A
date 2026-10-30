@@ -8,7 +8,6 @@ import '../hardware_tests/mic_test_view.dart';
 import '../hardware_tests/monitor_test_view.dart';
 import '../hardware_tests/mouse_test_view.dart';
 import '../hardware_tests/test_hub_view.dart';
-import '../hardware_tests/test_report_view.dart';
 import '../hardware_tests/webcam_test_view.dart';
 
 class HardwareTestsPage extends StatelessWidget {
@@ -33,8 +32,6 @@ class HardwareTestsPage extends StatelessWidget {
           return const KeyboardTestView();
         case 'mouse':
           return const MouseTestView();
-        case 'report':
-          return const TestReportView();
         case 'hub':
         default:
           return const TestHubView();

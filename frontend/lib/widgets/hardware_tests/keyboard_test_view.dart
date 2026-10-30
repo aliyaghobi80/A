@@ -1060,76 +1060,51 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
 
               const SizedBox(width: 8),
 
-              // 3. Compact Pass / Fail evaluation buttons
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FilledButton.icon(
-                    onPressed: () {
-                      final testedCount = ctrl.testedKeys.length;
-                      ctrl.recordResult(
-                        testName: 'تست کیبورد و دکمه‌ها',
-                        status: 'passed',
-                        details: '$testedCount کلید فیزیکی آزمایش شد؛ عملکرد کلیدها بدون گیرکردن تأیید گردید.',
-                      );
-                      Get.snackbar(
-                        'ثبت شد',
-                        'سلامت کیبورد در کارنامه ثبت شد.',
-                        snackPosition: SnackPosition.BOTTOM,
-                        backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.9),
-                        colorText: Colors.white,
-                        duration: const Duration(seconds: 2),
-                      );
-                    },
-                    icon: const Icon(Icons.check_rounded, size: 14),
-                    label: Text(
-                      isUltraNarrow ? '' : (isNarrow ? 'تأیید' : 'تأیید سلامت'),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isUltraNarrow ? 8 : (isNarrow ? 8 : 10),
-                        vertical: 6,
+              // 3. Keystroke Hit Counter & Reset Button
+              Obx(() {
+                final hits = ctrl.totalKeyHits.value;
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: const Color(0xFF3B82F6).withValues(alpha: 0.4),
+                        ),
                       ),
-                      minimumSize: const Size(0, 32),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      ctrl.recordResult(
-                        testName: 'تست کیبورد و دکمه‌ها',
-                        status: 'failed',
-                        details: 'یک یا چند کلید کار نمی‌کند، گیر دارد یا کد نادرست به سیستم گزارش می‌دهد.',
-                      );
-                      Get.snackbar(
-                        'ثبت شد',
-                        'ایراد کیبورد در کارنامه ثبت شد.',
-                        snackPosition: SnackPosition.BOTTOM,
-                        backgroundColor: const Color(0xFFEF4444).withValues(alpha: 0.9),
-                        colorText: Colors.white,
-                        duration: const Duration(seconds: 2),
-                      );
-                    },
-                    icon: const Icon(Icons.close_rounded, size: 14),
-                    label: Text(
-                      isUltraNarrow ? '' : (isNarrow ? 'ایراد' : 'ثبت ایراد'),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFEF4444),
-                      side: const BorderSide(color: Color(0xFFEF4444)),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isUltraNarrow ? 8 : (isNarrow ? 8 : 10),
-                        vertical: 6,
+                      child: Text(
+                        'ضربات: $hits',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF3B82F6),
+                        ),
                       ),
-                      minimumSize: const Size(0, 32),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 6),
+                    FilledButton.icon(
+                      onPressed: () => ctrl.resetKeyboard(),
+                      icon: const Icon(Icons.refresh_rounded, size: 14),
+                      label: Text(
+                        isUltraNarrow ? '' : (isNarrow ? 'بازنشانی' : 'پاک‌سازی / Reset'),
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF475569),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isUltraNarrow ? 8 : 10,
+                          vertical: 6,
+                        ),
+                        minimumSize: const Size(0, 32),
+                      ),
+                    ),
+                  ],
+                );
+              }),
             ],
           );
         },

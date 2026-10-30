@@ -1,11 +1,41 @@
 // frontend/lib/widgets/hardware_tests/mic_test_view.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/hardware_test_controller.dart';
 import '../../theme/app_theme.dart';
 
-class MicTestView extends StatelessWidget {
+class MicTestView extends StatefulWidget {
   const MicTestView({super.key});
+
+  @override
+  State<MicTestView> createState() => _MicTestViewState();
+}
+
+class _MicTestViewState extends State<MicTestView>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  void _openPrivacySettings() {
+    try {
+      Process.run('cmd', ['/c', 'start', 'ms-settings:privacy-microphone']);
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +137,59 @@ class MicTestView extends StatelessWidget {
                   );
                 }),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
+
+                // Real-time Waveform / Amplitude Level Meter
+                Obx(() {
+                  final phase = ctrl.micPhase.value;
+                  final isRecording = phase == 'recording';
+                  final isPlaying = phase == 'playing';
+                  final isActive = isRecording || isPlaying;
+
+                  return Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isActive
+                            ? (isRecording ? const Color(0xFFEF4444) : const Color(0xFF3B82F6))
+                            : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                      ),
+                    ),
+                    child: AnimatedBuilder(
+                      animation: _animController,
+                      builder: (context, _) {
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: List.generate(24, (i) {
+                            double barHeight = 6.0;
+                            if (isActive) {
+                              final offset = (i * 0.12);
+                              final animVal = (_animController.value + offset) % 1.0;
+                              barHeight = 6.0 + 26.0 * (0.3 + 0.7 * (animVal > 0.5 ? 1.0 - animVal : animVal) * 2);
+                            }
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              width: 5,
+                              height: barHeight,
+                              decoration: BoxDecoration(
+                                color: isActive
+                                    ? (isRecording ? const Color(0xFFEF4444) : const Color(0xFF3B82F6))
+                                    : (isDark ? const Color(0xFF475569) : const Color(0xFF94A3B8)),
+                                borderRadius: BorderRadius.circular(2.5),
+                              ),
+                            );
+                          }),
+                        );
+                      },
+                    ),
+                  );
+                }),
+
+                const SizedBox(height: 14),
 
                 // Status Message Box
                 Obx(() {
@@ -120,8 +202,10 @@ class MicTestView extends StatelessWidget {
                     children: [
                       Text(
                         isRecording
-                            ? 'در حال ضبط صدا...'
-                            : (isPlaying ? 'در حال بازپخش صدای ضبط‌شده شما...' : 'آزمون هوشمند لوپ‌بک میکروفون'),
+                            ? 'در حال ضبط صدا (میکروفون فعال)...'
+                            : (isPlaying
+                                ? 'در حال بازپخش صدای ضبط‌شده شما در خروجی...'
+                                : 'آزمون لوپ‌بک صدا (ضبط و بازپخش مستقیم)'),
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 6),
@@ -146,29 +230,43 @@ class MicTestView extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                // Action Buttons
+                // Loopback Controls (Record, Re-record, Stop)
                 Obx(() {
                   final isBusy = ctrl.isMicBusy.value;
+                  final phase = ctrl.micPhase.value;
 
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
                     children: [
                       ElevatedButton.icon(
                         onPressed: isBusy ? null : () => ctrl.startMicLoopbackTest(duration: 3.0),
-                        icon: const Icon(Icons.record_voice_over_rounded, size: 18),
-                        label: Text(isBusy ? 'در حال اجرای آزمون...' : 'شروع ضبط و بازپخش آزمایشی (۳ ثانیه)'),
+                        icon: const Icon(Icons.mic_rounded, size: 18),
+                        label: Text(phase == 'completed'
+                            ? 'ضبط مجدد (۳ ثانیه)'
+                            : (isBusy ? 'در حال پردازش...' : 'شروع ضبط آزمایشی (۳ ثانیه)')),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF10B981),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                         ),
                       ),
-                      const SizedBox(width: 12),
                       OutlinedButton.icon(
                         onPressed: isBusy ? null : () => ctrl.startMicLoopbackTest(duration: 5.0),
                         icon: const Icon(Icons.timer_outlined, size: 16),
                         label: const Text('آزمون ۵ ثانیه‌ای'),
                         style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _openPrivacySettings,
+                        icon: const Icon(Icons.security_rounded, size: 16),
+                        label: const Text('دسترسی میکروفون در ویندوز'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF3B82F6),
+                          side: const BorderSide(color: Color(0xFF3B82F6)),
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         ),
                       ),
@@ -250,90 +348,6 @@ class MicTestView extends StatelessWidget {
                     }).toList(),
                   );
                 }),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Evaluation Row
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'ثبت نتیجه تست میکروفون',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        'آیا صدای ضبط‌شده شما در بازپخش واضح، شفاف و بدون نویز یا قطعی شنیده شد؟',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    ctrl.recordResult(
-                      testName: 'تست میکروفون و هدست',
-                      status: 'passed',
-                      details: 'ضبط و بازپخش لوپ‌بک صدا انجام شد؛ وضوح، شفافیت و حساسیت میکروفون تأیید گردید.',
-                    );
-                    Get.snackbar(
-                      'ثبت شد',
-                      'سلامت میکروفون در کارنامه ثبت شد.',
-                      snackPosition: SnackPosition.BOTTOM,
-                      backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.9),
-                      colorText: Colors.white,
-                      duration: const Duration(seconds: 2),
-                    );
-                  },
-                  icon: const Icon(Icons.check_rounded, size: 16),
-                  label: const Text('میکروفون سالم و شفاف است (موفق)'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    ctrl.recordResult(
-                      testName: 'تست میکروفون و هدست',
-                      status: 'failed',
-                      details: 'عدم دریافت صدا، نویز شدید، صدای خفه یا ایراد در جک میکروفون گزارش شد.',
-                    );
-                    Get.snackbar(
-                      'ثبت شد',
-                      'ایراد میکروفون در کارنامه ثبت شد.',
-                      snackPosition: SnackPosition.BOTTOM,
-                      backgroundColor: const Color(0xFFEF4444).withValues(alpha: 0.9),
-                      colorText: Colors.white,
-                      duration: const Duration(seconds: 2),
-                    );
-                  },
-                  icon: const Icon(Icons.error_outline_rounded, size: 16),
-                  label: const Text('ایراد در ورودی میکروفون'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFEF4444),
-                    side: const BorderSide(color: Color(0xFFEF4444)),
-                  ),
-                ),
               ],
             ),
           ),

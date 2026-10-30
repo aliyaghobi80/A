@@ -17,7 +17,7 @@ except Exception:
     pass
 
 # Ensure backend directory is in sys.path
-APP_VERSION = "1.1.44"
+APP_VERSION = "1.1.45"
 _backend_dir = os.path.dirname(os.path.abspath(__file__))
 if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
@@ -184,7 +184,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
                 "service": "Markazi System Checker Backend",
                 "version": APP_VERSION,
                 "phase": 4,
-                "api_contract_version": 4,
+                "api_contract_version": 5,
             }
             self.wfile.write(json.dumps(resp).encode("utf-8"))
             return
@@ -361,7 +361,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"status": "success", "storage": storage_data}, indent=2).encode("utf-8"))
             return
 
-        elif path == "/api/packages/batch-status":
+        elif path in ("/api/packages/batch-status", "/api/software/install/status"):
             resp = get_batch_status()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -370,7 +370,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(resp, indent=2).encode("utf-8"))
             return
 
-        elif path in ("/api/drivers/batch-status", "/api/drivers/queue/status"):
+        elif path in ("/api/drivers/batch-status", "/api/drivers/queue/status", "/api/drivers/install/status"):
             resp = get_driver_batch_status()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")

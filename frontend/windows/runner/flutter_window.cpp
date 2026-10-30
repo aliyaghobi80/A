@@ -5,6 +5,10 @@
 #include <string>
 #include <vector>
 
+#include <flutter/encodable_value.h>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
+
 #include "flutter/generated_plugin_registrant.h"
 #include "startup_log.h"
 
@@ -17,6 +21,126 @@ namespace {
 // ordinary Windows display reset, but short enough that the technician does
 // not mistake a dead renderer for a frozen deployment.
 constexpr unsigned long long kDisplayRecoveryTimeoutMs = 8000;
+
+// Native window management channels supporting custom in-app title bar and fullscreen tests
+std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_markazi_window_channel;
+std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_window_manager_channel;
+WINDOWPLACEMENT g_prev_window_placement = {sizeof(WINDOWPLACEMENT)};
+bool g_is_window_fullscreen = false;
+
+void ApplyFullScreenMode(HWND hwnd, bool fullscreen) {
+  if (g_is_window_fullscreen == fullscreen) {
+    return;
+  }
+  g_is_window_fullscreen = fullscreen;
+
+  DWORD style = ::GetWindowLong(hwnd, GWL_STYLE);
+  if (fullscreen) {
+    MONITORINFO mi = {sizeof(mi)};
+    HMONITOR monitor = ::MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+    if (::GetWindowPlacement(hwnd, &g_prev_window_placement) &&
+        ::GetMonitorInfo(monitor, &mi)) {
+      ::SetWindowLong(hwnd, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
+      ::SetWindowPos(hwnd, HWND_TOP,
+                     mi.rcMonitor.left, mi.rcMonitor.top,
+                     mi.rcMonitor.right - mi.rcMonitor.left,
+                     mi.rcMonitor.bottom - mi.rcMonitor.top,
+                     SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+      LogStartup("Entered native fullscreen mode");
+    }
+  } else {
+    ::SetWindowLong(hwnd, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+    ::SetWindowPlacement(hwnd, &g_prev_window_placement);
+    ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                   SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    LogStartup("Exited native fullscreen mode");
+  }
+}
+
+void SetupWindowChannels(flutter::BinaryMessenger* messenger, HWND hwnd) {
+  if (!messenger || !hwnd) {
+    return;
+  }
+
+  auto method_handler = [hwnd](const flutter::MethodCall<flutter::EncodableValue>& call,
+                               std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+    const std::string& method = call.method_name();
+
+    if (method == "minimize") {
+      ::ShowWindow(hwnd, SW_MINIMIZE);
+      result->Success(flutter::EncodableValue(true));
+    } else if (method == "maximize") {
+      ::ShowWindow(hwnd, SW_MAXIMIZE);
+      result->Success(flutter::EncodableValue(true));
+    } else if (method == "unmaximize" || method == "restore") {
+      ::ShowWindow(hwnd, SW_RESTORE);
+      result->Success(flutter::EncodableValue(true));
+    } else if (method == "isMaximized") {
+      result->Success(flutter::EncodableValue(::IsZoomed(hwnd) != FALSE));
+    } else if (method == "isMinimized") {
+      result->Success(flutter::EncodableValue(::IsIconic(hwnd) != FALSE));
+    } else if (method == "close") {
+      ::PostMessage(hwnd, WM_CLOSE, 0, 0);
+      result->Success(flutter::EncodableValue(true));
+    } else if (method == "startDragging") {
+      ::ReleaseCapture();
+      ::SendMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+      result->Success(flutter::EncodableValue(true));
+    } else if (method == "show") {
+      ::ShowWindow(hwnd, SW_SHOW);
+      result->Success(flutter::EncodableValue(true));
+    } else if (method == "hide") {
+      ::ShowWindow(hwnd, SW_HIDE);
+      result->Success(flutter::EncodableValue(true));
+    } else if (method == "focus") {
+      ::SetForegroundWindow(hwnd);
+      ::SetFocus(hwnd);
+      result->Success(flutter::EncodableValue(true));
+    } else if (method == "setFullScreen") {
+      bool fullscreen = false;
+      if (call.arguments()) {
+        if (const auto* b = std::get_if<bool>(call.arguments())) {
+          fullscreen = *b;
+        } else if (const auto* map = std::get_if<flutter::EncodableMap>(call.arguments())) {
+          auto it = map->find(flutter::EncodableValue("isFullScreen"));
+          if (it != map->end() && std::holds_alternative<bool>(it->second)) {
+            fullscreen = std::get<bool>(it->second);
+          }
+        }
+      }
+      ApplyFullScreenMode(hwnd, fullscreen);
+      result->Success(flutter::EncodableValue(true));
+    } else if (method == "isFullScreen") {
+      result->Success(flutter::EncodableValue(g_is_window_fullscreen));
+    } else if (method == "ensureInitialized" || method == "waitUntilReadyToShow") {
+      result->Success(flutter::EncodableValue(true));
+    } else {
+      result->Success();
+    }
+  };
+
+  g_markazi_window_channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      messenger, "markazi/window", &flutter::StandardMethodCodec::GetInstance());
+  g_markazi_window_channel->SetMethodCallHandler(method_handler);
+
+  g_window_manager_channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      messenger, "window_manager", &flutter::StandardMethodCodec::GetInstance());
+  g_window_manager_channel->SetMethodCallHandler(method_handler);
+
+  LogStartup("Native window management platform channels registered (markazi/window and window_manager)");
+}
+
+void TeardownWindowChannels() {
+  if (g_markazi_window_channel) {
+    g_markazi_window_channel->SetMethodCallHandler(nullptr);
+    g_markazi_window_channel.reset();
+  }
+  if (g_window_manager_channel) {
+    g_window_manager_channel->SetMethodCallHandler(nullptr);
+    g_window_manager_channel.reset();
+  }
+}
 }
 
 FlutterWindow::~FlutterWindow() {
@@ -42,6 +166,7 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+  SetupWindowChannels(flutter_controller_->engine()->messenger(), GetHandle());
 
   flutter_controller_->engine()->SetNextFrameCallback([this]() {
     KillTimer(GetHandle(), 1);
@@ -85,6 +210,7 @@ void FlutterWindow::OnDestroy() {
   // The backend's parent watchdog owns process cleanup. Never kill other
   // sessions' backend processes by image name.
 
+  TeardownWindowChannels();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

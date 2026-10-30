@@ -20,7 +20,8 @@ import logging
 import winreg
 import subprocess
 import time
-from typing import Dict, Any, List, Optional
+import copy
+from typing import Dict, Any, List, Optional, Union
 
 from utils.powershell import get_hidden_subprocess_kwargs
 from software.registry import get_app_path_from_registry
@@ -215,7 +216,14 @@ def get_packages_directory(custom_path: Optional[str] = None) -> str:
         except Exception as e:
             logger.warning(f"Error reading software_directory.json: {e}")
 
-    # Check all candidate locations
+    # Prioritize external/technician drives (e.g. H:\PROGRAM, H:\Packages, D:\PROGRAM, etc.)
+    for letter in ["H", "D", "E", "F", "G", "I", "J", "K", "L"]:
+        for sub in ["PROGRAM", "Packages", "Software", "Programs"]:
+            cand = f"{letter}:\\{sub}"
+            if os.path.isdir(cand):
+                return cand
+
+    # Check candidate locations across repo root and workspace
     candidates = [
         os.path.abspath(os.path.join(REPO_ROOT, "Packages")),
         r"G:\MarkaziSystem\Packages",
@@ -239,8 +247,22 @@ def get_packages_directory(custom_path: Optional[str] = None) -> str:
     # directory_exists=false response instead of returning None.
     return os.path.abspath(os.path.join(REPO_ROOT, "Packages"))
 
+# In-memory scan cache to minimize redundant disk scanning
+_SCAN_PACKAGES_CACHE: Dict[str, Dict[str, Any]] = {}
+_SCAN_PACKAGES_CACHE_TIME: Dict[str, float] = {}
+_SCAN_CACHE_TTL_SECONDS: float = 3.0
+
+
+def clear_scan_cache() -> None:
+    """Clears the cached software package scan results."""
+    global _SCAN_PACKAGES_CACHE, _SCAN_PACKAGES_CACHE_TIME
+    _SCAN_PACKAGES_CACHE.clear()
+    _SCAN_PACKAGES_CACHE_TIME.clear()
+
+
 def set_packages_directory(custom_dir: str) -> Dict[str, Any]:
     """Updates and persists the active Packages directory in config/software_directory.json."""
+    clear_scan_cache()
     if not custom_dir or not os.path.isdir(custom_dir):
         return {"success": False, "message": f"Directory does not exist: {custom_dir}"}
 
@@ -1153,7 +1175,7 @@ IGNORED_SCAN_DIR_NAMES = {
     "backend", "_internal", "build", "dist", "build_backend_out",
     "node_modules", ".git", ".github", ".idea", ".vscode", "temp", "tmp",
     "appdata", "windows", "$recycle.bin", "system volume information",
-    "flutter_assets", "runner", "logs", "__pycache__", "obj", "bin"
+    "flutter_assets", "runner", "logs", "__pycache__", "obj", "bin", "آموزش"
 }
 
 IGNORED_FILE_PATTERNS = {
@@ -1211,6 +1233,9 @@ def _is_ignored_file_or_dir(root: str, filename: str, base_dir: Optional[str] = 
     else:
         path_parts = root_lower.split("/")
 
+    if "آموزش" in root_lower or "آموزش" in fn_lower or any("آموزش" in part for part in path_parts):
+        return True
+
     if any(part in IGNORED_SCAN_DIR_NAMES for part in path_parts):
         return True
 
@@ -1266,12 +1291,201 @@ def _select_windows_update_blocker_variant(
     ]
 
 
-def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
+def is_allowed_office_script(filename: str) -> bool:
+    """Strictly allows only Setup_Office 2024.cmd; excludes Activator, Uninstall, and older Office setup scripts."""
+    clean = str(filename or "").strip().lower()
+    if "activator" in clean or "uninstall" in clean or "setup_office 2021" in clean or "setup_office_2021" in clean:
+        return False
+    if "setup_office 2024.cmd" in clean or "setup_office_2024.cmd" in clean:
+        return True
+    return False
+
+
+def check_office_installation_permission(windows_identity: dict) -> dict:
+    """Evaluates Office installation policy against Windows identity (Home vs Pro)."""
+    if windows_identity.get("is_home"):
+        return {
+            "allowed": False,
+            "action": "desktop_shortcuts_only",
+            "reason": "نصب بسته آفیس طبق سیاست برنامه روی ویندوز هوم مسدود است؛ فقط آیکون‌های میانبر ایجاد می‌شوند.",
+        }
+    return {"allowed": True, "action": "install", "reason": ""}
+
+
+def deduplicate_adjacent_folders_and_archives(entries: List[str], base_dir: Optional[str] = None) -> List[str]:
+    """
+    If both folder 'X' and adjacent archive 'X.rar' (.zip, .7z) exist,
+    prefers the extracted folder and discards the archive to prevent redundant decompression.
+    """
+    archive_exts = (".rar", ".zip", ".7z")
+    if base_dir and os.path.isdir(base_dir):
+        folders = {e for e in entries if os.path.isdir(os.path.join(base_dir, e))}
+    else:
+        folders = {e for e in entries if not any(e.lower().endswith(ext) for ext in archive_exts)}
+
+    deduped = []
+    for e in entries:
+        lower = e.lower()
+        if lower.endswith(archive_exts):
+            base_name = os.path.splitext(e)[0]
+            if base_name in folders:
+                continue
+        deduped.append(e)
+    return deduped
+
+
+def get_package_weight_tier(pkg: Dict[str, Any]) -> int:
+    """
+    Returns priority tier (1-4) for software queue ordering:
+    - Tier 1: Core lightweight utilities (WinRAR, Firefox, VLC, KMPlayer, FDM)
+    - Tier 2: System runtimes (Visual C++, .NET Framework, DirectX)
+    - Tier 3: Heavyweight applications (Chrome, Acrobat Reader)
+    - Tier 4: Microsoft Office suite (final barrier)
+    """
+    if "weight_tier" in pkg and isinstance(pkg["weight_tier"], int):
+        return pkg["weight_tier"]
+
+    category = str(pkg.get("category") or "").lower()
+    if category == "office":
+        return 4
+    if category == "runtime":
+        return 2
+    if category == "utility":
+        return 1
+    if category == "heavyweight":
+        return 3
+
+    if _is_microsoft_office_package(pkg):
+        return 4
+    pkg_id = str(pkg.get("id") or "").lower()
+    if pkg_id.startswith("office_") or "setup_office" in str(pkg.get("filename") or "").lower():
+        return 4
+
+    combined = " ".join(
+        str(pkg.get(field) or "")
+        for field in ("name", "filename", "relative_path", "product_name", "publisher", "folder_name")
+    ).lower()
+    compact = re.sub(r"[^a-z0-9]+", "", combined)
+
+    # Tier 2: System runtimes (must precede dependent applications)
+    runtime_keywords = (
+        "vcredist", "visualc", "visualcpp", "visual c++", "vc++", "redistributable",
+        "dotnet", ".net framework", ".net", "directx", "dxsetup", "msxml"
+    )
+    if any(kw in combined or kw in compact for kw in runtime_keywords):
+        return 2
+
+    # Tier 1: Core lightweight utilities
+    tier1_keywords = (
+        "winrar", "firefox", "mozilla firefox", "vlc", "vlc media player",
+        "kmplayer", "kmp64", "kmp", "freedownloadmanager", "free download manager", "fdm",
+        "7zip", "7-zip", "notepad++", "npp", "telegram"
+    )
+    if any(kw in combined or kw in compact for kw in tier1_keywords):
+        return 1
+
+    # Tier 3: Heavyweight software / general apps
+    return 3
+
+
+def get_package_category(pkg: Dict[str, Any]) -> str:
+    """Returns category string based on weight tier."""
+    if "category" in pkg and pkg["category"]:
+        return pkg["category"]
+    tier = get_package_weight_tier(pkg)
+    if tier == 4:
+        return "office"
+    elif tier == 2:
+        return "runtime"
+    elif tier == 1:
+        return "utility"
+    else:
+        return "heavyweight"
+
+
+def get_package_sort_key(pkg: Dict[str, Any]) -> tuple:
+    """Deterministic sort key: (weight_tier, display_name)."""
+    tier = pkg.get("weight_tier")
+    if tier is None:
+        tier = get_package_weight_tier(pkg)
+    name = str(pkg.get("name") or pkg.get("display_name") or pkg.get("filename") or "")
+    return (tier, name)
+
+
+def sort_software_queue(packages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Sorts software packages deterministically: Tier 1 -> Tier 2 -> Tier 3 -> Tier 4."""
+    return sorted(packages, key=get_package_sort_key)
+
+
+def classify_package_concurrency(pkg: Dict[str, Any]) -> Dict[str, bool]:
+    """
+    Classifies parallel-safe vs strict barrier packages:
+    Barriers: MSI (.msi or msiexec), Office, System Runtimes, and unswitched installers.
+    Parallel-Safe: Standalone EXEs with documented silent switches not in the barrier categories.
+    """
+    ext = str(pkg.get("extension") or os.path.splitext(str(pkg.get("full_path") or pkg.get("filename") or ""))[1]).lower()
+    is_msi = ext in (".msi", ".msp", ".msu") or pkg.get("install_method") == "msiexec" or pkg.get("package_format") == "MSI"
+    is_office = _is_microsoft_office_package(pkg) or pkg.get("category") == "office" or get_package_weight_tier(pkg) == 4
+    is_runtime = pkg.get("category") == "runtime" or get_package_weight_tier(pkg) == 2
+
+    silent_args = pkg.get("silent_args")
+    if silent_args is None:
+        raw_silent = pkg.get("silent_arguments") or _get_silent_args(pkg)
+        if raw_silent:
+            try:
+                silent_args = shlex.split(raw_silent, posix=False)
+            except ValueError:
+                silent_args = []
+        else:
+            silent_args = []
+
+    has_no_switches = len(silent_args) == 0
+
+    if is_msi or is_office or is_runtime or has_no_switches:
+        return {"is_barrier": True, "is_parallel_safe": False}
+    return {"is_barrier": False, "is_parallel_safe": True}
+
+
+def filter_auto_selection(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Excludes tutorial folders (آموزش) and WUB from automatic batch selection."""
+    filtered = []
+    for item in entries:
+        path = str(item.get("full_path") or item.get("path") or item.get("relative_path") or "")
+        if "آموزش" in path:
+            continue
+        if item.get("is_wub") or _is_windows_update_blocker(item):
+            continue
+        if item.get("is_duplicate"):
+            continue
+        filtered.append(item)
+    return filtered
+
+
+def _is_kms_path_or_file(root: str, filename: str) -> bool:
+    """Checks whether a path or file belongs to KMS activation tools rather than regular software packages."""
+    combined = f"{root} {filename}".lower()
+    norm = re.sub(r"[^a-z0-9]+", " ", combined).strip()
+    tokens = norm.split()
+    if "kms" in tokens or "kmsauto" in norm.replace(" ", "") or "kms_v6" in norm.replace(" ", "_"):
+        return True
+    fn_lower = filename.lower()
+    if fn_lower in ("windows.cmd", "office.cmd", "windows.bat", "office.bat", "activate.cmd"):
+        return True
+    return False
+
+
+def scan_packages(custom_dir: Optional[str] = None, force_refresh: bool = False) -> Dict[str, Any]:
     """
     Recursively scans supported Windows installer formats, validates that EXE
     candidates are actual installers, and detects installed status & version.
     """
     pkg_dir = get_packages_directory(custom_dir)
+    cache_key = pkg_dir.lower()
+    now = time.time()
+    if not force_refresh and cache_key in _SCAN_PACKAGES_CACHE:
+        if now - _SCAN_PACKAGES_CACHE_TIME.get(cache_key, 0) < _SCAN_CACHE_TTL_SECONDS:
+            return copy.deepcopy(_SCAN_PACKAGES_CACHE[cache_key])
+
     dir_exists = os.path.isdir(pkg_dir)
 
     if not dir_exists:
@@ -1295,13 +1509,14 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
 
     for root, dirs, files in os.walk(pkg_dir):
         # Prune internal and temporary directories in-place
-        dirs[:] = [d for d in dirs if d.lower() not in IGNORED_SCAN_DIR_NAMES and not d.startswith(".")]
+        dirs[:] = [d for d in dirs if d.lower() not in IGNORED_SCAN_DIR_NAMES and not d.startswith(".") and "آموزش" not in d]
+        dir_stems = {d.lower() for d in dirs}
 
         # Check if this directory contains an Office setup script (e.g. Setup_Office 2024.cmd)
-        office_cmds = [f for f in files if f.lower().startswith("setup_office") and f.lower().endswith(".cmd")]
+        office_cmds = [f for f in files if is_allowed_office_script(f)]
         if office_cmds:
             # Prioritize Setup_Office 2024.cmd, then 2021, etc.
-            office_cmds.sort(key=lambda x: "2024" not in x)
+            # Strictly allowlisted Setup_Office 2024.cmd
             chosen_office_cmd = office_cmds[0]
             cmd_full = os.path.abspath(os.path.join(root, chosen_office_cmd))
             if cmd_full not in seen_paths and _is_safe_path(pkg_dir, cmd_full):
@@ -1322,6 +1537,17 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             # If an Office setup script is present in this folder, do not enumerate ODT.exe or other internal helper files
             if office_cmds and (file.lower() in ("odt.exe", "setup.exe") or file.lower().endswith(".cmd")):
                 continue
+
+            # Exclude KMS v6 activation tools from ordinary software scan
+            if _is_kms_path_or_file(root, file):
+                continue
+
+            # Deduplicate adjacent folder and archive (.rar, .zip, .7z) with identical base names: prefer folder
+            file_lower = file.lower()
+            if file_lower.endswith((".rar", ".zip", ".7z")):
+                stem = os.path.splitext(file_lower)[0]
+                if stem in dir_stems or os.path.isdir(os.path.join(root, stem)):
+                    continue
 
             extension = os.path.splitext(file)[1].lower()
             if extension not in SUPPORTED_PACKAGE_EXTENSIONS:
@@ -1543,6 +1769,42 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         else:
             final_name = clean_file_title or display_name
 
+        # Determine weight tier, category, silent_args, and concurrency
+        pkg_dict_for_meta = {
+            "name": final_name,
+            "filename": file,
+            "extension": extension,
+            "installer_type": "office_cmd" if is_office_cmd else ("portable" if is_portable else installer_type),
+            "full_path": full_path,
+            "category": "office" if is_office_cmd else "",
+            "silent_arguments": silent_args,
+        }
+        pkg_category = "office" if is_office_cmd else get_package_category(pkg_dict_for_meta)
+        pkg_dict_for_meta["category"] = pkg_category
+        pkg_tier = 4 if is_office_cmd else get_package_weight_tier(pkg_dict_for_meta)
+        pkg_dict_for_meta["weight_tier"] = pkg_tier
+
+        if is_office_cmd:
+            parsed_silent_args = ["1"]
+        elif silent_args:
+            try:
+                parsed_silent_args = shlex.split(silent_args, posix=False)
+            except ValueError:
+                parsed_silent_args = []
+        else:
+            raw_silent = _get_silent_args({**meta, "installer_type": installer_type, "full_path": full_path, "name": final_name, "filename": file})
+            if raw_silent:
+                try:
+                    parsed_silent_args = shlex.split(raw_silent, posix=False)
+                except ValueError:
+                    parsed_silent_args = []
+            else:
+                parsed_silent_args = []
+
+        pkg_dict_for_meta["silent_args"] = parsed_silent_args
+        concurrency = classify_package_concurrency(pkg_dict_for_meta)
+        is_wub_package = _is_windows_update_blocker(pkg_dict_for_meta)
+
         packages.append({
             "id": pkg_id,
             "name": final_name,
@@ -1575,6 +1837,14 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "has_icon": icon_data is not None,
             "icon_base64": icon_data,
             "silent_arguments": silent_args,
+            "category": pkg_category,
+            "weight_tier": pkg_tier,
+            "silent_args": parsed_silent_args,
+            "is_barrier": concurrency["is_barrier"],
+            "is_parallel_safe": concurrency["is_parallel_safe"],
+            "is_wub": is_wub_package,
+            "auto_select": not is_wub_package and not is_portable,
+            "watchdog_timeout": 600 if is_office_cmd else 300,
         })
 
     # WUB archives normally include both Wub.exe and Wub_x64.exe. Only expose
@@ -1639,6 +1909,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             dup["is_duplicate"] = True
             dup["duplicate_of"] = canonical["id"]
             dup["duplicate_count"] = 0
+            dup["auto_select"] = False
 
     # Windows Update is a machine-wide state. Read it once and expose the same
     # verified state on every WUB executable (x86/x64) shown in the package list.
@@ -1651,7 +1922,8 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             package["windows_update_state_known"] = state_known
 
     # Sort alphabetically by display name
-    packages.sort(key=lambda p: (p.get("is_duplicate", False), p["name"].lower()))
+    # Sort deterministically by weight tier (Tier 1 Utilities -> Tier 2 Runtimes -> Tier 3 Heavyweight -> Tier 4 Office), then by name
+    packages.sort(key=lambda p: (p.get("is_duplicate", False), get_package_sort_key(p)))
 
     total_packages = len(packages)
     valid_packages = len([p for p in packages if p.get("is_valid")])
@@ -1665,7 +1937,7 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
         if p.get("install_allowed") and not p.get("auto_install_supported")
     ])
 
-    return {
+    result = {
         "directory_exists": True,
         "packages_directory": pkg_dir,
         "packages": packages,
@@ -1680,6 +1952,12 @@ def scan_packages(custom_dir: Optional[str] = None) -> Dict[str, Any]:
             "duplicate_packages": duplicate_packages,
         }
     }
+    _SCAN_PACKAGES_CACHE[cache_key] = copy.deepcopy(result)
+    _SCAN_PACKAGES_CACHE_TIME[cache_key] = time.time()
+    return result
+
+
+
 
 
 def _find_package(data: Dict[str, Any], target_identifier: str) -> Optional[Dict[str, Any]]:
@@ -2208,6 +2486,7 @@ def _silent_install_command(pkg: Dict[str, Any]) -> List[str]:
     if extension == ".exe":
         silent_args = _get_silent_args(pkg)
         if not silent_args:
+            # Zero guessed switches policy: unswitched installers run via GUI autopilot with empty [] silent_args
             return []
         try:
             parsed = shlex.split(silent_args, posix=False)
@@ -2380,7 +2659,7 @@ def pin_package_to_taskbar(target_identifier: str, custom_dir: Optional[str] = N
     return pin_to_taskbar(pkg.get("name", "Program"), executable, icon=f"{executable},0")
 
 
-def _install_office_automated(pkg: Dict[str, Any], timeout_seconds: int = 900) -> Dict[str, Any]:
+def _install_office_automated(pkg: Dict[str, Any], timeout_seconds: int = 600) -> Dict[str, Any]:
     """Automates Setup_Office 2024.cmd execution by piping option '1' (All Products) and verifying installation."""
     cmd_path = os.path.abspath(pkg.get("full_path", ""))
     office_dir = os.path.dirname(cmd_path)
@@ -2525,7 +2804,7 @@ def silent_install_package(target_identifier: str, custom_dir: Optional[str] = N
                 "package_id": target_pkg.get("id"),
                 "name": target_pkg.get("name"),
             }
-        return _install_office_automated(target_pkg, timeout_seconds=max(timeout_seconds, 900))
+        return _install_office_automated(target_pkg, timeout_seconds=max(timeout_seconds, 600))
 
     # Skip if already installed
     if target_pkg.get("is_installed"):
@@ -2604,7 +2883,7 @@ def silent_install_package(target_identifier: str, custom_dir: Optional[str] = N
 
     # Verify installation by re-scanning registry
     import time
-    time.sleep(2)  # Allow uninstall/app-path registration to settle.
+    time.sleep(0.5)  # Minimize inter-package delay; quick initial settle
 
     verified = False
     installed_version = ""
@@ -2744,7 +3023,7 @@ def open_office_folder(custom_dir: Optional[str] = None) -> Dict[str, Any]:
     try:
         for entry in os.listdir(pkg_dir):
             full_entry = os.path.join(pkg_dir, entry)
-            if os.path.isdir(full_entry):
+            if os.path.isdir(full_entry) and "آموزش" not in entry:
                 entry_lower = entry.lower()
                 if any(kw in entry_lower for kw in office_keywords):
                     matched_folder = full_entry
@@ -2761,6 +3040,8 @@ def open_office_folder(custom_dir: Optional[str] = None) -> Dict[str, Any]:
                 if depth > 2:
                     continue
                 for d in dirs:
+                    if "آموزش" in d:
+                        continue
                     d_lower = d.lower()
                     if any(kw in d_lower for kw in office_keywords):
                         matched_folder = os.path.join(root, d)

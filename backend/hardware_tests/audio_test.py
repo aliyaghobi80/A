@@ -11,6 +11,7 @@ Uses only standard library (math, struct, wave, io, winsound) with no external b
 
 import io
 import math
+import random
 import struct
 import threading
 import wave
@@ -30,6 +31,7 @@ def generate_tone_wav(
     duration: float = 2.2,
     volume: float = 0.2,
     sweep: bool = False,
+    pink_noise: bool = False,
     sample_rate: int = 44100,
 ) -> bytes:
     """Generates standard 16-bit stereo PCM WAV bytes in memory."""
@@ -46,16 +48,28 @@ def generate_tone_wav(
         wf.setframerate(sample_rate)
 
         frames = bytearray()
+        # Kellet filter states for pink noise approximation
+        b0, b1, b2, b3, b4, b5, b6 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         for i in range(n_samples):
             t = i / sample_rate
-            if sweep:
+            if pink_noise:
+                white = random.uniform(-1.0, 1.0)
+                b0 = 0.99886 * b0 + white * 0.0555179
+                b1 = 0.99332 * b1 + white * 0.0750759
+                b2 = 0.96900 * b2 + white * 0.1538520
+                b3 = 0.86650 * b3 + white * 0.3104856
+                b4 = 0.55000 * b4 + white * 0.5329522
+                b5 = -0.7616 * b5 - white * 0.0168980
+                raw_wave = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11
+                b6 = white * 0.115926
+            elif sweep:
                 # 40Hz to 120Hz exponential sweep
                 current_freq = 40.0 * math.pow(120.0 / 40.0, t / duration)
                 phase = 2.0 * math.pi * current_freq * t
+                raw_wave = math.sin(phase)
             else:
                 phase = 2.0 * math.pi * freq * t
-
-            raw_wave = math.sin(phase)
+                raw_wave = math.sin(phase)
 
             # Smooth fade-in and fade-out envelope to avoid audible speaker pops
             if i < ramp_samples:
@@ -98,6 +112,7 @@ def play_audio_tone(
     duration: float = 2.2,
     volume: float = 0.2,
     sweep: bool = False,
+    pink_noise: bool = False,
 ) -> dict:
     """Synthesizes and plays the diagnostic tone asynchronously."""
     global winsound
@@ -109,6 +124,7 @@ def play_audio_tone(
         duration=duration,
         volume=volume,
         sweep=sweep,
+        pink_noise=pink_noise,
     )
 
     played = False
@@ -134,6 +150,7 @@ def play_audio_tone(
         "duration": duration,
         "volume": volume,
         "sweep": sweep,
+        "pink_noise": pink_noise,
         "bytes_played": len(wav_bytes),
         "native_played": played,
     }

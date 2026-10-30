@@ -7,6 +7,7 @@ import '../models/system_info.dart';
 import '../services/api_service.dart';
 import '../services/cache_service.dart';
 import '../services/folder_picker_service.dart';
+import '../services/install_state_service.dart';
 import 'system_info_controller.dart';
 import 'device_settings_controller.dart';
 import 'deployment_preferences.dart';
@@ -85,9 +86,13 @@ class SoftwareController extends GetxController {
   final Rx<BatchInstallStatus> batchStatus = BatchInstallStatus.empty().obs;
   final RxSet<String> selectedPackageIds = <String>{}.obs;
 
+  InstallStateService get _installService =>
+      InstallStateService.ensureInitialized(apiService: _apiService);
+  Worker? _softwareStatusWorker;
+  Worker? _softwareRunningWorker;
+
   Timer? _pollTimer;
   Timer? _initialTimer;
-  bool _batchPollInFlight = false;
   bool _batchSyncInFlight = false;
   int _emptyBatchSnapshots = 0;
   bool _syncInFlight = false;
@@ -141,6 +146,17 @@ class SoftwareController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _softwareStatusWorker = ever(_installService.softwareStatus, (BatchInstallStatus status) {
+      if (!isClosed) {
+        _onSoftwareStatusUpdated(status);
+      }
+    });
+    _softwareRunningWorker = ever(_installService.isSoftwareRunning, (bool running) {
+      if (!isClosed) {
+        isBatchInstalling.value = running;
+      }
+    });
+
     // Queue ownership lives in the backend. Reconnect immediately so a
     // recreated Flutter view never looks idle while installers are running.
     unawaited(_checkInitialBatchStatus());
@@ -167,12 +183,15 @@ class SoftwareController extends GetxController {
 
   @override
   void onClose() {
+    _softwareStatusWorker?.dispose();
+    _softwareRunningWorker?.dispose();
     _initialTimer?.cancel();
     _scanGeneration++;
     _pollTimer?.cancel();
     _debounceTimer?.cancel();
     _periodicSyncTimer?.cancel();
     _batchPollTimer?.cancel();
+    _batchPollTimer = null;
     _dirWatcherSub?.cancel();
     super.onClose();
   }
@@ -376,7 +395,7 @@ class SoftwareController extends GetxController {
               it.relativePath == pkg.relativePath) ||
           it.name.toLowerCase() == pkg.name.toLowerCase(),
     );
-    return currentItem != null && currentItem.status == 'queued';
+    return currentItem != null && currentItem.isPending;
   }
 
   bool isCurrentUninstalling(SoftwarePackage pkg) {
@@ -1272,6 +1291,7 @@ class SoftwareController extends GetxController {
     BatchInstallStatus status, {
     bool startPolling = true,
   }) {
+    _installService.applySoftwareStatus(status);
     // A backend restart/race can briefly yield a default empty snapshot while
     // the installer worker is still alive. Require two consecutive empty
     // snapshots before clearing a queue that the UI already knows is running.
@@ -1300,9 +1320,7 @@ class SoftwareController extends GetxController {
     final effective = preserveLastCompleted ? batchStatus.value : status;
     isBatchInstalling.value = effective.isRunning;
     deploymentPreferences.reconcileQueue(effective);
-    if (effective.isRunning &&
-        startPolling &&
-        _batchPollTimer?.isActive != true) {
+    if (effective.isRunning && startPolling) {
       _startBatchStatusPolling(null);
     }
     return effective;
@@ -1634,103 +1652,86 @@ class SoftwareController extends GetxController {
     }
   }
 
+  bool _wasBatchRunning = false;
+
+  void _onSoftwareStatusUpdated(BatchInstallStatus effective) {
+    batchStatus.value = effective;
+    isBatchInstalling.value = effective.isRunning;
+    deploymentPreferences.reconcileQueue(effective);
+
+    // REAL-TIME IN-MEMORY UPDATE:
+    // Update package cards immediately as each package finishes in the batch queue
+    final currentPkgs = packagesResponse.value.packages;
+    bool anyChanged = false;
+    final updatedList = <SoftwarePackage>[];
+
+    for (final pkg in currentPkgs) {
+      final matchingItem = effective.items.firstWhereOrNull(
+        (it) =>
+            it.id == pkg.id ||
+            (pkg.relativePath.isNotEmpty &&
+                it.relativePath == pkg.relativePath) ||
+            it.name.toLowerCase() == pkg.name.toLowerCase(),
+      );
+
+      if (matchingItem != null &&
+          matchingItem.status == 'completed' &&
+          !pkg.isInstalled) {
+        anyChanged = true;
+        updatedList.add(
+          pkg.copyWith(
+            isInstalled: true,
+            installedVersion: matchingItem.installedVersion.isNotEmpty
+                ? matchingItem.installedVersion
+                : (pkg.version.isNotEmpty ? pkg.version : 'نصب شده'),
+            status: 'Installed',
+          ),
+        );
+      } else {
+        updatedList.add(pkg);
+      }
+    }
+
+    if (anyChanged) {
+      packagesResponse.value = packagesResponse.value.copyWith(
+        packages: updatedList,
+      );
+      packagesResponse.refresh();
+    }
+
+    if (_wasBatchRunning && !effective.isRunning) {
+      _wasBatchRunning = false;
+      scanPackages(silent: true, force: true);
+
+      if (Get.isRegistered<DeviceSettingsController>()) {
+        Get.find<DeviceSettingsController>().refreshStatus();
+      }
+      if (Get.isRegistered<SystemInfoController>()) {
+        Get.find<SystemInfoController>().fetchSystemInfo(
+          forceRefresh: true,
+        );
+      }
+      if (Get.isRegistered<QcController>()) {
+        Get.find<QcController>().fetchInitialQcStatus();
+      }
+
+      if (effective.completed > 0 &&
+          Get.isRegistered<SystemInfoController>()) {
+        Get.find<SystemInfoController>().recordSoftwareInstall();
+      }
+
+      if (effective.rebootRequired) {
+        _showManualRestartReminder();
+      }
+    } else if (effective.isRunning) {
+      _wasBatchRunning = true;
+    }
+  }
+
   void _startBatchStatusPolling(ScaffoldMessengerState? scaffoldMessenger) {
     _batchPollTimer?.cancel();
-
-    _batchPollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
-      timer,
-    ) async {
-      if (_batchPollInFlight || isClosed) return;
-      _batchPollInFlight = true;
-      try {
-        final status = await _apiService.getBatchInstallStatus();
-        if (isClosed || timer != _batchPollTimer) return;
-        final effective = _applyBatchStatus(status, startPolling: false);
-
-        // REAL-TIME IN-MEMORY UPDATE:
-        // Update package cards immediately as each package finishes in the batch queue
-        final currentPkgs = packagesResponse.value.packages;
-        bool anyChanged = false;
-        final updatedList = <SoftwarePackage>[];
-
-        for (final pkg in currentPkgs) {
-          final matchingItem = effective.items.firstWhereOrNull(
-            (it) =>
-                it.id == pkg.id ||
-                (pkg.relativePath.isNotEmpty &&
-                    it.relativePath == pkg.relativePath) ||
-                it.name.toLowerCase() == pkg.name.toLowerCase(),
-          );
-
-          if (matchingItem != null &&
-              matchingItem.status == 'completed' &&
-              !pkg.isInstalled) {
-            anyChanged = true;
-            updatedList.add(
-              pkg.copyWith(
-                isInstalled: true,
-                installedVersion: matchingItem.installedVersion.isNotEmpty
-                    ? matchingItem.installedVersion
-                    : (pkg.version.isNotEmpty ? pkg.version : 'نصب شده'),
-                status: 'Installed',
-              ),
-            );
-          } else {
-            updatedList.add(pkg);
-          }
-        }
-
-        if (anyChanged) {
-          packagesResponse.value = packagesResponse.value.copyWith(
-            packages: updatedList,
-          );
-          packagesResponse.refresh();
-        }
-
-        if (!effective.isRunning) {
-          timer.cancel();
-          await scanPackages(silent: true, force: true);
-
-          if (Get.isRegistered<DeviceSettingsController>()) {
-            Get.find<DeviceSettingsController>().refreshStatus();
-          }
-          if (Get.isRegistered<SystemInfoController>()) {
-            Get.find<SystemInfoController>().fetchSystemInfo(
-              forceRefresh: true,
-            );
-          }
-          if (Get.isRegistered<QcController>()) {
-            Get.find<QcController>().fetchInitialQcStatus();
-          }
-
-          if (effective.completed > 0 &&
-              Get.isRegistered<SystemInfoController>()) {
-            Get.find<SystemInfoController>().recordSoftwareInstall();
-          }
-
-          if (scaffoldMessenger != null &&
-              effective.summaryMessage.isNotEmpty) {
-            scaffoldMessenger.showSnackBar(
-              SnackBar(
-                content: Text(effective.summaryMessage),
-                backgroundColor: effective.failed == 0
-                    ? const Color(0xFF10B981)
-                    : const Color(0xFFF59E0B),
-                duration: const Duration(seconds: 6),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
-          if (effective.rebootRequired) {
-            _showManualRestartReminder();
-          }
-        }
-      } catch (e) {
-        debugPrint('[SoftwareController] Batch poll error: $e');
-      } finally {
-        _batchPollInFlight = false;
-      }
-    });
+    _batchPollTimer = null;
+    _installService.notifyQueueStarted();
   }
 
   void _showManualRestartReminder() {

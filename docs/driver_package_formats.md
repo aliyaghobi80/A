@@ -1,6 +1,6 @@
 # Markazi System Checker — Driver Package Formats & Vendor Switch Reference
 
-**Version**: 1.1.44  
+**Version**: 1.1.45  
 **Date**: October 2026  
 **Audience**: Systems Engineers, Core Developers, Deployment Technicians  
 **Status**: Official Production Reference Specification  

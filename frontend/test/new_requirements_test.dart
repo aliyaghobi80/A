@@ -1,10 +1,17 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:markazi_system_checker/controllers/driver_install_controller.dart';
+import 'package:markazi_system_checker/controllers/hardware_test_controller.dart';
+import 'package:markazi_system_checker/controllers/qc_controller.dart';
 import 'package:markazi_system_checker/controllers/software_controller.dart';
 import 'package:markazi_system_checker/controllers/theme_language_controller.dart';
+import 'package:markazi_system_checker/l10n/app_localizations.dart';
 import 'package:markazi_system_checker/models/system_info.dart';
 import 'package:markazi_system_checker/services/api_service.dart';
 import 'package:markazi_system_checker/utils/persian_date_time.dart';
+import 'package:markazi_system_checker/widgets/common/app_sidebar.dart';
 
 class _FakeBatchApiService extends ApiService {
   BatchInstallStatus status;
@@ -36,12 +43,57 @@ class _FakeDriverApiService extends ApiService {
 }
 
 void main() {
+  setUp(() {
+    Get.reset();
+  });
+
   test('seventh sidebar destination opens application settings', () {
     final controller = ThemeLanguageController();
     controller.setNavIndex(6);
     expect(controller.activeNavIndex.value, 6);
     controller.setNavIndex(7);
-    expect(controller.activeNavIndex.value, 6);
+    expect(controller.activeNavIndex.value, 7);
+  });
+
+  testWidgets('sidebar navigation to settings switches activeNavIndex to 7', (tester) async {
+    final themeCtrl = Get.put(ThemeLanguageController());
+    Get.put(DriverInstallController(apiService: ApiService()));
+    Get.put(SoftwareController(apiService: ApiService()));
+    Get.put(HardwareTestController(), permanent: true);
+    Get.put(QcController());
+
+    await tester.pumpWidget(
+      GetMaterialApp(
+        locale: const Locale('fa'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Scaffold(
+          body: Obx(() => AppSidebar(
+            selectedIndex: themeCtrl.activeNavIndex.value,
+            onItemSelected: (index) {
+              themeCtrl.setNavIndex(index);
+            },
+          )),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(themeCtrl.activeNavIndex.value, 0);
+
+    // Find the settings navigation item in the sidebar
+    final settingsNavItem = find.text('تنظیمات برنامه');
+    expect(settingsNavItem, findsOneWidget);
+
+    await tester.tap(settingsNavItem);
+    await tester.pumpAndSettle();
+
+    expect(themeCtrl.activeNavIndex.value, 7);
   });
 
   test('Gregorian new year converts to Jalali new year', () {

@@ -1,366 +1,70 @@
 # Markazi System Checker — Interface Contract & Technical Specifications
 
-**Contract Version**: 4  
-**Target Application Version**: 1.1.44 (Build 1.1.44+45)  
+**Contract Version**: 5  
+**Target Application Version**: 1.1.45 (Build 1.1.45+46)  
 **Status**: Official Specification (Ratified by System Contract Architect)  
-**Scope**: Backend API Server, Driver Engine, Concurrency Scheduler, Package Profiler, Hardware Matcher, Native Graphics Recovery, and Flutter Frontend.
+**Scope**: Backend API Server, Driver Engine, Software Batch Deployment, Concurrency Scheduler, Package Profiler, Hardware Diagnostic Subsystems, Custom Window Frame, State Management Service, and Flutter Frontend.
 
 ---
 
-## 1. Version Alignment Contract
+## 1. Release Descriptors & Version Alignment Contract
 
 All four release descriptors across the repository must remain strictly synchronized to the values below:
 
 | Target File | Variable / Key | Target Value | Verification Check |
 |---|---|---|---|
-| `backend/api_server.py` | `APP_VERSION` & `/api/health` `version` | `"1.1.44"` | `GET /api/health` returns `"version": "1.1.44"` |
-| `backend/api_server.py` | `/api/health` `api_contract_version` | `4` | `GET /api/health` returns `"api_contract_version": 4` |
-| `frontend/pubspec.yaml` | `version` | `1.1.44+45` | `flutter pub get` & `flutter test` |
-| `installer/setup.iss` | `#define MyAppVersion` | `"1.1.44"` | Inno Setup compile output |
-| `build_production.py` | `APP_VERSION` | `"1.1.44"` | `py build_production.py --help` / build logs |
+| `backend/api_server.py` | `APP_VERSION` & `/api/health` `version` | `"1.1.45"` | `GET /api/health` returns `"version": "1.1.45"` |
+| `backend/api_server.py` | `/api/health` `api_contract_version` | `5` | `GET /api/health` returns `"api_contract_version": 5` |
+| `backend/api_server.py` | `/api/health` `phase` | `5` | `GET /api/health` returns `"phase": 5` |
+| `frontend/pubspec.yaml` | `version` | `1.1.45+46` | `flutter pub get` & `flutter test` |
+| `installer/setup.iss` | `#define MyAppVersion` | `"1.1.45"` | Inno Setup compile check |
+| `build_production.py` | `APP_VERSION` | `"1.1.45"` | `py build_production.py --help` / build logs |
+
+> **Ownership Rule**: Modification of these 4 release descriptor files is exclusively owned by the Integrator Agent during Phase 7 / Milestone G integration.
 
 ---
 
-## 2. Driver Package Profiling Schema & Data Models
+## 2. Status Polling Schema & Monotonic Sequence Model
 
-Every inspected driver package must produce a normalized `DriverPackage` dictionary conforming to the schema below. This schema is populated by `backend/drivers/package_inspector.py` without executing any binaries.
+### 2.1 Monotonic Sequence Contract
 
-### 2.1 Complete JSON Schema for `DriverPackage`
+Both Driver Queue Status and Software Batch Status endpoints must provide monotonic ordering primitives to prevent UI flickering, out-of-order race conditions, and status reversion:
+
+1. **`state_revision`** (`integer`, mandatory, `>= 1`):
+   - Initialized to `1` when a queue session is created or restored.
+   - Strictly incremented by at least `+1` on **every internal state mutation**:
+     - Queue initialization, start, pause, resume, cancellation, or completion.
+     - Item state transition (`pending` → `installing` → `completed` / `failed` / `skipped` / `interrupted`).
+     - Worker assignment or release.
+     - Error 1618 retry re-queueing.
+     - Dead worker recovery.
+     - Progress percent update or elapsed time tick.
+     - Reconciled state update upon backend startup.
+   - The value is strictly monotonic and never decrements or rolls back during the lifetime of a queue session.
+2. **`server_time`** (`float`, mandatory):
+   - High-resolution POSIX epoch timestamp (`time.time()`).
+   - Captured under lock at the exact instant the status response snapshot is constructed.
+3. **`api_contract_version`** (`integer`, mandatory):
+   - Set to `5`.
+
+### 2.2 Endpoint Routing Alignment
+
+The backend HTTP server (`backend/api_server.py`) must route the following canonical and aliased paths:
+- **Driver Queue Status**:
+  - `GET /api/drivers/queue/status` (Canonical)
+  - `GET /api/drivers/batch-status` (Backward-compatible alias)
+  - `GET /api/drivers/install/status` (Forward-compatible alias)
+- **Software Batch Status**:
+  - `GET /api/packages/batch-status` (Canonical)
+  - `GET /api/software/install/status` (Forward-compatible alias)
+
+### 2.3 Driver Queue Status Schema (`GET /api/drivers/queue/status`)
 
 ```json
 {
-  "package_id": "drv_pkg_a1b2c3d4e5f60718",
-  "display_name": "Realtek High Definition Audio Driver",
-  "category": "audio",
-  "category_fa": "کارت صدا و مالتی‌مدیا",
-  "category_order": 9,
-  "package_type": "folder",
-  "source_path": "C:\\Drivers\\Realtek_Audio",
-  "relative_path": "Realtek_Audio",
-  "installer_file": "setup.exe",
-  "installer_path": "C:\\Drivers\\Realtek_Audio\\setup.exe",
-  "install_method": "setup_exe",
-  "silent_args": ["-s", "-norestart"],
-  "is_barrier": false,
-  "is_parallel_safe": true,
-  "resource_tag": "audio",
-  "timeout_seconds": 300,
-  "requires_reboot": false,
-  "hardware_ids": [
-    "HDAUDIO\\FUNC_01&VEN_10EC&DEV_0256",
-    "HDAUDIO\\FUNC_01&VEN_10EC&DEV_0256&SUBSYS_10431234"
-  ],
-  "driver_version": "6.0.9239.1",
-  "driver_date": "2024-03-15",
-  "provider": "Realtek Semiconductor Corp.",
-  "is_valid": true,
-  "match": {
-    "is_matched": true,
-    "confidence": "HIGH",
-    "status": "needs_install",
-    "recommendation": "recommended"
-  }
-}
-```
-
-### 2.2 Field Definitions & Constraints
-
-| Field | Type | Description | Mandatory Constraints |
-|---|---|---|---|
-| `package_id` | `string` | Deterministic 16-character SHA-256 hex string prefixed with `drv_pkg_`. | Stable across scans and UI refreshes. |
-| `display_name` | `string` | User-friendly Persian/English component title. | Never empty. |
-| `category` | `string` | Canonical category key. | Must be one of the 13 defined categories. |
-| `category_fa` | `string` | Persian localized category label. | Displayed in UI cards. |
-| `category_order` | `integer` | Numerical sorting weight for installation sequence. | 1 (highest priority) to 14 (lowest priority). |
-| `package_type` | `string` | Physical packaging structure. | `"folder"`, `"archive"`, `"standalone_exe"`, `"standalone_msi"`, `"inf_only"`. |
-| `source_path` | `string` | Absolute Windows file system path to root of package. | Must exist on disk. |
-| `relative_path` | `string` | Path relative to root of scanned drivers directory. | Used for display & logging. |
-| `installer_file` | `string` | Target entry-point filename (e.g. `setup.exe`, `AsusSetup.exe`). | Statically validated. |
-| `installer_path` | `string` | Absolute path to target installer executable/script. | Statically validated. |
-| `install_method` | `string` | Execution dispatcher route. | `"setup_exe"`, `"asus_setup"`, `"msiexec"`, `"pnputil"`, `"inf_pnputil"`, `"script"`, `"interactive"`. |
-| `silent_args` | `list[string]` | Official unattended command-line flags. | **Zero guessed switches**. Empty `[]` if unknown. |
-| `is_barrier` | `boolean` | Concurrency barrier flag. | `true` forces exclusive execution on Worker 1. |
-| `is_parallel_safe` | `boolean` | 2X concurrency eligibility flag. | `true` permits parallel execution on Worker 2. |
-| `resource_tag` | `string` | Hardware resource isolation tag. | Prevents resource collisions (e.g. `"audio"`, `"lan"`). |
-| `timeout_seconds` | `integer` | Process watchdog timeout. | Default 300s; GPU 600s; Chipset 420s. |
-| `requires_reboot` | `boolean` | Indicates whether package inherently demands restart. | Propagates to post-queue reminder. |
-| `hardware_ids` | `list[string]` | List of extracted or matched PnP Hardware/Compatible IDs. | Normalized uppercase strings. |
-| `driver_version` | `string` | Extracted package driver version string. | E.g. `"6.0.9239.1"` or empty string. |
-| `driver_date` | `string` | Extracted INF driver date (`YYYY-MM-DD`). | ISO 8601 string or empty string. |
-| `provider` | `string` | Vendor or publisher name from INF / PE header. | E.g. `"Realtek"`, `"Intel"`. |
-| `match` | `object` | Hardware matcher assessment. | Contains `is_matched`, `confidence`, `status`, `recommendation`. |
-
----
-
-## 3. Barrier vs Parallel-Safe Classification & Rules
-
-To guarantee system stability, hardware registers are never written concurrently by competing installers.
-
-### 3.1 Strict Barriers (`is_barrier: true`, `is_parallel_safe: false`)
-
-A barrier package must **always** execute exclusively on **Worker 1**. Before a barrier executes, any running parallel worker must be **drained**. While a barrier is running, no other worker may claim or execute any package.
-
-The following packages are strictly classified as Barriers:
-1. **Core Platform & Chipset**:
-   - `category in ("chipset", "system_mei", "storage")`
-   - Intel Chipset Device Software, Intel Management Engine (MEI), Intel Rapid Storage Technology (RST), AMD Chipset Drivers.
-2. **Graphics Drivers (GPU)**:
-   - `category == "gpu"`
-   - Discrete and integrated graphics installers (NVIDIA, AMD Radeon, Intel Graphics).
-3. **Windows Installer (MSI Packages)**:
-   - `install_method == "msiexec"` or any executable wrapper that unpacks/invokes `msiexec.exe`.
-4. **PnPUtil INF Batches**:
-   - `install_method in ("pnputil", "inf_pnputil")` (kernel driver store manipulation).
-5. **Vendor Batch Scripts**:
-   - `install_method == "script"` (`InstallPackage.bat`, `setup.bat`).
-6. **System Runtimes & Frameworks**:
-   - Visual C++ Redistributable, .NET Framework, DirectX Runtimes.
-7. **Unknown or Unswitched Installers**:
-   - Packages where `silent_args` is empty `[]` and require GUI Autopilot or interactive wizard confirmation.
-8. **Re-scheduled 1618 Retry Packages**:
-   - Any package retrying after an initial `1618` (`ERROR_INSTALL_ALREADY_RUNNING`) exit code.
-
-### 3.2 Parallel-Safe Packages (`is_barrier: false`, `is_parallel_safe: true`)
-
-Parallel-safe packages are eligible for concurrent execution on **Worker 2** only when **2X mode** is active (`double_speed == true`). In **1X mode**, all packages run serially on Worker 1.
-
-A package is classified as Parallel-Safe **if and only if** all the following criteria are met:
-1. `category in ("audio", "lan", "wifi", "bluetooth", "touchpad", "card_reader", "usb", "other")`.
-2. `install_method in ("setup_exe", "asus_setup")`.
-3. Verified, vendor-documented silent switches with reboot suppression are present in `silent_args`.
-4. It does not invoke `msiexec.exe` or hold `Global\_MSIExecute`.
-5. It does not collide with the `resource_tag` of an already active parallel package.
-
-### 3.3 Drainage & Lookahead Barrier Invariants
-
-1. **Pre-Barrier Drain Rule**: When Worker 1 dequeues a Barrier package, it checks if Worker 2 is currently active. If Worker 2 is active, Worker 1 must enter a blocking wait (`Condition.wait()`) until Worker 2 completes and releases its slot. Only when `active_workers == 0` does Worker 1 begin executing the Barrier.
-2. **Lookahead Barrier Brake**: When Worker 2 completes an item and requests another task from the scheduler, the scheduler inspects the next pending item in the queue. If the next pending item is a Barrier, Worker 2 **must not** claim any subsequent item, even if parallel-safe items exist further down the queue. Worker 2 yields immediately so that Worker 1 can claim the Barrier without unnecessary delay.
-
----
-
-## 4. Installation Ordering Contract
-
-Queue items are strictly sorted by `category_order` before execution begins:
-
-| Order | Category Key | Category Description | Concurrency Classification |
-|---|---|---|---|
-| **1** | `chipset` | Intel/AMD Core Chipset & Platform | **Strict Barrier** (Serial) |
-| **2** | `system_mei` | Management Engine Interface / Serial IO | **Strict Barrier** (Serial) |
-| **3** | `storage` | Rapid Storage Technology (RST) / NVMe | **Strict Barrier** (Serial) |
-| **4** | `gpu` (iGPU) | Integrated Graphics (AMD APU or Intel UHD/Iris) | **Strict Barrier** (Serial + Display Settle) |
-| **5** | `gpu` (dGPU) | Discrete Graphics (NVIDIA, AMD Radeon, Intel Arc) | **Strict Barrier** (Serial + Display Settle) |
-| **6** | `lan` | Ethernet Controller | **Parallel-Safe** (2X Eligible) |
-| **7** | `wifi` | Wireless WLAN Controller | **Parallel-Safe** (2X Eligible) |
-| **8** | `bluetooth` | Bluetooth Adapter | **Parallel-Safe** (2X Eligible) |
-| **9** | `audio` | High Definition Audio & Codecs | **Parallel-Safe** (2X Eligible) |
-| **10** | `touchpad` | Precision Touchpad / Pointing Device | **Parallel-Safe** (2X Eligible) |
-| **11** | `card_reader` | SD/PCIe Card Reader | **Parallel-Safe** (2X Eligible) |
-| **12** | `camera` | Web Camera / IR Sensor | **Parallel-Safe** (2X Eligible) |
-| **13** | `usb` | USB 3.x / Thunderbolt Drivers | **Parallel-Safe** (2X Eligible) |
-| **14** | `other` | Hotkey utilities, OEM helper software | **Parallel-Safe** or Barrier if unswitched |
-
----
-
-## 5. Windows Installer Mutex & Error 1618 Retry Policy
-
-### 5.1 Mutex Synchronization (`Global\_MSIExecute`)
-
-The Windows Installer service creates and holds the kernel mutex `Global\_MSIExecute` during any active installation transaction:
-- The scheduler checks `Global\_MSIExecute` prior to launching any package known to invoke MSI technology.
-- Check implementation: `OpenMutexW(SYNCHRONIZE | 0x0001, False, "Global\\_MSIExecute")`.
-- If the handle is non-zero, Windows Installer is currently busy.
-
-### 5.2 Error 1618 Bounded Retry & Serial Fallback Policy
-
-When any installer process exits with code `1618` (`ERROR_INSTALL_ALREADY_RUNNING`):
-
-```
-Installer returns 1618
-         │
-         ▼
-  retry_count < 2? ────► NO ───► Mark item as FAILED with Persian explanation
-         │
-        YES
-         │
-         ▼
-Increment retry_count (+1)
-Set status = "pending"
-Set is_barrier = True  (FORCED SERIAL FALLBACK)
-Set message = "Windows Installer در حال استفاده است؛ تلاش مجدد {N} از ۲..."
-         │
-         ▼
-Exponential Backoff Delay:
-- Retry 1: Wait 3.0s + poll wait_for_windows_installer_idle()
-- Retry 2: Wait 7.0s + poll wait_for_windows_installer_idle()
-         │
-         ▼
-Re-queue to head of queue
-Execute exclusively on Worker 1 after Worker 2 drains
-```
-
-- **Maximum Retries**: Strictly capped at **2 retries** (maximum 3 total execution attempts).
-- **Infinite Loop Prevention**: Under no circumstances may an item retry more than twice.
-- **Immediate Failure Elimination**: An initial exit code of 1618 must **never** be recorded as an immediate installation failure in the UI.
-
----
-
-## 6. Exit Code Normalization & Reboot Suppression Contract
-
-All installer processes return an exit code that must be mapped to normalized queue item outcomes:
-
-| Exit Code | Constant / Meaning | Normalized Status | Reboot Flag | Action Taken |
-|---|---|---|---|---|
-| `0` | `ERROR_SUCCESS` | `completed` | Unchanged | Mark successful. Advance queue. |
-| `3010` | `ERROR_SUCCESS_REBOOT_REQUIRED` | `completed` | Set `reboot_required = true` | Mark successful. Suppress reboot. Queue continues. |
-| `1641` | `ERROR_SUCCESS_REBOOT_INITIATED` | `completed` | Set `reboot_required = true` | Mark successful. Suppress reboot. Queue continues. |
-| `1638` | `ERROR_PRODUCT_VERSION` | `completed` | Unchanged | Another version already installed. Acceptable success. |
-| `1618` | `ERROR_INSTALL_ALREADY_RUNNING` | `pending` (retry) or `failed` | Unchanged | Trigger 1618 Retry Policy (Section 5.2). |
-| `1602` | `ERROR_INSTALL_USEREXIT` | `failed` | Unchanged | Mark cancelled by technician. |
-| `1603` | `ERROR_INSTALL_FAILURE` | `failed` | Unchanged | Record fatal MSI/Setup failure reason. |
-| `-2` | `TIMEOUT_EXPIRED` | `failed` | Unchanged | Watchdog killed process tree. Record timeout failure. |
-| `-5` | `WORKER_DIED` | `failed` | Unchanged | Recovered by dead worker watchdog. |
-| Other | Non-zero exit code | `failed` | Unchanged | Record exit code in item state. |
-
-### 6.1 Single Advisory Reboot Reminder
-
-- Automated operating system restarts (`shutdown /r`, installer automatic reboots) are **strictly prohibited**.
-- If any package completes with exit code `3010` or `1641`, the global queue flag `reboot_required` is set to `true`.
-- When the entire driver queue finishes, the backend appends exactly one advisory Persian message to `summary_message`:
-  `" — یادتان نرود پس از پایان همهٔ کارها، سیستم را دستی ری‌استارت کنید."`
-- The Flutter UI displays an advisory dialog offering: `"متوجه شدم؛ بعداً ری‌استارت می‌کنم"`.
-
----
-
-## 7. Process Tree Termination & Timeout Watchdog Contract
-
-When an installer process hangs or exceeds `timeout_seconds`:
-
-### 7.1 Specification for `terminate_process_tree`
-
-```python
-def terminate_process_tree(pid: int) -> bool:
-    """
-    Forcefully terminates a process and all of its spawned child processes.
-    Uses Windows native taskkill.exe with /F (force) and /T (tree).
-    """
-    if not pid or pid <= 0:
-        return False
-    try:
-        cmd = ["taskkill.exe", "/F", "/T", "/PID", str(pid)]
-        CREATE_NO_WINDOW = 0x08000000
-        res = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            creationflags=CREATE_NO_WINDOW,
-            timeout=10,
-        )
-        return res.returncode == 0
-    except Exception as e:
-        logger.error(f"Failed to terminate process tree for PID {pid}: {e}")
-        return False
-```
-
-- When `subprocess.TimeoutExpired` occurs in `_run_elevated_and_wait` or scheduler worker:
-  1. Capture the process PID.
-  2. Invoke `terminate_process_tree(pid)`.
-  3. Return exit code `-2`.
-  4. Record failure reason: `"زمان مجاز نصب به پایان رسید و فرآیند متوقف شد (Timeout)."`
-
----
-
-## 8. GPU Vendor Installation Subsystem Contract
-
-Graphics driver deployment must handle hardware topology (hybrid graphics, APUs + dGPUs) safely.
-
-### 8.1 Common Interface: `GpuVendorInstaller`
-
-Located in `backend/drivers/gpu_installers.py`:
-
-```python
-from abc import ABC, abstractmethod
-from typing import Dict, Any
-
-class GpuVendorInstaller(ABC):
-    @abstractmethod
-    def can_handle(self, package: Dict[str, Any]) -> bool:
-        """Determines if this vendor installer matches the package."""
-        pass
-
-    @abstractmethod
-    def install(self, package: Dict[str, Any], timeout_seconds: int = 600) -> Dict[str, Any]:
-        """
-        Executes the unattended GPU installation.
-        Returns Dict with keys: success (bool), exit_code (int), message (str), reboot (bool).
-        """
-        pass
-
-    @abstractmethod
-    def get_vendor_name(self) -> str:
-        """Returns vendor display name ('NVIDIA', 'AMD', 'Intel')."""
-        pass
-```
-
-### 8.2 Vendor Specific Implementations
-
-1. **`NvidiaGpuInstaller`**:
-   - Matches: `VEN_10DE` or package filename matching `*geforce*`, `*whql*.exe`, `*quadro*`.
-   - Silent switches: `["-s", "-noreboot"]`.
-   - Timeout: 600 seconds.
-2. **`AmdGpuInstaller`**:
-   - Matches: `VEN_1002` or package filename matching `*adrenalin*`, `*radeon*`, `amd-software*.exe`.
-   - Silent switches: `["-INSTALL", "-OUTPUT", "screen", "-NORESTART"]`.
-   - Timeout: 600 seconds.
-   - **Unified Adrenalin Deduplication**: If an AMD APU (iGPU) and AMD Radeon (dGPU) share the identical hardware package, the installer executes once and maps completion to both devices.
-3. **`IntelGpuInstaller`**:
-   - Matches: `VEN_8086` (Display controller class) or `Installer.exe`, `igxpin.exe`, `gfx_win*.exe`.
-   - Modern Switch (Intel Arc / 11th Gen+): `["--overwrite", "-s"]`.
-   - Legacy Switch: `["-s", "-norestart"]`.
-   - Timeout: 480 seconds.
-
-### 8.3 GPU Execution Rules & Display Settle Delay
-
-1. **Topological Order**:
-   - iGPU (Integrated Processor Graphics) **must always be installed before** dGPU (Discrete Dedicated Graphics).
-   - Global vendor priority: `AMD` → `Intel` → `NVIDIA`.
-2. **Mandatory Display Settle Delay**:
-   - Windows Display Driver Model (WDDM) resets the display adapter during graphics driver replacement, temporarily interrupting DXGI swap chains.
-   - After any GPU installer completes (success or failure), the scheduler must execute a non-blocking delay of **5 to 8 seconds** (default: 8s) before starting any subsequent package or initiating a hardware scan.
-
----
-
-## 9. Atomic State Persistence Contract
-
-To guarantee that a graphics reset, UI crash, or process termination does not corrupt queue state, all state changes must be written atomically to disk:
-
-- **State File Path**:  
-  `%LOCALAPPDATA%\MarkaziSystemChecker\driver_queue_state.json`  
-  (Fallback: `%APPDATA%\MarkaziSystemChecker\driver_queue_state.json` or `C:\ProgramData\MarkaziSystemChecker\driver_queue_state.json`).
-- **Atomic Replacement Protocol**:
-  ```python
-  def persist_queue_state_atomic(state_dict: dict, file_path: str) -> None:
-      temp_path = f"{file_path}.tmp"
-      os.makedirs(os.path.dirname(file_path), exist_ok=True)
-      with open(temp_path, "w", encoding="utf-8") as f:
-          json.dump(state_dict, f, ensure_ascii=False, indent=2)
-          f.flush()
-          os.fsync(f.fileno())
-      os.replace(temp_path, file_path)
-  ```
-- **Backend Adoption Handshake**:
-  - If the Flutter UI crashes and relaunches, it connects to `/api/drivers/queue/status`.
-  - The backend serves the active state directly from memory, verified against the atomic snapshot on disk.
-
----
-
-## 10. Queue Status API Schema (`/api/drivers/queue/status` & `/api/drivers/batch-status`)
-
-Both endpoints serve identical JSON structures. Contract Version 4 adds `active_items` while maintaining backward compatibility with `current_package` and `current_index`.
-
-### 10.1 Complete Response JSON Schema
-
-```json
-{
+  "api_contract_version": 5,
+  "state_revision": 42,
+  "server_time": 1729000150.125,
   "status": "ok",
   "is_running": true,
   "cancelled": false,
@@ -372,9 +76,10 @@ Both endpoints serve identical JSON structures. Contract Version 4 adds `active_
   "completed": 2,
   "failed": 0,
   "skipped": 0,
+  "interrupted": 0,
   "current_index": 2,
-  "current_package": "Realtek Audio Driver",
-  "current_file": "Realtek Audio Driver",
+  "current_package": "Realtek Audio Driver • Intel Wi-Fi Driver",
+  "current_file": "Realtek Audio Driver • Intel Wi-Fi Driver",
   "progress_percent": 33.3,
   "start_time": 1729000080.0,
   "end_time": null,
@@ -387,7 +92,7 @@ Both endpoints serve identical JSON structures. Contract Version 4 adds `active_
   "active_items": [
     {
       "package_id": "drv_pkg_a1b2c3d4",
-      "display_name": "Realtek Audio Driver",
+      "display_name": "Realtek High Definition Audio Driver",
       "category": "audio",
       "worker_id": 1,
       "status": "installing",
@@ -397,7 +102,7 @@ Both endpoints serve identical JSON structures. Contract Version 4 adds `active_
     },
     {
       "package_id": "drv_pkg_e5f60718",
-      "display_name": "Intel Wi-Fi Driver",
+      "display_name": "Intel Wi-Fi 6 AX201 Driver",
       "category": "wifi",
       "worker_id": 2,
       "status": "installing",
@@ -418,11 +123,12 @@ Both endpoints serve identical JSON structures. Contract Version 4 adds `active_
       "message": "نصاب درایور با موفقیت اجرا و نصب شد.",
       "failure_reason": null,
       "exit_code": 0,
-      "retry_count": 0
+      "retry_count": 0,
+      "elapsed_seconds": 18.2
     },
     {
       "package_id": "drv_pkg_a1b2c3d4",
-      "display_name": "Realtek Audio Driver",
+      "display_name": "Realtek High Definition Audio Driver",
       "category": "audio",
       "category_fa": "کارت صدا و مالتی‌مدیا",
       "installer_file": "setup.exe",
@@ -431,11 +137,12 @@ Both endpoints serve identical JSON structures. Contract Version 4 adds `active_
       "message": "در حال نصب...",
       "failure_reason": null,
       "exit_code": null,
-      "retry_count": 0
+      "retry_count": 0,
+      "elapsed_seconds": 12.3
     },
     {
       "package_id": "drv_pkg_e5f60718",
-      "display_name": "Intel Wi-Fi Driver",
+      "display_name": "Intel Wi-Fi 6 AX201 Driver",
       "category": "wifi",
       "category_fa": "شبکه بی‌سیم (Wi-Fi)",
       "installer_file": "Setup.exe",
@@ -444,7 +151,8 @@ Both endpoints serve identical JSON structures. Contract Version 4 adds `active_
       "message": "در حال نصب...",
       "failure_reason": null,
       "exit_code": null,
-      "retry_count": 0
+      "retry_count": 0,
+      "elapsed_seconds": 8.6
     },
     {
       "package_id": "drv_pkg_2222",
@@ -457,55 +165,494 @@ Both endpoints serve identical JSON structures. Contract Version 4 adds `active_
       "message": "",
       "failure_reason": null,
       "exit_code": null,
-      "retry_count": 0
+      "retry_count": 0,
+      "elapsed_seconds": 0.0
     }
   ]
 }
 ```
 
-### 10.2 Field Validation Rules
+### 2.4 Software Batch Status Schema (`GET /api/packages/batch-status`)
 
-- `active_items`: Array of 0, 1, or 2 items currently executing.
-  - When queue is running in 1X mode: Contains at most 1 item (`worker_id: 1`).
-  - When queue is running in 2X mode: Contains up to 2 items (`worker_id: 1` and `worker_id: 2`).
-  - When queue is draining or waiting for barrier: Contains 0 or 1 item.
-- `current_package` / `current_file`:
-  - When 1 item is active: String matching `active_items[0].display_name`.
-  - When 2 items are active: Concatenated string: `"{Item 1} • {Item 2}"` for backward compatibility with older UI widgets.
-- `items`: All items in queue order. An item's status transitions:
-  `pending` → `installing` → (`completed` | `failed` | `skipped`).
+```json
+{
+  "api_contract_version": 5,
+  "state_revision": 19,
+  "server_time": 1729000155.450,
+  "is_running": true,
+  "cancelled": false,
+  "total": 5,
+  "completed": 2,
+  "failed": 0,
+  "skipped": 0,
+  "interrupted": 0,
+  "reboot_required": false,
+  "current_item_name": "Google Chrome",
+  "current_item_index": 2,
+  "progress_percent": 40.0,
+  "start_time": 1729000120.0,
+  "end_time": null,
+  "summary_message": "در حال نصب نرم‌افزار ۲ از ۵: Google Chrome",
+  "items": [
+    {
+      "id": "pkg_winrar_x64",
+      "name": "WinRAR 7.01",
+      "status": "completed",
+      "progress_percent": 100.0,
+      "is_barrier": false,
+      "stage": "done",
+      "error_message": null,
+      "exit_code": 0,
+      "retry_count": 0,
+      "elapsed_seconds": 4.1
+    },
+    {
+      "id": "pkg_vlc_media_player",
+      "name": "VLC Media Player 3.0.21",
+      "status": "completed",
+      "progress_percent": 100.0,
+      "is_barrier": false,
+      "stage": "done",
+      "error_message": null,
+      "exit_code": 0,
+      "retry_count": 0,
+      "elapsed_seconds": 11.5
+    },
+    {
+      "id": "pkg_chrome_standalone",
+      "name": "Google Chrome",
+      "status": "installing",
+      "progress_percent": 50.0,
+      "is_barrier": false,
+      "stage": "installing",
+      "error_message": null,
+      "exit_code": null,
+      "retry_count": 0,
+      "elapsed_seconds": 15.2
+    },
+    {
+      "id": "pkg_vcredist_bundle",
+      "name": "Visual C++ All-in-One",
+      "status": "pending",
+      "progress_percent": 0.0,
+      "is_barrier": true,
+      "stage": "waiting",
+      "error_message": null,
+      "exit_code": null,
+      "retry_count": 0,
+      "elapsed_seconds": 0.0
+    },
+    {
+      "id": "pkg_office_2024",
+      "name": "Microsoft Office 2024 Pro Plus",
+      "status": "pending",
+      "progress_percent": 0.0,
+      "is_barrier": true,
+      "stage": "waiting",
+      "error_message": null,
+      "exit_code": null,
+      "retry_count": 0,
+      "elapsed_seconds": 0.0
+    }
+  ]
+}
+```
+
+### 2.5 Item State Transition Machine
+
+All queue items (driver and software) adhere strictly to the forward state machine:
+
+```
+                  ┌──────────────┐
+                  │   pending    │
+                  └──────┬───────┘
+                         │
+                         ▼
+                  ┌──────────────┐
+       ┌─────────►│  installing  ├──────────┐
+       │          └──────┬───────┘          │
+       │                 │                  │
+(Error 1618 retry        │                  │
+ capped at 2)            ▼                  │ (Backend shutdown / crash)
+       │          ┌──────────────┐          │
+       └──────────┤ 1618 Retry   │          ▼
+                  └──────────────┘   ┌──────────────┐
+                         │           │ interrupted  │
+                         ▼           └──────────────┘
+            ┌────────────────────────────┐
+            │ Terminal States:           │
+            │  - completed               │
+            │  - failed                  │
+            │  - skipped                 │
+            └────────────────────────────┘
+```
+
+#### State Machine Invariants:
+1. **Forward Only**: Allowed transitions:
+   - `pending` → `installing`
+   - `installing` → `completed`
+   - `installing` → `failed`
+   - `installing` → `skipped`
+   - `installing` → `interrupted` (upon service restart)
+   - `pending` → `skipped` (user cancellation before execution)
+   - `pending` → `interrupted` (service shutdown before item execution)
+2. **Error 1618 Exception**: The backward transition `installing` → `pending` is permitted **exclusively** when an installer exits with error `1618` (`ERROR_INSTALL_ALREADY_RUNNING`), capped at maximum 2 retries. On rollback, `is_barrier` is forced to `true`.
+3. **Terminal Invariance**: Once an item reaches `completed`, `failed`, `skipped`, or `interrupted`, its status is immutable for that queue run. Any payload attempting to transition an item out of a terminal state must be rejected and logged as an error.
+
+### 2.6 Interrupted Status Model & Startup Reconciliation
+
+When the backend service restarts or crashes mid-installation:
+- Items marked `installing` or unexecuted `pending` items in a persisted active session must **never** resume execution automatically.
+- The startup recovery routine parses the persisted state file.
+- Every item with `status == "installing"` is transitioned to `status = "interrupted"` with message:
+  `"فرآیند نصب به دلیل بسته شدن یا راه‌اندازی مجدد سرویس متوقف شد."`
+- The queue's `is_running` flag is set to `false`.
+- The `interrupted` counter is populated.
+- `state_revision` is incremented.
 
 ---
 
-## 11. Frontend UI Specifications
+## 3. InstallStateService Model & Reactive Lifecycle Contract
 
-### 11.1 GPU Flashing Warning Banner
+### 3.1 Architecture Overview
 
-In `frontend/lib/widgets/pages/driver_install_page.dart` (and `driver_card.dart`):
-- **Display Condition**: Visible if and only if:
-  `batchStatus.isRunning && batchStatus.items.any((item) => item.status == 'installing' && item.category.toLowerCase() == 'gpu')`
-- **Exact Persian Text**:  
-  `«ممکن است صفحه چند ثانیه چشمک بزند؛ برنامه ادامه می‌دهد»`
-- **UI Presentation**:
-  - Container with amber background (`Colors.amber.shade900.withOpacity(0.2)`), amber border, and info/tv icon.
-  - Directionality: RTL layout for Persian message.
+A single permanent singleton service `InstallStateService` registered via `Get.put(InstallStateService(), permanent: true)` in `main.dart`:
+- Acts as the **sole source of truth** for all driver and software deployment states in Flutter.
+- Eliminates page-level polling timers (`_pollTimer`, `_batchPollTimer`, `_periodicSyncTimer`).
+- Manages an adaptive non-overlapping loop that queries backend status.
+- Discards out-of-order responses using monotonic `state_revision`.
+- Retains last valid state across transient network drops and displays a non-intrusive reconnection banner.
 
-### 11.2 Dual Active Items Display in 2X Mode
+### 3.2 State Service Observables & Properties
 
-- **Header Text in Queue Progress Panel**:
-  - Single active item: `"در حال نصب: {Item} ({done} از {total})"`
-  - Two active items: `"در حال نصب (۲ مورد همزمان): {Item 1} • {Item 2} ({done} از {total})"`
-- **Active Progress Slots**:
-  - Render two distinct progress chips/cards side by side when 2 items are installing.
-  - Each chip displays the worker tag (`خط ۱` and `خط ۲`), the package display name, elapsed seconds, and an animated spinner.
-- **Widget Key Invariant**:
-  - All cards, tiles, and chips must explicitly specify `ValueKey('driver-queue-${item.packageId}')` to avoid Flutter widget recycling or flickering during parallel state transitions.
+```dart
+class InstallStateService extends GetxService {
+  // Observables
+  final Rx<DriverBatchStatus> driverStatus = DriverBatchStatus.empty().obs;
+  final Rx<BatchInstallStatus> softwareStatus = BatchInstallStatus.empty().obs;
+  final RxBool isDriverRunning = false.obs;
+  final RxBool isSoftwareRunning = false.obs;
+  final RxBool isDisconnected = false.obs;
+  final RxString disconnectionMessage = ''.obs;
+
+  // Monotonic Revision Trackers
+  int _latestDriverRevision = 0;
+  int _latestSoftwareRevision = 0;
+
+  // Polling Management
+  bool _isPollingActive = false;
+  static const Duration _activeInterval = Duration(milliseconds: 600);
+  static const Duration _idleInterval = Duration(milliseconds: 4000);
+}
+```
+
+### 3.3 Out-of-Order Stale Response Guard
+
+Upon receiving an HTTP status response:
+```dart
+void applyDriverStatus(Map<String, dynamic> json) {
+  final int incomingRevision = json['state_revision'] ?? 0;
+  if (incomingRevision < _latestDriverRevision) {
+    logger.w('Dropped stale driver status frame: incoming $incomingRevision < latest $_latestDriverRevision');
+    return; // DISCARD STALE FRAME
+  }
+  _latestDriverRevision = incomingRevision;
+  isDisconnected.value = false;
+  // Apply state update reactively
+}
+```
+
+### 3.4 Adaptive Non-Overlapping Polling Loop
+
+- Operates as a single async loop awaiting the in-flight request before scheduling the next tick via `Future.delayed`.
+- **Active Interval**: 500ms – 800ms when `isDriverRunning.value || isSoftwareRunning.value`.
+- **Idle Interval**: 3000ms – 5000ms when all queues are idle.
+- If a network request times out or throws `SocketException`, `ClientException`, or 5xx:
+  - Do NOT reset `driverStatus` or `softwareStatus`.
+  - Set `isDisconnected.value = true`.
+  - Floating reconnection banner is displayed: `«اتصال به سرویس قطع شد؛ در حال تلاش مجدد»`.
+  - Polling continues attempting reconnection with idle backoff.
+  - Upon successful reconnection, `isDisconnected.value = false`, and state is smoothly reconciled.
+
+### 3.5 Granular Obx Rebuilding & Stable Keys
+
+- Screens and cards must avoid wrapping entire pages in monolithic `Obx`.
+- Only leaf state widgets (status badges, progress bars, time elapsed, log drawers) use targeted `Obx`.
+- Every card must specify an explicit stable key:
+  - Driver cards: `ValueKey('driver-queue-${item.packageId}')`
+  - Software cards: `ValueKey('software-item-${item.id}')`
 
 ---
 
-## 12. Application Batch Installer Compatibility
+## 4. Atomic State Persistence & Startup Reconciliation Contract
 
-The software batch installer (`backend/packages/batch_installer.py`) extends this exact same scheduler specification:
-1. `double_speed == true` enables up to 2 concurrent standalone EXE installations.
-2. MSI installers, packages invoking `msiexec`, and runtimes (DirectX, VC++) are designated strict barriers.
-3. Mutex inspection on `Global\_MSIExecute` and error 1618 retry policy apply identically to software packages.
+### 4.1 Persistence File Specifications
+
+State files are located in Windows application data directories:
+- **Driver Queue State**: `%LOCALAPPDATA%\MarkaziSystemChecker\driver_queue_state.json`
+- **Software Batch State**: `%LOCALAPPDATA%\MarkaziSystemChecker\software_queue_state.json`
+- Fallback paths: `%APPDATA%\MarkaziSystemChecker\` or `C:\ProgramData\MarkaziSystemChecker\`.
+
+### 4.2 Atomic Replacement Protocol
+
+To guarantee crash resilience and prevent file corruption during power cuts or GPU display resets:
+```python
+def persist_state_atomic(state_dict: dict, file_path: str) -> None:
+    temp_path = f"{file_path}.tmp"
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(state_dict, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp_path, file_path)
+```
+
+### 4.3 Startup Reconciliation Protocol
+
+Upon module initialization (`queue_manager.py` and `batch_installer.py`):
+1. Check if the persistence file exists.
+2. Read and parse JSON.
+3. If `is_running == true`:
+   - Reconcile any item with `status == "installing"` or `status == "pending"` to `status = "interrupted"`.
+   - Set `is_running = false`, `cancelled = true`.
+   - Set `summary_message = "فرآیند قبلی به دلیل بسته شدن ناگهانی سرویس متوقف شد."`.
+   - Increment `state_revision += 1`.
+   - Persist reconciled state atomically back to disk.
+4. If `is_running == false`:
+   - Keep completed/failed state available in memory for UI adoption upon launch.
+
+---
+
+## 5. Custom In-App Title Bar & Native Windows Runner Contract
+
+### 5.1 Package Evaluation & Selection: `window_manager`
+
+| Criteria | `bitsdojo_window` | `window_manager` (Ratified) |
+|---|---|---|
+| **pub.dev Status** | Discontinued / Unmaintained (>2 years) | Actively maintained, Flutter Favorite candidate |
+| **Flutter 3.x Support** | Broken build on modern Flutter Windows C++ engine | Full support for Flutter 3.12+ through 3.24+ |
+| **Native C++ Hooking** | Replaces Win32 `wWinMain` creation & message loop | Clean platform channel; leaves `flutter_window.cpp` intact |
+| **Display Recovery Watchdog**| Breaks custom watchdog and frame verification | **100% compatible**; watchdog timer remains unharmed |
+| **Windows 11 Snap Layouts** | Buggy / non-functional caption button hits | Native `WM_NCHITTEST` snap layout menu on Maximize hover |
+| **Fullscreen Mode** | Requires manual Win32 style bits stripping | Clean `setFullScreen(true/false)` API |
+
+### 5.2 Native Runner Invariants (Owned Exclusively by Native Agent)
+
+The following native capabilities in `frontend/windows/runner/` must remain strictly preserved:
+1. **Low-Power GPU Preference (`main.cpp`)**:
+   ```cpp
+   project.set_gpu_preference(flutter::GpuPreference::LowPowerPreference);
+   ```
+   Ensures Flutter renders on the integrated GPU (iGPU) on hybrid laptops, surviving dedicated GPU driver resets.
+2. **Display Recovery Watchdog (`flutter_window.cpp`)**:
+   - `StartDisplayRecoveryWatchdog()`, `ArmDisplayRecoveryWatchdog()`, `kDisplayRecoveryTimeoutMs = 8000`.
+   - If rendering hangs for > 8 seconds following a WDDM display reset, the watchdog relaunches the UI:
+     `MarkaziSystemChecker.exe --display-recovery-from=<old_pid>`.
+   - The replacement UI process adopts the active backend session without interrupting running installer queues.
+
+### 5.3 Custom Title Bar UI Invariants
+
+- Positioned at the very top of `DashboardScreen` / `Scaffold`.
+- Height: 36px – 40px.
+- RTL Alignment:
+  - **Right**: Application Logo and Persian Title (`سامانه بررسی و نصب مرکزی`).
+  - **Center**: Window dragging region (`DragToMoveArea` or `window_manager.startDragging()`).
+  - **Left**: Minimize (`_`), Maximize/Restore (`□`), and Close (`✕`) buttons.
+- Close button hover turns red (`#E81123`).
+- Double-clicking title bar toggles maximize / restore.
+- **Fullscreen Hiding Invariant**: When Monitor Test enters fullscreen, the Custom Title Bar must be completely hidden (`visibility: false` or unmounted).
+
+---
+
+## 6. Modernized Hardware Diagnostic Tests Contracts
+
+### 6.1 Monitor & Pixel Test
+- **True Game Fullscreen**: Calls `window_manager.setFullScreen(true)`, completely covering Windows Taskbar and Title Bar.
+- **Pure Static Solids**: Displays only pure solid colors:
+  - Black (`#000000`)
+  - White (`#FFFFFF`)
+  - Pure Red (`#FF0000`)
+  - Pure Green (`#00FF00`)
+  - Pure Blue (`#0000FF`)
+  - Optional secondary: Cyan (`#00FFFF`), Magenta (`#FF00FF`), Yellow (`#FFFF00`).
+- **Zero Artifacts**: Zero animations (`duration: Duration.zero`), zero gradients, zero shadows, zero text/overlays while in fullscreen test mode.
+- **Cursor Hidden**: `MouseRegion(cursor: SystemMouseCursors.none)`.
+- **Pre-Test Instructions**: Guidance shown exclusively on hub card before entering fullscreen.
+- **Navigation**:
+  - Next Color: `→` (`arrowRight`), `↑` (`arrowUp`), Space, Left Mouse Click.
+  - Previous Color: `←` (`arrowLeft`), `↓` (`arrowDown`), Right Mouse Click.
+  - Exit: `Esc` (`escape`).
+- **Restoration Invariant**: On Esc, calls `setFullScreen(false)`, restoring exact previous window bounds, state, and DPI scaling across multi-monitor setups.
+
+### 6.2 Keyboard Test
+- **Responsive Layout**: Wrapped in `LayoutBuilder` / `FittedBox` scaling dynamically to viewport width without horizontal overflow.
+- **Physical Keycode Detection**: Uses `event.physicalKey` (`PhysicalKeyboardKey`) to distinguish:
+  - `shiftLeft` vs `shiftRight`
+  - `controlLeft` vs `controlRight`
+  - `altLeft` vs `altRight`
+  - Dedicated Numpad keys (`numpad0`-`numpad9`, `numpadAdd`, `numpadEnter`, etc.)
+  - System keys: `metaLeft`, `contextMenu`, `printScreen`, `pause`, `scrollLock`.
+- **OS-Intercepted Keys Guidance**: Informative Persian note explaining keys captured by Windows (`Win`, `Ctrl+Alt+Del`, `Alt+Tab`).
+- **Hit Counters**: Real-time counter for each key, total keystroke counter, and a "پاک‌سازی / Reset" button.
+
+### 6.3 Audio & Headphones Test
+- **In-Memory Synthesized WAV**: Uses Python backend standard library (`math`, `struct`, `wave`, `io`, `winsound`) to generate:
+  - 440 Hz standard concert pitch sine tone.
+  - 1000 Hz (1 kHz) reference test tone.
+  - 40 Hz to 120 Hz bass frequency sweep.
+  - Pink noise (1/f filter approximation).
+- Standalone: Zero external audio files or copyright media.
+- Channel Routing: Buttons for `Left Only`, `Right Only`, and `Both Channels`.
+- Safe Default Volume: Default 20% (0.2), slider range 1% to 60%.
+- Windows mute warning badge and output device selector.
+
+### 6.4 Microphone Test
+- **Real-Time Level Meter**: Visual waveform / amplitude meter showing live mic input.
+- **Temporary Loopback Test**: Record button, Stop button, Play/Pause, Progress bar, and Re-record.
+- **Storage Hygiene**: Recorded WAV files saved strictly to `%TEMP%\markazi_mic_*.wav` and deleted immediately upon exiting the test or closing the app.
+- **Privacy Detection**: Detects Windows microphone privacy blocks and provides direct URI shortcut to `ms-settings:privacy-microphone`.
+
+### 6.5 Webcam Test
+- **In-App Live Video**: Direct live camera preview in Flutter using `camera_windows` (eliminating external `microsoft.windows.camera:` launch).
+- **Controls**: Device selector dropdown, mirror toggle, resolution picker, and temporary snapshot capture.
+- **Privacy Detection**: Handles camera permission blocks with direct link to `ms-settings:privacy-webcam`.
+
+### 6.6 Mouse Test
+- **Button Hold Detection**: Listens to pointer down/up events to reflect sustained hold for Left, Middle, Right, Side 1 (Back), Side 2 (Forward).
+- **Draggable Mouse Visual**: Canvas indicator tracking cursor position.
+- **Double-Click Detection**: Detects double-clicks (< 300ms interval) with visual counter.
+- **Scroll Tracking**: Directional scroll velocity and distance meter.
+- **Context Menu Suppression**: Blocks Win32 right-click context menu within test area.
+
+### 6.7 Complete Deletion of "Report & Health Card" Subtest
+- **Files Deleted**:
+  - `frontend/lib/widgets/hardware_tests/test_report_view.dart`
+  - `frontend/lib/models/hardware_test_result.dart`
+- **Controller & UI Cleanup**:
+  - `HardwareTestController`: Remove `activeSubTest == 'report'`, `testResults`, `recordResult()`, `clearResults()`, `getFormattedReport()`.
+  - `HardwareTestsPage`: Remove `case 'report': return const TestReportView()`.
+  - `app_sidebar.dart`: Remove `report` sub-item under Hardware Tests accordion.
+  - `test_hub_view.dart`: Remove `کارنامه و گزارش تست‌ها` card.
+  - All test views: Remove "ثبت سلامت در کارنامه" and "ثبت ایراد" buttons.
+- **QC Decoupling**: Keep top `گزارش QC` button (`qcCtrl.runFullCheck(context)` in `GlobalAppHeader`) and `qc_controller.dart` intact.
+
+---
+
+## 7. App Settings Navigation Fix Contract
+
+### 7.1 Root Cause & Invariant Fix
+- In `frontend/lib/controllers/theme_language_controller.dart`:
+  ```dart
+  // Previous bug:
+  void setNavIndex(int index) {
+    if (index >= 0 && index <= 6) { // BUG: Rejected SettingsPage (index 7)
+      activeNavIndex.value = index;
+    }
+  }
+  ```
+- **Contract Ratification**:
+  ```dart
+  void setNavIndex(int index) {
+    if (index >= 0 && index <= 7) {
+      activeNavIndex.value = index;
+    }
+  }
+  ```
+- `DashboardScreen` in `frontend/lib/main.dart` maps index 7 to `SettingsPage`.
+- Automated widget test must verify clicking "تنظیمات برنامه" in sidebar switches `activeNavIndex` to 7 and renders `SettingsPage`.
+
+---
+
+## 8. Software Scanner, Queue Ordering & Optimization Contract
+
+### 8.1 Scanner Safety & Synthetic Fixtures
+- Scans `H:\PROGRAM\` or configured custom directory.
+- Read-only: Zero executable binaries launched during scan.
+- Test environments without `H:\` mounted use synthetic directory trees (`tempfile.mkdtemp()`).
+
+### 8.2 Adjacent Folder vs Archive (.rar) Deduplication
+When scanning `H:\PROGRAM\`:
+- If an extracted folder `X\` and an adjacent archive `X.rar` (or `.zip`, `.7z`) exist in the same directory:
+  - The extracted folder `X\` is preferred.
+  - The archive `X.rar` is excluded from the scanned package list.
+  - Redundant decompression is completely avoided.
+
+### 8.3 Weight-Based Installation Queue Ordering
+
+Software packages in `backend/packages/batch_installer.py` must be sorted strictly by package weight and dependency tiers:
+
+| Tier | Priority Tier | Included Software Packages | Concurrency & Barrier Classification |
+|---|---|---|---|
+| **Tier 1** | **Lightweight Utilities** | WinRAR, Mozilla Firefox, VLC Media Player, KMPlayer, Free Download Manager (FDM) | Parallel-Safe (2X eligible if switched) |
+| **Tier 2** | **System Runtimes** | Visual C++ Redistributable All-in-One, .NET Framework, DirectX Runtimes | **Strict Barrier** (Serial, Worker 1) |
+| **Tier 3** | **Heavyweight Applications** | Google Chrome, Adobe Acrobat Reader, Large productivity tools | Parallel-Safe or Barrier depending on switches |
+| **Tier 4** | **Office Suite (Final Barrier)** | `Setup_Office 2024.cmd` | **Strict Barrier** (Serial, Worker 1, 600s watchdog) |
+
+> **Dependency Rule**: Tier 2 (System Runtimes) must **always** install prior to any dependent application in Tier 3 or 4.
+
+### 8.4 Microsoft Office Allowlist & Home Guard
+- **Strict Allowlist**: Exclusively queue `Setup_Office 2024.cmd`.
+- **Excluded**: `Activator.cmd`, `Uninstall.cmd`, and older setup scripts (`Setup_Office 2021.cmd`, etc.) are strictly excluded from automatic queueing.
+- **Windows Home Guard**: If running on Windows 10/11 Home, Office deployment is completely disabled; only desktop shortcuts are deployed.
+
+### 8.5 KMS v6 & Directory Exclusion
+- **KMS v6**: Managed strictly under activation rules (`activation_tools.py`), never as a software package.
+- **Windows Update Blocker (WUB)**: Excluded from automatic batch selection.
+- **Tutorial Directory Exclusion**: Any folder containing `"آموزش"` is ignored during scanning.
+
+### 8.6 Concurrency & Silent Switches
+- 2X concurrency applies exclusively to verified parallel-safe standalone EXEs with documented silent switches.
+- MSI packages, Office, runtimes, and unswitched installers execute as strict serial barriers on Worker 1.
+- Zero guessed switches: unswitched installers execute via GUI autopilot as barriers.
+
+---
+
+## 9. Driver Deployment Engine & Scheduler Specifications
+
+### 9.1 Priority Tiers (9 Tiers)
+1. **Chipset / Platform** (`chipset`): Intel/AMD Core Chipset & Platform (Strict Barrier, Serial).
+2. **Management Engine / System** (`system_mei`): MEI / Serial IO / DPTF (Strict Barrier, Serial).
+3. **Storage Controller** (`storage`): RST / NVMe / SATA RAID (Strict Barrier, Serial).
+4. **Integrated GPU (iGPU)** (`gpu`): Intel UHD/Iris or AMD APU graphics (Strict Barrier, Serial + Settle Delay).
+5. **Discrete GPU (dGPU)** (`gpu`): NVIDIA GeForce/RTX, AMD Radeon, Intel Arc (Strict Barrier, Serial + Settle Delay).
+   - Topological Order: iGPU always installs before dGPU. Vendor order: AMD → Intel → NVIDIA.
+   - Adrenalin Deduplication: Unified APU+dGPU installer runs once and maps completion to both.
+   - Display Settle Delay: 5 to 8 seconds delay after GPU install before starting next package.
+6. **Parallel-Safe Devices** (2X Concurrent):
+   - Wired LAN (`lan`), Wi-Fi (`wifi`), Bluetooth (`bluetooth`), Audio (`audio`), Touchpad (`touchpad`), Card Reader (`card_reader`), Camera (`camera`), USB (`usb`).
+7. **Utility & Hotkeys** (`other`): Parallel-Safe if switched, Barrier if unswitched.
+
+### 9.2 Pre-Barrier Drain & Lookahead Brake
+- **Pre-Barrier Drain**: Worker 1 waits for Worker 2 to drain before launching a Barrier.
+- **Lookahead Barrier Brake**: When Worker 2 finishes an item, it inspects the next pending item; if the next item is a Barrier, Worker 2 yields immediately.
+
+### 9.3 Windows Installer Mutex & Error 1618 Retry Policy
+- Mutex check: `Global\_MSIExecute`.
+- Error 1618: Bounded retry capped at 2 retries (3 total attempts). Backoff (3s, 7s), wait for mutex idle, forced serial fallback (`is_barrier = True`). Never recorded as immediate failure.
+
+### 9.4 Process Tree Termination
+- Watchdog timeout (300s default, 420s chipset, 600s GPU) killed cleanly via `taskkill.exe /F /T /PID`.
+
+---
+
+## 10. General UI/UX Polish & Technician Experience Contract
+
+### 10.1 Rich Queue Cards
+- Brand icon from `brand_icons.py` / assets.
+- Live status chip (`در انتظار`, `در حال نصب`, `نصب شد`, `خطا`, `رد شد`, `متوقف شد`).
+- Active elapsed timer (`XXs`).
+- Expandable execution log drawer displaying stdout/stderr.
+- Per-item retry button for failed items.
+
+### 10.2 Fixed Bottom Cumulative Progress Bar
+- Fixed bottom container on installation pages:
+  - Overall percentage (`progress_percent`).
+  - Item count (`تکمیل شده: X از Y`).
+  - Elapsed time.
+  - Concurrency mode indicator (`1X متوالی` / `2X موازی`).
+
+### 10.3 Pre-Run Queue Preview Sheet
+- Modal sheet showing the exact sequence of packages sorted by weight/priority before technician clicks "شروع نصب".
+- Filter and search bar.
+- Visual barrier indicators (Serial Barrier vs 2X Parallel).
+- Touch target minimum: 44px. RTL layout with LTR numbers/paths.

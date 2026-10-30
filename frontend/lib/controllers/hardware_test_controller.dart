@@ -1,24 +1,17 @@
 // frontend/lib/controllers/hardware_test_controller.dart
 import 'dart:async';
+import 'dart:ui';
 import 'package:get/get.dart';
-import '../models/hardware_test_result.dart';
 import '../services/api_service.dart';
 
 class HardwareTestController extends GetxController {
   final ApiService _api = ApiService();
 
-  // Active view: 'hub', 'monitor', 'audio', 'mic', 'webcam', 'keyboard', 'mouse', 'report'
+  // Active view: 'hub', 'monitor', 'audio', 'mic', 'webcam', 'keyboard', 'mouse'
   final activeSubTest = 'hub'.obs;
 
   // Sidebar accordion expansion state
   final isAccordionExpanded = false.obs;
-
-  // Test Results Log
-  final testResults = <HardwareTestResult>[].obs;
-
-  int get totalTestsCount => testResults.length;
-  int get passedTestsCount => testResults.where((r) => r.isPassed).length;
-  int get failedTestsCount => testResults.where((r) => r.isFailed).length;
 
   void toggleAccordion() {
     isAccordionExpanded.value = !isAccordionExpanded.value;
@@ -31,45 +24,6 @@ class HardwareTestController extends GetxController {
     } else if (testId == 'webcam') {
       fetchCameraDevices();
     }
-  }
-
-  void recordResult({
-    required String testName,
-    required String status,
-    required String details,
-  }) {
-    final result = HardwareTestResult(
-      testName: testName,
-      status: status,
-      details: details,
-      timestamp: DateTime.now(),
-    );
-    testResults.insert(0, result);
-  }
-
-  void clearResults() {
-    testResults.clear();
-  }
-
-  String getFormattedReport() {
-    final now = DateTime.now();
-    final dateStr = '${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    final buf = StringBuffer();
-    buf.writeln('مرکزی سیستم چکر — گزارش جامع آزمون سلامت قطعات و لوازم جانبی');
-    buf.writeln('زمان ثبت گزارش: $dateStr');
-    buf.writeln('خلاصه عملکرد: کل تست‌ها: $totalTestsCount | موفق: $passedTestsCount | نیازمند بررسی: $failedTestsCount');
-    buf.writeln('------------------------------------------------------------');
-    if (testResults.isEmpty) {
-      buf.writeln('هنوز تستی در این نشست ثبت نشده است.');
-    } else {
-      for (int i = 0; i < testResults.length; i++) {
-        final r = testResults[i];
-        buf.writeln('${i + 1}. [${r.localizedStatus}] ${r.testName} — ${r.details}');
-      }
-    }
-    buf.writeln('------------------------------------------------------------');
-    buf.writeln('تأییدیه فنی کامپیوتر مرکزی');
-    return buf.toString();
   }
 
   // =============================================================
@@ -217,12 +171,16 @@ class HardwareTestController extends GetxController {
   // =============================================================
   final testedKeys = <String>{}.obs;
   final activeKeys = <String>{}.obs;
+  final keyHits = <String, int>{}.obs;
+  final totalKeyHits = 0.obs;
   final lastKeyLabel = 'آماده دریافت کلید'.obs;
   final lastKeyCode = '-'.obs;
 
   void onKeyDown(String code, String label) {
     activeKeys.add(code);
     testedKeys.add(code);
+    keyHits[code] = (keyHits[code] ?? 0) + 1;
+    totalKeyHits.value++;
     lastKeyLabel.value = label.isNotEmpty ? label : code;
     lastKeyCode.value = code;
   }
@@ -234,6 +192,8 @@ class HardwareTestController extends GetxController {
   void resetKeyboard() {
     testedKeys.clear();
     activeKeys.clear();
+    keyHits.clear();
+    totalKeyHits.value = 0;
     lastKeyLabel.value = 'آماده دریافت کلید';
     lastKeyCode.value = '-';
   }
@@ -244,29 +204,96 @@ class HardwareTestController extends GetxController {
   final mouseLeftClicks = 0.obs;
   final mouseRightClicks = 0.obs;
   final mouseMiddleClicks = 0.obs;
+  final mouseSide1Clicks = 0.obs;
+  final mouseSide2Clicks = 0.obs;
+  final mouseDoubleClicks = 0.obs;
   final mouseWheelUp = 0.obs;
   final mouseWheelDown = 0.obs;
+  final mouseMoveCount = 0.obs;
+  final heldMouseButtons = <int>{}.obs;
+  final mousePosition = const Offset(0, 0).obs;
+  final isMouseDragging = false.obs;
   final lastMouseAction = 'آماده آزمون کلیک و اسکرول'.obs;
-  final mouseActiveButton = ''.obs; // 'left', 'right', 'middle'
+  final mouseActiveButton = ''.obs; // 'left', 'right', 'middle', 'side1', 'side2'
   final mouseScrollPercent = 0.0.obs;
+
+  DateTime? _lastClickTime;
+  int? _lastClickButton;
   Timer? _mouseResetTimer;
 
-  void onMouseButton(String button) {
-    if (button == 'left') {
-      mouseLeftClicks.value++;
-      lastMouseAction.value = 'کلیک چپ فشرده شد';
-    } else if (button == 'right') {
-      mouseRightClicks.value++;
-      lastMouseAction.value = 'کلیک راست فشرده شد';
-    } else if (button == 'middle') {
-      mouseMiddleClicks.value++;
-      lastMouseAction.value = 'کلیک وسط (چرخ) فشرده شد';
+  void onPointerDown(int buttons, Offset position) {
+    mousePosition.value = position;
+    for (final bit in [1, 2, 4, 8, 16]) {
+      if ((buttons & bit) != 0) {
+        heldMouseButtons.add(bit);
+        _handleSingleButtonPress(bit);
+      }
     }
-    mouseActiveButton.value = button;
+  }
+
+  void onPointerUp(int remainingButtons) {
+    heldMouseButtons.removeWhere((bit) => (remainingButtons & bit) == 0);
+    if (heldMouseButtons.isEmpty) {
+      isMouseDragging.value = false;
+    }
+  }
+
+  void onPointerMove(Offset position, {bool hasButtons = false}) {
+    mousePosition.value = position;
+    mouseMoveCount.value++;
+    if (hasButtons && heldMouseButtons.isNotEmpty) {
+      isMouseDragging.value = true;
+      lastMouseAction.value = 'در حال درگ موس (Drag)';
+    }
+  }
+
+  void _handleSingleButtonPress(int bit) {
+    final now = DateTime.now();
+    if (_lastClickButton == bit &&
+        _lastClickTime != null &&
+        now.difference(_lastClickTime!) < const Duration(milliseconds: 300)) {
+      mouseDoubleClicks.value++;
+      lastMouseAction.value = 'دوبار کلیک سریع (< 300ms)';
+    } else {
+      if (bit == 1) {
+        mouseLeftClicks.value++;
+        lastMouseAction.value = 'کلیک چپ (Left)';
+        mouseActiveButton.value = 'left';
+      } else if (bit == 2) {
+        mouseRightClicks.value++;
+        lastMouseAction.value = 'کلیک راست (Right)';
+        mouseActiveButton.value = 'right';
+      } else if (bit == 4) {
+        mouseMiddleClicks.value++;
+        lastMouseAction.value = 'کلیک چرخ وسط (Middle)';
+        mouseActiveButton.value = 'middle';
+      } else if (bit == 8) {
+        mouseSide1Clicks.value++;
+        lastMouseAction.value = 'کلیک دکمه جانبی ۱ (Back)';
+        mouseActiveButton.value = 'side1';
+      } else if (bit == 16) {
+        mouseSide2Clicks.value++;
+        lastMouseAction.value = 'کلیک دکمه جانبی ۲ (Forward)';
+        mouseActiveButton.value = 'side2';
+      }
+    }
+    _lastClickTime = now;
+    _lastClickButton = bit;
+
     _mouseResetTimer?.cancel();
     _mouseResetTimer = Timer(const Duration(milliseconds: 300), () {
       mouseActiveButton.value = '';
     });
+  }
+
+  void onMouseButton(String button) {
+    if (button == 'left') {
+      _handleSingleButtonPress(1);
+    } else if (button == 'right') {
+      _handleSingleButtonPress(2);
+    } else if (button == 'middle') {
+      _handleSingleButtonPress(4);
+    }
   }
 
   void onMouseScroll(double deltaY) {
@@ -293,11 +320,19 @@ class HardwareTestController extends GetxController {
     mouseLeftClicks.value = 0;
     mouseRightClicks.value = 0;
     mouseMiddleClicks.value = 0;
+    mouseSide1Clicks.value = 0;
+    mouseSide2Clicks.value = 0;
+    mouseDoubleClicks.value = 0;
     mouseWheelUp.value = 0;
     mouseWheelDown.value = 0;
+    mouseMoveCount.value = 0;
+    heldMouseButtons.clear();
+    isMouseDragging.value = false;
     lastMouseAction.value = 'آماده آزمون کلیک و اسکرول';
     mouseActiveButton.value = '';
     mouseScrollPercent.value = 0.0;
+    _lastClickTime = null;
+    _lastClickButton = null;
   }
 
   @override
