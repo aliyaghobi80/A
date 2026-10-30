@@ -28,7 +28,9 @@ class _WebcamTestViewState extends State<WebcamTestView> {
 
   void _openPrivacySettings() {
     try {
-      Process.run('cmd', ['/c', 'start', 'ms-settings:privacy-webcam']);
+      if (Platform.isWindows) {
+        Process.run('cmd', ['/c', 'start', 'ms-settings:privacy-webcam']);
+      }
     } catch (_) {}
   }
 
@@ -59,203 +61,227 @@ class _WebcamTestViewState extends State<WebcamTestView> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final ctrl = Get.find<HardwareTestController>();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Top Navigation Breadcrumb
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: () => ctrl.selectSubTest('hub'),
-                icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                label: const Text('بازگشت به لیست تست‌ها'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Text(
-                'تست وب‌کم، فوکوس و تصویر زنده',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: () => ctrl.fetchCameraDevices(),
-                icon: const Icon(Icons.refresh_rounded),
-                tooltip: 'بازخوانی دستگاه‌های دوربین',
-              ),
-            ],
-          ),
+          // 1. Consolidated Compact Top Header Bar (Height 44px)
+          _buildCompactHeader(context, ctrl, isDark),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
 
-          // In-App Live Video Viewport Container
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                width: 1.2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Top Viewport Header Controls
-                Row(
+          // 2. Main Viewport Area (Side-by-Side Split without Vertical Scroll)
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 750;
+                if (!isWide) {
+                  return _buildVideoContainer(ctrl, isDark);
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.videocam_rounded, color: Color(0xFFF59E0B), size: 22),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'پیش‌نمایش زنده وب‌کم (In-App Viewport)',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    // Primary Video Viewport (Expanded flex 7)
+                    Expanded(
+                      flex: 7,
+                      child: _buildVideoContainer(ctrl, isDark),
                     ),
-                    const Spacer(),
-                    // Device Selector Dropdown
-                    Obx(() {
-                      final devices = ctrl.cameraDevices;
-                      final items = <String>['وب‌کم پیش‌فرض سیستم'];
-                      for (final d in devices) {
-                        final name = d['name'] ?? '';
-                        if (name.isNotEmpty && !items.contains(name)) {
-                          items.add(name);
-                        }
-                      }
-                      final currentVal = (_selectedDevice != null && items.contains(_selectedDevice))
-                          ? _selectedDevice!
-                          : items.first;
 
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
-                          ),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: currentVal,
-                            isDense: true,
-                            dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-                            ),
-                            items: items.map((dev) => DropdownMenuItem(value: dev, child: Text(dev))).toList(),
-                            onChanged: (val) {
-                              if (val != null) setState(() => _selectedDevice = val);
-                            },
-                          ),
-                        ),
-                      );
-                    }),
-                    const SizedBox(width: 8),
-                    // Resolution Selector
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
-                        ),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedResolution,
-                          isDense: true,
-                          dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-                          ),
-                          items: _resolutions
-                              .map((res) => DropdownMenuItem(value: res, child: Text(res)))
-                              .toList(),
-                          onChanged: (val) {
-                            if (val != null) setState(() => _selectedResolution = val);
-                          },
-                        ),
-                      ),
+                    const SizedBox(width: 14),
+
+                    // Secondary Sidebar Panel (Detected Hardware & Checklist)
+                    SizedBox(
+                      width: 290,
+                      child: _buildSidePanel(ctrl, isDark),
                     ),
                   ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- UNIFIED COMPACT TOP HEADER (44px) ---
+  Widget _buildCompactHeader(BuildContext context, HardwareTestController ctrl, bool isDark) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Return Button
+          OutlinedButton.icon(
+            onPressed: () => ctrl.selectSubTest('hub'),
+            icon: const Icon(Icons.arrow_forward_rounded, size: 15),
+            label: const Text('بازگشت به لیست تست‌ها', style: TextStyle(fontSize: 11.5)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Icon(Icons.videocam_rounded, color: Color(0xFFF59E0B), size: 20),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'تست وب‌کم، فوکوس و تصویر زنده',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Compact Device Selector
+          Obx(() {
+            final devices = ctrl.cameraDevices;
+            final items = <String>['وب‌کم پیش‌فرض سیستم'];
+            for (final d in devices) {
+              final name = d['name'] ?? '';
+              if (name.isNotEmpty && !items.contains(name)) items.add(name);
+            }
+            final currentVal = (_selectedDevice != null && items.contains(_selectedDevice))
+                ? _selectedDevice!
+                : items.first;
+
+            return Container(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: currentVal,
+                  isDense: true,
+                  dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  style: TextStyle(fontSize: 11.5, color: isDark ? Colors.white : Colors.black87),
+                  items: items.map((dev) => DropdownMenuItem(value: dev, child: Text(dev))).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedDevice = val);
+                  },
                 ),
+              ),
+            );
+          }),
 
-                const SizedBox(height: 14),
+          const SizedBox(width: 8),
 
-                // Main Video Viewport Canvas
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Container(
-                      color: const Color(0xFF0F172A),
+          // Compact Resolution Selector
+          Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedResolution,
+                isDense: true,
+                dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                style: TextStyle(fontSize: 11.5, color: isDark ? Colors.white : Colors.black87),
+                items: _resolutions.map((res) => DropdownMenuItem(value: res, child: Text(res))).toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => _selectedResolution = val);
+                },
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Refresh Button
+          IconButton(
+            onPressed: () => ctrl.fetchCameraDevices(),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            tooltip: 'بازخوانی دستگاه‌های دوربین',
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- PRIMARY VIDEO CONTAINER ---
+  Widget _buildVideoContainer(HardwareTestController ctrl, bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1. Live Video Canvas (FittedBox contain inside Expanded, 0 overflow)
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+              child: Container(
+                color: const Color(0xFF0F172A),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox(
+                      width: 640,
+                      height: 360,
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          // Video Frame / Viewport background with grid
+                          // Viewfinder Canvas
                           Transform(
                             alignment: Alignment.center,
                             transform: Matrix4.rotationY(_isMirrored ? math.pi : 0),
-                            child: CustomPaint(
-                              painter: const _WebcamViewportPainter(isDark: true),
+                            child: const CustomPaint(
+                              painter: _WebcamViewportPainter(isDark: true),
                               child: Center(
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Container(
-                                      width: 80,
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: const Color(0xFF1E293B),
-                                        border: Border.all(color: const Color(0xFFF59E0B), width: 2),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: const Color(0xFFF59E0B).withValues(alpha: 0.25),
-                                            blurRadius: 16,
-                                          ),
-                                        ],
-                                      ),
-                                      child: const Icon(
-                                        Icons.camera_alt_rounded,
-                                        size: 40,
-                                        color: Color(0xFFF59E0B),
-                                      ),
+                                    CircleAvatar(
+                                      radius: 30,
+                                      backgroundColor: Color(0xFF1E293B),
+                                      child: Icon(Icons.camera_alt_rounded, size: 30, color: Color(0xFFF59E0B)),
                                     ),
-                                    const SizedBox(height: 12),
-                                    const Text(
+                                    SizedBox(height: 10),
+                                    Text(
                                       'پیش‌نمایش زنده وب‌کم فعال است',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
                                     ),
-                                    const SizedBox(height: 4),
+                                    SizedBox(height: 3),
                                     Text(
                                       'سنسور در حال تصویربرداری زنده و ارسال فریم',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.white.withValues(alpha: 0.65),
-                                      ),
+                                      style: TextStyle(fontSize: 11, color: Colors.white70),
                                     ),
                                   ],
                                 ),
@@ -263,107 +289,78 @@ class _WebcamTestViewState extends State<WebcamTestView> {
                             ),
                           ),
 
-                          // Top-Left Badges (LIVE + Resolution)
+                          // Badges: LIVE + Resolution
                           Positioned(
-                            top: 12,
-                            left: 12,
+                            top: 10,
+                            left: 10,
                             child: Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFEF4444),
-                                    borderRadius: BorderRadius.circular(6),
+                                    borderRadius: BorderRadius.circular(5),
                                   ),
                                   child: const Row(
                                     children: [
-                                      Icon(Icons.fiber_manual_record, size: 10, color: Colors.white),
+                                      Icon(Icons.fiber_manual_record, size: 8, color: Colors.white),
                                       SizedBox(width: 4),
-                                      Text(
-                                        'LIVE • 30 FPS',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
+                                      Text('LIVE • 30 FPS', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
                                     ],
                                   ),
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.6),
-                                    borderRadius: BorderRadius.circular(6),
+                                    color: Colors.black.withValues(alpha: 0.65),
+                                    borderRadius: BorderRadius.circular(5),
                                   ),
-                                  child: Text(
-                                    _selectedResolution,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                                  child: Text(_selectedResolution, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
                                 ),
                               ],
                             ),
                           ),
 
-                          // Top-Right Mirror Status Badge
+                          // Mirror Badge
                           Positioned(
-                            top: 12,
-                            right: 12,
+                            top: 10,
+                            right: 10,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                               decoration: BoxDecoration(
-                                color: _isMirrored
-                                    ? const Color(0xFF3B82F6)
-                                    : Colors.black.withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(6),
+                                color: _isMirrored ? const Color(0xFF3B82F6) : Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(5),
                               ),
                               child: Text(
                                 _isMirrored ? 'حالت آینه‌ای: فعال' : 'حالت آینه‌ای: خاموش',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
                               ),
                             ),
                           ),
 
-                          // Snapshot Floating Notification
+                          // Snapshot Toast
                           if (_hasSnapshot)
                             Positioned(
-                              bottom: 12,
-                              left: 12,
+                              bottom: 10,
+                              left: 10,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF10B981).withValues(alpha: 0.95),
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.3),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+                                    const Icon(Icons.check_circle_rounded, color: Colors.white, size: 14),
                                     const SizedBox(width: 6),
                                     Text(
-                                      'عکس موقت ثبت شد (${_snapshotTimestamp != null ? "${_snapshotTimestamp!.hour.toString().padLeft(2, '0')}:${_snapshotTimestamp!.minute.toString().padLeft(2, '0')}:${_snapshotTimestamp!.second.toString().padLeft(2, '0')}" : ""})',
-                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                                      'عکس ثبت شد (${_snapshotTimestamp != null ? "${_snapshotTimestamp!.hour.toString().padLeft(2, '0')}:${_snapshotTimestamp!.minute.toString().padLeft(2, '0')}:${_snapshotTimestamp!.second.toString().padLeft(2, '0')}" : ""})',
+                                      style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w700),
                                     ),
-                                    const SizedBox(width: 8),
-                                    InkWell(
-                                      onTap: _clearSnapshot,
-                                      child: const Icon(Icons.close, color: Colors.white, size: 14),
-                                    ),
+                                    const SizedBox(width: 6),
+                                    InkWell(onTap: _clearSnapshot, child: const Icon(Icons.close, color: Colors.white, size: 13)),
                                   ],
                                 ),
                               ),
@@ -373,163 +370,166 @@ class _WebcamTestViewState extends State<WebcamTestView> {
                     ),
                   ),
                 ),
+              ),
+            ),
+          ),
 
-                const SizedBox(height: 14),
-
-                // Viewport Action Buttons Bar
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _takeSnapshot,
-                      icon: const Icon(Icons.camera_rounded, size: 18),
-                      label: const Text('ثبت فریم آزمایشی (Snapshot)'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF59E0B),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _isMirrored = !_isMirrored;
-                        });
-                      },
-                      icon: Icon(
-                        _isMirrored ? Icons.flip_rounded : Icons.flip_camera_android_rounded,
-                        size: 18,
-                      ),
-                      label: Text(_isMirrored ? 'غیرفعال کردن آینه' : 'فعال‌سازی آینه (Mirror)'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _openPrivacySettings,
-                      icon: const Icon(Icons.security_rounded, size: 18),
-                      label: const Text('دسترسی وب‌کم در ویندوز'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF3B82F6),
-                        side: const BorderSide(color: Color(0xFF3B82F6)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                    ),
-                  ],
+          // 2. Compact Bottom Action Toolbar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(13)),
+              border: Border(top: BorderSide(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0))),
+            ),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _takeSnapshot,
+                  icon: const Icon(Icons.camera_rounded, size: 16),
+                  label: const Text('ثبت فریم آزمایشی (Snapshot)', style: TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF59E0B),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _isMirrored = !_isMirrored),
+                  icon: Icon(_isMirrored ? Icons.flip_rounded : Icons.flip_camera_android_rounded, size: 16),
+                  label: Text(_isMirrored ? 'غیرفعال کردن آینه' : 'فعال‌سازی آینه (Mirror)', style: const TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9)),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _openPrivacySettings,
+                  icon: const Icon(Icons.security_rounded, size: 16),
+                  label: const Text('دسترسی وب‌کم در ویندوز', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF3B82F6),
+                    side: const BorderSide(color: Color(0xFF3B82F6)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  ),
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
 
-          const SizedBox(height: 16),
-
-          // Camera Checklist & Detected Devices
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Detected Hardware List
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.camera_alt_outlined, size: 18, color: Color(0xFFF59E0B)),
-                          SizedBox(width: 8),
-                          Text(
-                            'دوربین‌های شناسایی‌شده در سیستم:',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                          ),
-                        ],
+  // --- SECONDARY SIDE PANEL (Detected Devices + Checklist) ---
+  Widget _buildSidePanel(HardwareTestController ctrl, bool isDark) {
+    return Column(
+      children: [
+        // Card 1: Detected Devices
+        Expanded(
+          flex: 4,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.camera_alt_outlined, size: 16, color: Color(0xFFF59E0B)),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'دوربین‌های شناسایی‌شده:',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 12),
-                      Obx(() {
-                        final list = ctrl.cameraDevices;
-                        if (list.isEmpty) {
-                          return const Text(
-                            'دوربین مجزا ثبت نشده است یا از وب‌کم استاندارد استفاده می‌شود.',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          );
-                        }
-                        return Column(
-                          children: list.map((cam) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.circle, size: 8, color: Color(0xFFF59E0B)),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      cam['name'] ?? 'Camera',
-                                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      cam['status'] ?? 'OK',
-                                      style: const TextStyle(
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFFF59E0B),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        );
-                      }),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ),
-
-              const SizedBox(width: 14),
-
-              // Checklist
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.checklist_rounded, size: 18, color: Color(0xFFF59E0B)),
-                          SizedBox(width: 8),
-                          Text(
-                            'چک‌لیست بررسی فنی دوربین:',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Obx(() {
+                    final list = ctrl.cameraDevices;
+                    if (list.isEmpty) {
+                      return const Center(
+                        child: Text('دوربین مجزا ثبت نشده است.', style: TextStyle(fontSize: 11.5, color: Colors.grey)),
+                      );
+                    }
+                    return ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: list.length,
+                      itemBuilder: (context, idx) {
+                        final cam = list[idx];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.circle, size: 7, color: Color(0xFFF59E0B)),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(cam['name'] ?? 'Camera', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(cam['status'] ?? 'OK', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFFF59E0B))),
+                              ),
+                            ],
                           ),
-                        ],
+                        );
+                      },
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        // Card 2: Technical Checklist
+        Expanded(
+          flex: 6,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.checklist_rounded, size: 16, color: Color(0xFFF59E0B)),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'چک‌لیست بررسی فنی دوربین:',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 10),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
                       _buildCheckItem('۱. شاتر فیزیکی یا پوشش حریم خصوصی وب‌کم باز است.', isDark),
                       _buildCheckItem('۲. تصویر بدون خطوط پارازیت و پرش (Flicker) است.', isDark),
                       _buildCheckItem('۳. فوکوس روی اشیای نزدیک و دور به‌درستی تنظیم می‌شود.', isDark),
@@ -537,11 +537,11 @@ class _WebcamTestViewState extends State<WebcamTestView> {
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

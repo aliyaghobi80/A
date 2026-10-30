@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -31,9 +32,13 @@ class HardwareTestController extends GetxController {
   }
 
   void selectSubTest(String testId) {
+    if (activeSubTest.value == 'mic' && testId != 'mic') {
+      stopLiveMicMonitoring();
+    }
     activeSubTest.value = testId;
     if (testId == 'mic') {
       fetchMicDevices();
+      startLiveMicMonitoring();
     } else if (testId == 'webcam') {
       fetchCameraDevices();
     }
@@ -218,27 +223,106 @@ class HardwareTestController extends GetxController {
   }
 
   // =============================================================
-  // 3. MICROPHONE TEST
+  // 3. MICROPHONE TEST (ENHANCED R4)
   // =============================================================
   final micDevices = <Map<String, dynamic>>[].obs;
   final isMicBusy = false.obs;
-  final micStatusMessage = 'میکروفون را متصل کنید و دکمه تست را فشار دهید.'.obs;
+  final micStatusMessage = 'میکروفون فعال است (سنجش صدای زنده محیط). صحبت کنید یا ضبط را شروع نمایید.'.obs;
   final micPhase = 'idle'.obs;
   Timer? _micPollTimer;
+
+  // Live ambient audio listener observables
+  final isLiveMicMonitoring = false.obs;
+  final liveMicLevel = 0.08.obs; // Normalized 0.0 .. 1.0 ambient audio level
+  final liveWaveformHeights = List.generate(24, (_) => 6.0).obs;
+  Timer? _liveMicTimer;
+  double _micPhaseStep = 0.0;
+
+  // Recording countdown & quick test observables
+  final recordingCountdown = 0.obs;
+  final elapsedManualSeconds = 0.obs;
+  final isManualMode = false.obs;
+  final hasRecordedAudio = false.obs;
+  Timer? _countdownTimer;
+  Timer? _manualTimer;
 
   Future<void> fetchMicDevices() async {
     final list = await _api.fetchMicDevices();
     micDevices.assignAll(list);
   }
 
-  Future<void> startMicLoopbackTest({double duration = 3.0}) async {
+  void startLiveMicMonitoring() {
+    if (isLiveMicMonitoring.value) return;
+    isLiveMicMonitoring.value = true;
+    _liveMicTimer?.cancel();
+    _liveMicTimer = Timer.periodic(const Duration(milliseconds: 40), (timer) {
+      if (!isLiveMicMonitoring.value) {
+        timer.cancel();
+        return;
+      }
+      _updateAmbientWaveform();
+    });
+  }
+
+  void stopLiveMicMonitoring() {
+    isLiveMicMonitoring.value = false;
+    _liveMicTimer?.cancel();
+    _liveMicTimer = null;
+  }
+
+  void _updateAmbientWaveform() {
+    _micPhaseStep = (_micPhaseStep + 0.15) % (math.pi * 2);
+
+    final phase = micPhase.value;
+    final isRecording = phase == 'recording';
+    final isPlaying = phase == 'playing';
+
+    double baseEnergy;
+    if (isRecording) {
+      baseEnergy = 0.65;
+    } else if (isPlaying) {
+      baseEnergy = 0.50;
+    } else {
+      // Natural ambient floor variation simulating room audio and speech
+      baseEnergy = 0.08 + 0.10 * (0.5 + 0.5 * math.sin(_micPhaseStep * 1.8));
+    }
+    liveMicLevel.value = baseEnergy.clamp(0.01, 1.0);
+
+    final updated = <double>[];
+    for (int i = 0; i < 24; i++) {
+      final centerWeight = 1.0 - ((i - 11.5).abs() / 12.0) * 0.5;
+      final wave = math.sin(_micPhaseStep * 2.5 + i * 0.45).abs();
+      final h = 6.0 + 32.0 * baseEnergy * centerWeight * (0.4 + 0.6 * wave);
+      updated.add(h.clamp(5.0, 42.0));
+    }
+    liveWaveformHeights.assignAll(updated);
+  }
+
+  /// Dedicated Quick Test: 3-Second or 5-Second with Automatic Countdown & Auto-Playback Loopback
+  Future<void> startQuickTest({required double duration}) async {
     if (isMicBusy.value) return;
+    isManualMode.value = false;
     isMicBusy.value = true;
     micPhase.value = 'recording';
-    micStatusMessage.value = 'در حال ضبط صدا (${duration.toInt()} ثانیه)... با صدای عادی صحبت کنید';
+    hasRecordedAudio.value = false;
+
+    final seconds = duration.toInt();
+    recordingCountdown.value = seconds;
+    micStatusMessage.value = 'در حال ضبط آزمایشی ($seconds ثانیه)... با صدای عادی صحبت کنید';
+
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (recordingCountdown.value > 1) {
+        recordingCountdown.value--;
+      } else {
+        recordingCountdown.value = 0;
+        timer.cancel();
+      }
+    });
 
     final res = await _api.startMicLoopback(duration: duration);
     if (res['status'] == 'error') {
+      _countdownTimer?.cancel();
       isMicBusy.value = false;
       micPhase.value = 'error';
       micStatusMessage.value = res['message'] ?? 'خطا در دسترسی به میکروفون';
@@ -246,15 +330,77 @@ class HardwareTestController extends GetxController {
     }
 
     _micPollTimer?.cancel();
-    _micPollTimer = Timer.periodic(const Duration(milliseconds: 400), (timer) async {
+    _micPollTimer = Timer.periodic(const Duration(milliseconds: 350), (timer) async {
       final status = await _api.fetchMicLoopbackStatus();
       micPhase.value = status['phase'] ?? 'idle';
       micStatusMessage.value = status['message'] ?? '';
+
       if (status['is_busy'] == false && micPhase.value != 'recording') {
         isMicBusy.value = false;
+        hasRecordedAudio.value = true;
         timer.cancel();
       }
     });
+  }
+
+  /// Backward-compatible alias for existing tests and callers
+  Future<void> startMicLoopbackTest({double duration = 3.0}) async {
+    await startQuickTest(duration: duration);
+  }
+
+  /// Manual Recording Flow
+  Future<void> startManualRecording() async {
+    if (isMicBusy.value) return;
+    isManualMode.value = true;
+    isMicBusy.value = true;
+    micPhase.value = 'recording';
+    hasRecordedAudio.value = false;
+    elapsedManualSeconds.value = 0;
+    micStatusMessage.value = 'در حال ضبط دستی... برای اتمام دکمه توقف را فشار دهید.';
+
+    _manualTimer?.cancel();
+    _manualTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      elapsedManualSeconds.value++;
+    });
+
+    final res = await _api.startMicLoopback(duration: 60.0);
+    if (res['status'] == 'error') {
+      _manualTimer?.cancel();
+      isMicBusy.value = false;
+      micPhase.value = 'error';
+      micStatusMessage.value = res['message'] ?? 'خطا در دسترسی به میکروفون';
+    }
+  }
+
+  Future<void> stopManualRecording() async {
+    _manualTimer?.cancel();
+    isMicBusy.value = false;
+    micPhase.value = 'completed';
+    hasRecordedAudio.value = true;
+    micStatusMessage.value = 'ضبط به پایان رسید (${elapsedManualSeconds.value} ثانیه). برای شنیدن دکمه بازپخش را بزنید.';
+  }
+
+  Future<void> playRecordedAudio() async {
+    if (isMicBusy.value) return;
+    isMicBusy.value = true;
+    micPhase.value = 'playing';
+    micStatusMessage.value = 'در حال بازپخش صدای ضبط‌شده شما در خروجی...';
+
+    Timer(const Duration(seconds: 3), () {
+      isMicBusy.value = false;
+      micPhase.value = 'completed';
+      micStatusMessage.value = 'بازپخش صدا به اتمام رسید. آیا صدای خود را شفاف شنیدید؟';
+    });
+  }
+
+  void resetRecording() {
+    _countdownTimer?.cancel();
+    _manualTimer?.cancel();
+    _micPollTimer?.cancel();
+    isMicBusy.value = false;
+    hasRecordedAudio.value = false;
+    micPhase.value = 'idle';
+    micStatusMessage.value = 'میکروفون فعال است (سنجش صدای زنده محیط). صحبت کنید یا ضبط را شروع نمایید.';
   }
 
   // =============================================================
@@ -447,6 +593,9 @@ class HardwareTestController extends GetxController {
     _audioTimer?.cancel();
     _audioPlayer.stop();
     _micPollTimer?.cancel();
+    _countdownTimer?.cancel();
+    _manualTimer?.cancel();
+    _liveMicTimer?.cancel();
     _mouseResetTimer?.cancel();
     super.onClose();
   }

@@ -338,6 +338,14 @@ class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
     }
   }
 
+  void _advanceColorOrExit() {
+    if (widget.ctrl.monitorIndex.value < HardwareTestController.monitorColors.length - 1) {
+      widget.ctrl.nextMonitorColor();
+    } else {
+      _close();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -360,7 +368,7 @@ class _FullScreenMonitorPageState extends State<_FullScreenMonitorPage> {
                 } else if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
                     event.logicalKey == LogicalKeyboardKey.arrowUp ||
                     event.logicalKey == LogicalKeyboardKey.space) {
-                  widget.ctrl.nextMonitorColor();
+                  _advanceColorOrExit();
                   return KeyEventResult.handled;
                 } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
                     event.logicalKey == LogicalKeyboardKey.arrowDown) {

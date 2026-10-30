@@ -225,6 +225,90 @@ void main() {
           .setMockMethodCallHandler(const MethodChannel('markazi/window'), null);
     });
 
+    testWidgets('Advancing past final monitor color exits fullscreen mode (R2)', (tester) async {
+      final List<Map<String, dynamic>> channelCalls = [];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(const MethodChannel('markazi/window'), (call) async {
+        channelCalls.add({'method': call.method, 'arguments': call.arguments});
+        return null;
+      });
+
+      final ctrl = Get.put(HardwareTestController());
+      ctrl.setMonitorColor(HardwareTestController.monitorColors.length - 1); // Set to last color (Grey 50%)
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: MonitorTestView(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Enter fullscreen
+      final btnFinder = find.text('شروع تست تمام‌صفحه');
+      await tester.scrollUntilVisible(btnFinder, 100);
+      await tester.tap(btnFinder);
+      await tester.pumpAndSettle();
+
+      expect(ctrl.isMonitorFullScreen.value, isTrue);
+      expect(ctrl.monitorIndex.value, HardwareTestController.monitorColors.length - 1);
+
+      // Press ArrowRight at final color
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+
+      // Fullscreen exited cleanly
+      expect(ctrl.isMonitorFullScreen.value, isFalse);
+      expect(channelCalls.any((c) => c['method'] == 'setFullScreen' && c['arguments'] == false), isTrue);
+      expect(find.byKey(const ValueKey('monitor-fullscreen-color-canvas')), findsNothing);
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(const MethodChannel('markazi/window'), null);
+    });
+
+    testWidgets('Mouse click advances monitor colors in fullscreen mode (R2)', (tester) async {
+      final List<Map<String, dynamic>> channelCalls = [];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(const MethodChannel('markazi/window'), (call) async {
+        channelCalls.add({'method': call.method, 'arguments': call.arguments});
+        return null;
+      });
+
+      final ctrl = Get.put(HardwareTestController());
+      ctrl.setMonitorColor(0);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: MonitorTestView(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Enter fullscreen
+      final btnFinder = find.text('شروع تست تمام‌صفحه');
+      await tester.scrollUntilVisible(btnFinder, 100);
+      await tester.tap(btnFinder);
+      await tester.pumpAndSettle();
+
+      expect(ctrl.isMonitorFullScreen.value, isTrue);
+      expect(ctrl.monitorIndex.value, 0);
+
+      // Tap screen to advance color
+      await tester.tap(find.byKey(const ValueKey('monitor-fullscreen-color-canvas')));
+      await tester.pump();
+      expect(ctrl.monitorIndex.value, 1);
+
+      // Exit
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(const MethodChannel('markazi/window'), null);
+    });
+
     testWidgets('AppFrame observes HardwareTestController.isMonitorFullScreen reactively', (tester) async {
       final ctrl = Get.put(HardwareTestController());
 

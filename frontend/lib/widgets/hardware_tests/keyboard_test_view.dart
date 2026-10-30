@@ -169,7 +169,7 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
               Positioned.fill(
                 bottom: 48,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 52, 16, 12),
+                  padding: const EdgeInsets.fromLTRB(16, 40, 16, 12),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       return Center(
@@ -177,8 +177,8 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
                           fit: BoxFit.contain,
                           alignment: Alignment.center,
                           child: SizedBox(
-                            width: 936,
-                            height: 288,
+                            width: 1224,
+                            height: 384,
                             child: _buildKeyboardChassis(ctrl, isDark),
                           ),
                         ),
@@ -307,7 +307,7 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
   // --- KEYBOARD CHASSIS CONTAINER ---
   Widget _buildKeyboardChassis(HardwareTestController ctrl, bool isDark) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0F172A) : const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(16),
@@ -329,13 +329,13 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cluster 1: Main Typing Cluster (width: 592)
+            // Cluster 1: Main Typing Cluster (width: 780)
             _buildMainCluster(ctrl, isDark),
-            _gap(16),
-            // Cluster 2: Navigation Cluster (width: 116)
+            _gap(18),
+            // Cluster 2: Navigation Cluster (width: 156)
             _buildNavCluster(ctrl, isDark),
-            _gap(16),
-            // Cluster 3: Numpad Cluster (width: 156)
+            _gap(18),
+            // Cluster 3: Numpad Cluster (width: 208)
             _buildNumpadCluster(ctrl, isDark),
           ],
         ),
@@ -343,191 +343,191 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
     );
   }
 
-  // --- CLUSTER 1: MAIN TYPING CLUSTER (Width = 592px) ---
+  // --- CLUSTER 1: MAIN TYPING CLUSTER (Width = 780px) ---
   Widget _buildMainCluster(HardwareTestController ctrl, bool isDark) {
     return SizedBox(
-      width: 592,
+      width: 780,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Row 0: Function Row (Esc + F1..F4 + F5..F8 + F9..F12)
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'Escape', 'Esc', width: 36),
-              _gap(24),
-              _buildKey(ctrl, isDark, 'F1', 'F1', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'F2', 'F2', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'F3', 'F3', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'F4', 'F4', width: 36),
-              _gap(32),
-              _buildKey(ctrl, isDark, 'F5', 'F5', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'F6', 'F6', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'F7', 'F7', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'F8', 'F8', width: 36),
-              _gap(32),
-              _buildKey(ctrl, isDark, 'F9', 'F9', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'F10', 'F10', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'F11', 'F11', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'F12', 'F12', width: 36),
+              _buildKey(ctrl, isDark, 'Escape', 'Esc', width: 48),
+              _gap(31),
+              _buildKey(ctrl, isDark, 'F1', 'F1', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'F2', 'F2', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'F3', 'F3', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'F4', 'F4', width: 48),
+              _gap(40),
+              _buildKey(ctrl, isDark, 'F5', 'F5', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'F6', 'F6', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'F7', 'F7', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'F8', 'F8', width: 48),
+              _gap(39),
+              _buildKey(ctrl, isDark, 'F9', 'F9', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'F10', 'F10', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'F11', 'F11', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'F12', 'F12', width: 48),
             ],
           ),
-          _vGap(10),
+          _vGap(14),
 
           // Row 1: Number Row (~ 1..0 - = Backspace)
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'Backquote', '`', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Digit1', '1', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Digit2', '2', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Digit3', '3', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Digit4', '4', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Digit5', '5', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Digit6', '6', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Digit7', '7', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Digit8', '8', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Digit9', '9', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Digit0', '0', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Minus', '-', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Equal', '=', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Backspace', '⌫ Backspace', width: 72),
+              _buildKey(ctrl, isDark, 'Backquote', '`', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Digit1', '1', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Digit2', '2', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Digit3', '3', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Digit4', '4', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Digit5', '5', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Digit6', '6', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Digit7', '7', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Digit8', '8', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Digit9', '9', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Digit0', '0', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Minus', '-', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Equal', '=', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Backspace', '⌫ Backspace', width: 91),
             ],
           ),
-          _vGap(5),
+          _vGap(6),
 
           // Row 2: Tab QWERTY [ ] \
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'Tab', 'Tab', width: 58),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyQ', 'Q', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyW', 'W', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyE', 'E', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyR', 'R', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyT', 'T', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyY', 'Y', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyU', 'U', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyI', 'I', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyO', 'O', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyP', 'P', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'BracketLeft', '[', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'BracketRight', ']', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Backslash', '\\', width: 50),
+              _buildKey(ctrl, isDark, 'Tab', 'Tab', width: 76),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyQ', 'Q', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyW', 'W', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyE', 'E', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyR', 'R', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyT', 'T', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyY', 'Y', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyU', 'U', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyI', 'I', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyO', 'O', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyP', 'P', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'BracketLeft', '[', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'BracketRight', ']', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Backslash', '\\', width: 63),
             ],
           ),
-          _vGap(5),
+          _vGap(6),
 
           // Row 3: Caps ASDF Enter
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'CapsLock', 'Caps', width: 66),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyA', 'A', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyS', 'S', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyD', 'D', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyF', 'F', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyG', 'G', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyH', 'H', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyJ', 'J', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyK', 'K', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyL', 'L', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Semicolon', ';', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Quote', '\'', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Enter', 'Enter ↵', width: 82),
+              _buildKey(ctrl, isDark, 'CapsLock', 'Caps', width: 88),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyA', 'A', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyS', 'S', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyD', 'D', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyF', 'F', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyG', 'G', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyH', 'H', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyJ', 'J', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyK', 'K', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyL', 'L', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Semicolon', ';', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Quote', '\'', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Enter', 'Enter ↵', width: 104),
             ],
           ),
-          _vGap(5),
+          _vGap(6),
 
           // Row 4: Shift ZXCV Shift
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'ShiftLeft', 'Shift ⇧', width: 86),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyZ', 'Z', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyX', 'X', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyC', 'C', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyV', 'V', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyB', 'B', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyN', 'N', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'KeyM', 'M', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Comma', ',', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Period', '.', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Slash', '/', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'ShiftRight', 'Shift ⇧', width: 102),
+              _buildKey(ctrl, isDark, 'ShiftLeft', 'Shift ⇧', width: 114),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyZ', 'Z', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyX', 'X', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyC', 'C', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyV', 'V', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyB', 'B', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyN', 'N', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'KeyM', 'M', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Comma', ',', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Period', '.', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'Slash', '/', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'ShiftRight', 'Shift ⇧', width: 131),
             ],
           ),
-          _vGap(5),
+          _vGap(6),
 
           // Row 5: Modifiers Row (Ctrl Win Alt Space Alt Menu Ctrl)
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'ControlLeft', 'Ctrl', width: 46),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'MetaLeft', 'Win', width: 42),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'AltLeft', 'Alt', width: 42),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Space', 'Space', width: 308),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'AltRight', 'Alt', width: 42),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'ContextMenu', 'Menu', width: 42),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'ControlRight', 'Ctrl', width: 46),
+              _buildKey(ctrl, isDark, 'ControlLeft', 'Ctrl', width: 60),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'MetaLeft', 'Win', width: 56),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'AltLeft', 'Alt', width: 56),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'Space', 'Space', width: 400),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'AltRight', 'Alt', width: 56),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'ContextMenu', 'Menu', width: 56),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'ControlRight', 'Ctrl', width: 60),
             ],
           ),
         ],
@@ -535,71 +535,71 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
     );
   }
 
-  // --- CLUSTER 2: NAVIGATION CLUSTER (Width = 116px) ---
+  // --- CLUSTER 2: NAVIGATION CLUSTER (Width = 156px) ---
   Widget _buildNavCluster(HardwareTestController ctrl, bool isDark) {
     return SizedBox(
-      width: 116,
+      width: 156,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Row 0: PrtSc, ScrLk, Pause
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'PrintScreen', 'PrtSc', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'ScrollLock', 'ScrLk', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Pause', 'Pause', width: 36),
+              _buildKey(ctrl, isDark, 'PrintScreen', 'PrtSc', width: 48),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'ScrollLock', 'ScrLk', width: 48),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'Pause', 'Pause', width: 48),
             ],
           ),
-          _vGap(10),
+          _vGap(14),
 
           // Row 1: Ins, Home, PgUp
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'Insert', 'Ins', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'Home', 'Home', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'PageUp', 'PgUp', width: 36),
+              _buildKey(ctrl, isDark, 'Insert', 'Ins', width: 48),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'Home', 'Home', width: 48),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'PageUp', 'PgUp', width: 48),
             ],
           ),
-          _vGap(5),
+          _vGap(6),
 
           // Row 2: Del, End, PgDn
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'Delete', 'Del', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'End', 'End', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'PageDown', 'PgDn', width: 36),
+              _buildKey(ctrl, isDark, 'Delete', 'Del', width: 48),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'End', 'End', width: 48),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'PageDown', 'PgDn', width: 48),
             ],
           ),
-          _vGap(5),
+          _vGap(6),
 
           // Row 3: Spacer
-          const SizedBox(width: 116, height: 36),
-          _vGap(5),
+          const SizedBox(width: 156, height: 48),
+          _vGap(6),
 
           // Row 4: Arrow Up (centered)
           Row(
             children: [
-              _gap(40),
-              _buildKey(ctrl, isDark, 'ArrowUp', '▲', width: 36),
-              _gap(40),
+              _gap(54),
+              _buildKey(ctrl, isDark, 'ArrowUp', '▲', width: 48),
+              _gap(54),
             ],
           ),
-          _vGap(5),
+          _vGap(6),
 
           // Row 5: Arrow Left, Down, Right
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'ArrowLeft', '◀', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'ArrowDown', '▼', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'ArrowRight', '▶', width: 36),
+              _buildKey(ctrl, isDark, 'ArrowLeft', '◀', width: 48),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'ArrowDown', '▼', width: 48),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'ArrowRight', '▶', width: 48),
             ],
           ),
         ],
@@ -607,97 +607,97 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
     );
   }
 
-  // --- CLUSTER 3: NUMPAD CLUSTER (Width = 156px) ---
+  // --- CLUSTER 3: NUMPAD CLUSTER (Width = 208px) ---
   Widget _buildNumpadCluster(HardwareTestController ctrl, bool isDark) {
     return SizedBox(
-      width: 156,
+      width: 208,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Row 0: LED Indicator Plate
           _buildNumpadLedPanel(ctrl, isDark),
-          _vGap(10),
+          _vGap(14),
 
           // Row 1: NumLock, /, *, -
           Row(
             children: [
-              _buildKey(ctrl, isDark, 'NumLock', 'Num', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'NumpadDivide', '/', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'NumpadMultiply', '*', width: 36),
-              _gap(4),
-              _buildKey(ctrl, isDark, 'NumpadSubtract', '-', width: 36),
+              _buildKey(ctrl, isDark, 'NumLock', 'Num', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'NumpadDivide', '/', width: 48),
+              _gap(6),
+              _buildKey(ctrl, isDark, 'NumpadMultiply', '*', width: 48),
+              _gap(5),
+              _buildKey(ctrl, isDark, 'NumpadSubtract', '-', width: 48),
             ],
           ),
-          _vGap(5),
+          _vGap(6),
 
           // Rows 2-5: Decoupled columns preventing tall keys from expanding rows
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left sub-column: 3 standard key columns (width: 116)
+              // Left sub-column: 3 standard key columns (width: 155)
               SizedBox(
-                width: 116,
+                width: 155,
                 child: Column(
                   children: [
                     // Row 2: 7, 8, 9
                     Row(
                       children: [
-                        _buildKey(ctrl, isDark, 'Numpad7', '7', width: 36),
-                        _gap(4),
-                        _buildKey(ctrl, isDark, 'Numpad8', '8', width: 36),
-                        _gap(4),
-                        _buildKey(ctrl, isDark, 'Numpad9', '9', width: 36),
+                        _buildKey(ctrl, isDark, 'Numpad7', '7', width: 48),
+                        _gap(5),
+                        _buildKey(ctrl, isDark, 'Numpad8', '8', width: 48),
+                        _gap(5),
+                        _buildKey(ctrl, isDark, 'Numpad9', '9', width: 48),
                       ],
                     ),
-                    _vGap(5),
+                    _vGap(6),
 
                     // Row 3: 4, 5, 6
                     Row(
                       children: [
-                        _buildKey(ctrl, isDark, 'Numpad4', '4', width: 36),
-                        _gap(4),
-                        _buildKey(ctrl, isDark, 'Numpad5', '5', width: 36),
-                        _gap(4),
-                        _buildKey(ctrl, isDark, 'Numpad6', '6', width: 36),
+                        _buildKey(ctrl, isDark, 'Numpad4', '4', width: 48),
+                        _gap(5),
+                        _buildKey(ctrl, isDark, 'Numpad5', '5', width: 48),
+                        _gap(5),
+                        _buildKey(ctrl, isDark, 'Numpad6', '6', width: 48),
                       ],
                     ),
-                    _vGap(5),
+                    _vGap(6),
 
                     // Row 4: 1, 2, 3
                     Row(
                       children: [
-                        _buildKey(ctrl, isDark, 'Numpad1', '1', width: 36),
-                        _gap(4),
-                        _buildKey(ctrl, isDark, 'Numpad2', '2', width: 36),
-                        _gap(4),
-                        _buildKey(ctrl, isDark, 'Numpad3', '3', width: 36),
+                        _buildKey(ctrl, isDark, 'Numpad1', '1', width: 48),
+                        _gap(5),
+                        _buildKey(ctrl, isDark, 'Numpad2', '2', width: 48),
+                        _gap(5),
+                        _buildKey(ctrl, isDark, 'Numpad3', '3', width: 48),
                       ],
                     ),
-                    _vGap(5),
+                    _vGap(6),
 
                     // Row 5: 0 (wide), .
                     Row(
                       children: [
-                        _buildKey(ctrl, isDark, 'Numpad0', '0', width: 76),
-                        _gap(4),
-                        _buildKey(ctrl, isDark, 'NumpadDecimal', '.', width: 36),
+                        _buildKey(ctrl, isDark, 'Numpad0', '0', width: 101),
+                        _gap(5),
+                        _buildKey(ctrl, isDark, 'NumpadDecimal', '.', width: 48),
                       ],
                     ),
                   ],
                 ),
               ),
-              _gap(4),
+              _gap(5),
 
-              // Right sub-column: Tall keys + and Enter (width: 36)
+              // Right sub-column: Tall keys + and Enter (width: 48)
               SizedBox(
-                width: 36,
+                width: 48,
                 child: Column(
                   children: [
-                    _buildKey(ctrl, isDark, 'NumpadAdd', '+', width: 36, height: 77),
-                    _vGap(5),
-                    _buildKey(ctrl, isDark, 'NumpadEnter', '↵', width: 36, height: 77),
+                    _buildKey(ctrl, isDark, 'NumpadAdd', '+', width: 48, height: 102),
+                    _vGap(6),
+                    _buildKey(ctrl, isDark, 'NumpadEnter', '↵', width: 48, height: 102),
                   ],
                 ),
               ),
@@ -716,8 +716,8 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
       final scrollActive = ctrl.testedKeys.contains('ScrollLock');
 
       return Container(
-        width: 156,
-        height: 36,
+        width: 208,
+        height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1E293B) : const Color(0xFF334155),
@@ -780,8 +780,8 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
     bool isDark,
     String code,
     String label, {
-    double width = 36,
-    double height = 36,
+    double width = 48,
+    double height = 48,
   }) {
     return Obx(() {
       final isDown = ctrl.activeKeys.contains(code);
@@ -877,15 +877,15 @@ class _KeyboardTestViewState extends State<KeyboardTestView> {
       }
 
       final double fontSize = label.length > 5
-          ? 9.5
+          ? 11.5
           : label.length > 3
-              ? 10.5
-              : 11.5;
+              ? 13.0
+              : 14.5;
 
-      return GestureDetector(
-        onTapDown: (_) => ctrl.onKeyDown(code, label),
-        onTapUp: (_) => ctrl.onKeyUp(code),
-        onTapCancel: () => ctrl.onKeyUp(code),
+      // Mouse clicks disabled on keys: keys only respond to physical keyboard events.
+      // Clicks pass through to the background GestureDetector which maintains focus.
+      return IgnorePointer(
+        ignoring: true,
         child: AnimatedScale(
           scale: isDown ? 0.92 : 1.0,
           duration: const Duration(milliseconds: 60),

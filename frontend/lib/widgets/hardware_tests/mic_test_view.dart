@@ -12,28 +12,31 @@ class MicTestView extends StatefulWidget {
   State<MicTestView> createState() => _MicTestViewState();
 }
 
-class _MicTestViewState extends State<MicTestView>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
-
+class _MicTestViewState extends State<MicTestView> {
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
+    final ctrl = Get.find<HardwareTestController>();
+    ctrl.startLiveMicMonitoring();
+    if (ctrl.micDevices.isEmpty) {
+      ctrl.fetchMicDevices();
+    }
   }
 
   @override
   void dispose() {
-    _animController.dispose();
+    if (Get.isRegistered<HardwareTestController>()) {
+      final ctrl = Get.find<HardwareTestController>();
+      ctrl.stopLiveMicMonitoring();
+    }
     super.dispose();
   }
 
   void _openPrivacySettings() {
     try {
-      Process.run('cmd', ['/c', 'start', 'ms-settings:privacy-microphone']);
+      if (Platform.isWindows) {
+        Process.run('cmd', ['/c', 'start', 'ms-settings:privacy-microphone']);
+      }
     } catch (_) {}
   }
 
@@ -47,11 +50,14 @@ class _MicTestViewState extends State<MicTestView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top Navigation Breadcrumb
+          // 1. Top Navigation Breadcrumb
           Row(
             children: [
               OutlinedButton.icon(
-                onPressed: () => ctrl.selectSubTest('hub'),
+                onPressed: () {
+                  ctrl.stopLiveMicMonitoring();
+                  ctrl.selectSubTest('hub');
+                },
                 icon: const Icon(Icons.arrow_forward_rounded, size: 16),
                 label: const Text('بازگشت به لیست تست‌ها'),
                 style: OutlinedButton.styleFrom(
@@ -60,7 +66,7 @@ class _MicTestViewState extends State<MicTestView>
               ),
               const SizedBox(width: 14),
               Text(
-                'تست میکروفون و سنجش ورودی هدست',
+                'تست میکروفون، سنجش صدای محیط و لوپ‌بک',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
@@ -78,7 +84,7 @@ class _MicTestViewState extends State<MicTestView>
 
           const SizedBox(height: 16),
 
-          // Main Recording & Loopback Interactive Console
+          // 2. Main Recording & Live Ambient Console
           Container(
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
@@ -98,117 +104,134 @@ class _MicTestViewState extends State<MicTestView>
             ),
             child: Column(
               children: [
-                // Animated Mic Icon with Status Ring
+                // Animated Mic Icon with Dynamic Status Ring
                 Obx(() {
                   final isBusy = ctrl.isMicBusy.value;
                   final phase = ctrl.micPhase.value;
 
-                  Color ringColor = const Color(0xFF10B981);
+                  Color ringColor = const Color(0xFF10B981); // Live Ambient (Green)
                   IconData iconData = Icons.mic_rounded;
+
                   if (phase == 'recording') {
-                    ringColor = const Color(0xFFEF4444);
+                    ringColor = const Color(0xFFEF4444); // Recording (Red)
                     iconData = Icons.fiber_manual_record_rounded;
                   } else if (phase == 'playing') {
-                    ringColor = const Color(0xFF3B82F6);
+                    ringColor = const Color(0xFF3B82F6); // Playback (Blue)
                     iconData = Icons.volume_up_rounded;
                   }
 
                   return AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: 80,
-                    height: 80,
+                    duration: const Duration(milliseconds: 250),
+                    width: 76,
+                    height: 76,
                     decoration: BoxDecoration(
                       color: ringColor.withValues(alpha: isDark ? 0.2 : 0.1),
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: ringColor,
-                        width: isBusy ? 3.0 : 1.5,
+                        width: isBusy ? 3.0 : 1.8,
                       ),
-                      boxShadow: isBusy
-                          ? [
-                              BoxShadow(
-                                color: ringColor.withValues(alpha: 0.35),
-                                blurRadius: 16,
-                              ),
-                            ]
-                          : null,
+                      boxShadow: [
+                        BoxShadow(
+                          color: ringColor.withValues(alpha: isBusy ? 0.4 : 0.2),
+                          blurRadius: isBusy ? 16 : 8,
+                        ),
+                      ],
                     ),
-                    child: Icon(iconData, color: ringColor, size: 40),
+                    child: Icon(iconData, color: ringColor, size: 38),
                   );
                 }),
 
                 const SizedBox(height: 14),
 
-                // Real-time Waveform / Amplitude Level Meter
+                // Real-time Live Ambient Waveform (Reacts Immediately to Ambient Sound & Speech)
                 Obx(() {
+                  final heights = ctrl.liveWaveformHeights;
                   final phase = ctrl.micPhase.value;
                   final isRecording = phase == 'recording';
                   final isPlaying = phase == 'playing';
-                  final isActive = isRecording || isPlaying;
+
+                  Color activeColor = const Color(0xFF10B981); // Emerald for ambient voice
+                  if (isRecording) activeColor = const Color(0xFFEF4444);
+                  if (isPlaying) activeColor = const Color(0xFF3B82F6);
 
                   return Container(
-                    height: 52,
+                    height: 54,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: isActive
-                            ? (isRecording ? const Color(0xFFEF4444) : const Color(0xFF3B82F6))
-                            : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                        color: activeColor.withValues(alpha: 0.6),
                       ),
                     ),
-                    child: AnimatedBuilder(
-                      animation: _animController,
-                      builder: (context, _) {
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: List.generate(24, (i) {
-                            double barHeight = 6.0;
-                            if (isActive) {
-                              final offset = (i * 0.12);
-                              final animVal = (_animController.value + offset) % 1.0;
-                              barHeight = 6.0 + 26.0 * (0.3 + 0.7 * (animVal > 0.5 ? 1.0 - animVal : animVal) * 2);
-                            }
-                            return Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 2),
-                              width: 5,
-                              height: barHeight,
-                              decoration: BoxDecoration(
-                                color: isActive
-                                    ? (isRecording ? const Color(0xFFEF4444) : const Color(0xFF3B82F6))
-                                    : (isDark ? const Color(0xFF475569) : const Color(0xFF94A3B8)),
-                                borderRadius: BorderRadius.circular(2.5),
-                              ),
-                            );
-                          }),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: List.generate(heights.length, (i) {
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 2.2),
+                          width: 5,
+                          height: heights[i],
+                          decoration: BoxDecoration(
+                            color: activeColor,
+                            borderRadius: BorderRadius.circular(2.5),
+                          ),
                         );
-                      },
+                      }),
                     ),
                   );
                 }),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 8),
 
-                // Status Message Box
+                // Live Audio Level Percentage Indicator
+                Obx(() {
+                  final level = (ctrl.liveMicLevel.value * 100).toInt();
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.graphic_eq_rounded, size: 14, color: Color(0xFF10B981)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'سطح صدای ورودی زنده: $level٪',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+
+                const SizedBox(height: 12),
+
+                // Status Message & Countdown Box
                 Obx(() {
                   final msg = ctrl.micStatusMessage.value;
+                  final countdown = ctrl.recordingCountdown.value;
                   final phase = ctrl.micPhase.value;
-                  final isRecording = phase == 'recording';
-                  final isPlaying = phase == 'playing';
 
                   return Column(
                     children: [
-                      Text(
-                        isRecording
-                            ? 'در حال ضبط صدا (میکروفون فعال)...'
-                            : (isPlaying
-                                ? 'در حال بازپخش صدای ضبط‌شده شما در خروجی...'
-                                : 'آزمون لوپ‌بک صدا (ضبط و بازپخش مستقیم)'),
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 6),
+                      if (countdown > 0 && phase == 'recording')
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'شمارش معکوس: $countdown ثانیه باقی‌مانده...',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFFEF4444),
+                            ),
+                          ),
+                        ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
@@ -228,47 +251,108 @@ class _MicTestViewState extends State<MicTestView>
                   );
                 }),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
 
-                // Loopback Controls (Record, Re-record, Stop)
+                // Dedicated Quick Test & Manual Loopback Controls
                 Obx(() {
                   final isBusy = ctrl.isMicBusy.value;
                   final phase = ctrl.micPhase.value;
+                  final isManual = ctrl.isManualMode.value;
+                  final hasAudio = ctrl.hasRecordedAudio.value;
 
-                  return Wrap(
-                    spacing: 12,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.center,
+                  return Column(
                     children: [
-                      ElevatedButton.icon(
-                        onPressed: isBusy ? null : () => ctrl.startMicLoopbackTest(duration: 3.0),
-                        icon: const Icon(Icons.mic_rounded, size: 18),
-                        label: Text(phase == 'completed'
-                            ? 'ضبط مجدد (۳ ثانیه)'
-                            : (isBusy ? 'در حال پردازش...' : 'شروع ضبط آزمایشی (۳ ثانیه)')),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                        ),
+                      // Row 1: Dedicated Quick Tests (3s and 5s with Auto Loopback)
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: isBusy ? null : () => ctrl.startQuickTest(duration: 3.0),
+                            icon: const Icon(Icons.flash_on_rounded, size: 18),
+                            label: const Text('آزمون سریع ۳ ثانیه‌ای (خودکار)'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: isBusy ? null : () => ctrl.startQuickTest(duration: 5.0),
+                            icon: const Icon(Icons.timer_outlined, size: 18),
+                            label: const Text('آزمون سریع ۵ ثانیه‌ای (خودکار)'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF059669),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                            ),
+                          ),
+                        ],
                       ),
-                      OutlinedButton.icon(
-                        onPressed: isBusy ? null : () => ctrl.startMicLoopbackTest(duration: 5.0),
-                        icon: const Icon(Icons.timer_outlined, size: 16),
-                        label: const Text('آزمون ۵ ثانیه‌ای'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _openPrivacySettings,
-                        icon: const Icon(Icons.security_rounded, size: 16),
-                        label: const Text('دسترسی میکروفون در ویندوز'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF3B82F6),
-                          side: const BorderSide(color: Color(0xFF3B82F6)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        ),
+
+                      const SizedBox(height: 10),
+
+                      // Row 2: Standard Manual Recording, Playback & Windows Privacy
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          // Manual Record / Stop Button
+                          if (phase == 'recording' && isManual)
+                            ElevatedButton.icon(
+                              onPressed: () => ctrl.stopManualRecording(),
+                              icon: const Icon(Icons.stop_rounded, size: 18),
+                              label: const Text('توقف ضبط دستی'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFEF4444),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              ),
+                            )
+                          else
+                            OutlinedButton.icon(
+                              onPressed: isBusy ? null : () => ctrl.startManualRecording(),
+                              icon: const Icon(Icons.fiber_manual_record, size: 16, color: Color(0xFFEF4444)),
+                              label: const Text('شروع ضبط دستی'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              ),
+                            ),
+
+                          // Playback Button
+                          OutlinedButton.icon(
+                            onPressed: (isBusy || !hasAudio) ? null : () => ctrl.playRecordedAudio(),
+                            icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                            label: const Text('بازپخش صدای ضبط‌شده'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF3B82F6),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            ),
+                          ),
+
+                          // Reset Button
+                          if (hasAudio || phase == 'completed' || phase == 'error')
+                            OutlinedButton.icon(
+                              onPressed: isBusy ? null : () => ctrl.resetRecording(),
+                              icon: const Icon(Icons.refresh_rounded, size: 16),
+                              label: const Text('بازنشانی'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              ),
+                            ),
+
+                          // Windows Privacy Shortcut
+                          OutlinedButton.icon(
+                            onPressed: _openPrivacySettings,
+                            icon: const Icon(Icons.security_rounded, size: 16),
+                            label: const Text('دسترسی در ویندوز'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   );
@@ -279,7 +363,7 @@ class _MicTestViewState extends State<MicTestView>
 
           const SizedBox(height: 16),
 
-          // Detected Audio Devices List
+          // 3. Detected Audio Input Devices List
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
