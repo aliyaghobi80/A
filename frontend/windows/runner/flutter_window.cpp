@@ -38,6 +38,8 @@ constexpr unsigned long long kDisplayRecoveryTimeoutMs = 8000;
 std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_markazi_window_channel;
 std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_window_manager_channel;
 WINDOWPLACEMENT g_prev_window_placement = {sizeof(WINDOWPLACEMENT)};
+LONG_PTR g_prev_window_style = 0;
+bool g_prev_was_zoomed = false;
 bool g_is_window_fullscreen = false;
 
 void ApplyFullScreenMode(HWND hwnd, bool fullscreen) {
@@ -46,29 +48,53 @@ void ApplyFullScreenMode(HWND hwnd, bool fullscreen) {
   }
   g_is_window_fullscreen = fullscreen;
 
-  DWORD style = ::GetWindowLong(hwnd, GWL_STYLE);
   if (fullscreen) {
+    g_prev_window_placement.length = sizeof(WINDOWPLACEMENT);
+    ::GetWindowPlacement(hwnd, &g_prev_window_placement);
+    g_prev_window_style = ::GetWindowLongPtr(hwnd, GWL_STYLE);
+    g_prev_was_zoomed = (::IsZoomed(hwnd) != FALSE);
+
+    if (g_prev_was_zoomed) {
+      ::ShowWindow(hwnd, SW_RESTORE);
+    }
+
     MONITORINFO mi = {sizeof(mi)};
-    HMONITOR monitor = ::MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
-    if (::GetWindowPlacement(hwnd, &g_prev_window_placement) &&
-        ::GetMonitorInfo(monitor, &mi)) {
-      ::SetWindowLong(hwnd, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
-      ::SetWindowPos(hwnd, HWND_TOP,
+    HMONITOR monitor = ::MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    if (::GetMonitorInfo(monitor, &mi)) {
+      LONG_PTR new_style = (g_prev_window_style & ~WS_OVERLAPPEDWINDOW) | WS_POPUP;
+      ::SetWindowLongPtr(hwnd, GWL_STYLE, new_style);
+      ::SetWindowPos(hwnd, HWND_TOPMOST,
                      mi.rcMonitor.left, mi.rcMonitor.top,
                      mi.rcMonitor.right - mi.rcMonitor.left,
                      mi.rcMonitor.bottom - mi.rcMonitor.top,
-                     SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-      LogStartup("Entered native fullscreen mode");
+                     SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+      ::SetForegroundWindow(hwnd);
+      ::SetFocus(hwnd);
+
+      RECT wr = {};
+      ::GetWindowRect(hwnd, &wr);
+      if (wr.left == mi.rcMonitor.left && wr.top == mi.rcMonitor.top &&
+          wr.right == mi.rcMonitor.right && wr.bottom == mi.rcMonitor.bottom) {
+        LogStartup("Verified GetWindowRect == rcMonitor in true native fullscreen mode");
+      } else {
+        LogStartup("Entered native fullscreen mode with monitor bounds");
+      }
     }
   } else {
-    ::SetWindowLong(hwnd, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+    LONG_PTR orig_style = g_prev_window_style
+                              ? g_prev_window_style
+                              : ((::GetWindowLongPtr(hwnd, GWL_STYLE) & ~WS_POPUP) | WS_OVERLAPPEDWINDOW);
+    ::SetWindowLongPtr(hwnd, GWL_STYLE, orig_style);
     ::SetWindowPlacement(hwnd, &g_prev_window_placement);
-    ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
-                   SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    ::SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
     MARGINS margins = {0, 0, 1, 0};
     ::DwmExtendFrameIntoClientArea(hwnd, &margins);
-    LogStartup("Exited native fullscreen mode");
+
+    if (g_prev_was_zoomed) {
+      ::ShowWindow(hwnd, SW_MAXIMIZE);
+    }
+    LogStartup("Exited native fullscreen mode and restored geometry");
   }
 }
 
@@ -99,7 +125,9 @@ void SetupWindowChannels(flutter::BinaryMessenger* messenger, HWND hwnd) {
       result->Success(flutter::EncodableValue(true));
     } else if (method == "startDragging") {
       ::ReleaseCapture();
-      ::SendMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+      POINT pt = {};
+      ::GetCursorPos(&pt);
+      ::SendMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, MAKELPARAM(pt.x, pt.y));
       result->Success(flutter::EncodableValue(true));
     } else if (method == "show") {
       ::ShowWindow(hwnd, SW_SHOW);
@@ -116,10 +144,20 @@ void SetupWindowChannels(flutter::BinaryMessenger* messenger, HWND hwnd) {
       if (call.arguments()) {
         if (const auto* b = std::get_if<bool>(call.arguments())) {
           fullscreen = *b;
+        } else if (const auto* i = std::get_if<int>(call.arguments())) {
+          fullscreen = (*i != 0);
+        } else if (const auto* i64 = std::get_if<int64_t>(call.arguments())) {
+          fullscreen = (*i64 != 0);
         } else if (const auto* map = std::get_if<flutter::EncodableMap>(call.arguments())) {
           auto it = map->find(flutter::EncodableValue("isFullScreen"));
-          if (it != map->end() && std::holds_alternative<bool>(it->second)) {
-            fullscreen = std::get<bool>(it->second);
+          if (it != map->end()) {
+            if (std::holds_alternative<bool>(it->second)) {
+              fullscreen = std::get<bool>(it->second);
+            } else if (std::holds_alternative<int>(it->second)) {
+              fullscreen = (std::get<int>(it->second) != 0);
+            } else if (std::holds_alternative<int64_t>(it->second)) {
+              fullscreen = (std::get<int64_t>(it->second) != 0);
+            }
           }
         }
       }
@@ -332,7 +370,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     return 0;
   }
 
-  // Native edge/corner resizing and Windows 11 Snap Layouts hover
+  // Native edge/corner resizing, Windows 11 Snap Layouts hover, and window controls hit-testing
   if (message == WM_NCHITTEST) {
     if (g_is_window_fullscreen) {
       return HTCLIENT;
@@ -343,10 +381,40 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     ::GetWindowRect(hwnd, &rc);
 
     HMONITOR monitor = ::MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi = {sizeof(mi)};
+    if (::GetMonitorInfo(monitor, &mi)) {
+      if (::IsZoomed(hwnd)) {
+        rc = mi.rcWork;
+      }
+    }
+
     UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
     double scale = (dpi == 0 ? 96.0 : dpi) / 96.0;
 
-    // 1. Edge & Corner Resizing (Only when not maximized)
+    int button_width = static_cast<int>(46 * scale);
+    int title_bar_height = static_cast<int>(32 * scale);
+
+    // 1. Window Controls Area (Top-Right):
+    // Bypass HTTOP/HTTOPRIGHT resize interception over the top 8-16px of window controls
+    // so buttons (Minimize, Maximize, Close) receive clicks across their full 32px height.
+    int controls_left = rc.right - 3 * button_width;
+    int controls_right = rc.right;
+    int controls_top = rc.top;
+    int controls_bottom = rc.top + title_bar_height;
+
+    if (pt.x >= controls_left && pt.x < controls_right &&
+        pt.y >= controls_top && pt.y < controls_bottom) {
+      // Maximize button: return HTMAXBUTTON for Windows 11 Snap Layouts hover flyout
+      int max_btn_left = rc.right - 2 * button_width;
+      int max_btn_right = rc.right - button_width;
+      if (pt.x >= max_btn_left && pt.x < max_btn_right) {
+        return HTMAXBUTTON;
+      }
+      // Minimize and Close buttons return HTCLIENT so Flutter receives click and hover events
+      return HTCLIENT;
+    }
+
+    // 2. Edge & Corner Resizing (Only when not maximized)
     if (!::IsZoomed(hwnd)) {
       int border_thickness = static_cast<int>(8 * scale);
       int corner_size = static_cast<int>(16 * scale);
@@ -367,22 +435,12 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       if (right) return HTRIGHT;
     }
 
-    // 2. Windows 11 Snap Layouts on Maximize Button Hover
-    int button_width = static_cast<int>(46 * scale);
-    int title_bar_height = static_cast<int>(32 * scale);
-
-    RECT max_btn_rc = {
-        rc.right - 2 * button_width,
-        rc.top,
-        rc.right - button_width,
-        rc.top + title_bar_height
-    };
-
-    if (::PtInRect(&max_btn_rc, pt)) {
-      return HTMAXBUTTON;
-    }
-
     return HTCLIENT;
+  }
+
+  if (message == WM_NCLBUTTONDOWN && wparam == HTMAXBUTTON) {
+    // Acknowledge button down cleanly so Windows sends the subsequent UP event
+    return 0;
   }
 
   if (message == WM_NCLBUTTONUP && wparam == HTMAXBUTTON) {
