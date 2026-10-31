@@ -47,12 +47,24 @@ class CustomTitleBar extends StatefulWidget {
   /// Window control actions use bitsdojo_window's appWindow directly.
   static const MethodChannel _windowChannel = MethodChannel('markazi/window');
 
+  /// Notifier reflecting whether the native window management channel is missing.
+  static final ValueNotifier<bool> hasMissingPlugin = ValueNotifier<bool>(false);
+
+  static void _reportMissingPlugin(dynamic error) {
+    if (error is MissingPluginException) {
+      debugPrint('[CustomTitleBar] MissingPluginException: $error');
+      hasMissingPlugin.value = true;
+    }
+  }
+
   /// Asynchronously queries whether the native OS window is currently maximized.
   static Future<bool> isMaximized() async {
     try {
       final bool? isMax =
           await _windowChannel.invokeMethod<bool>('isMaximized');
       if (isMax != null) return isMax;
+    } on MissingPluginException catch (e) {
+      _reportMissingPlugin(e);
     } catch (_) {}
     try {
       return appWindow.isMaximized;
@@ -67,6 +79,8 @@ class CustomTitleBar extends StatefulWidget {
     } catch (_) {}
     try {
       await _windowChannel.invokeMethod('minimize');
+    } on MissingPluginException catch (e) {
+      _reportMissingPlugin(e);
     } catch (_) {}
   }
 
@@ -76,6 +90,8 @@ class CustomTitleBar extends StatefulWidget {
     } catch (_) {}
     try {
       await _windowChannel.invokeMethod('maximize');
+    } on MissingPluginException catch (e) {
+      _reportMissingPlugin(e);
     } catch (_) {}
   }
 
@@ -85,6 +101,8 @@ class CustomTitleBar extends StatefulWidget {
     } catch (_) {}
     try {
       await _windowChannel.invokeMethod('unmaximize');
+    } on MissingPluginException catch (e) {
+      _reportMissingPlugin(e);
     } catch (_) {}
   }
 
@@ -102,6 +120,11 @@ class CustomTitleBar extends StatefulWidget {
           await _windowChannel.invokeMethod('maximize');
         }
       }
+    } on MissingPluginException catch (e) {
+      _reportMissingPlugin(e);
+      try {
+        appWindow.maximizeOrRestore();
+      } catch (_) {}
     } catch (_) {
       try {
         appWindow.maximizeOrRestore();
@@ -115,6 +138,8 @@ class CustomTitleBar extends StatefulWidget {
     } catch (_) {}
     try {
       await _windowChannel.invokeMethod('close');
+    } on MissingPluginException catch (e) {
+      _reportMissingPlugin(e);
     } catch (_) {}
   }
 
@@ -125,12 +150,16 @@ class CustomTitleBar extends StatefulWidget {
     } catch (_) {}
     try {
       await _windowChannel.invokeMethod('startDragging');
+    } on MissingPluginException catch (e) {
+      _reportMissingPlugin(e);
     } catch (_) {}
   }
 
   static Future<void> setFullScreen(bool fullscreen) async {
     try {
       await _windowChannel.invokeMethod('setFullScreen', fullscreen);
+    } on MissingPluginException catch (e) {
+      _reportMissingPlugin(e);
     } catch (_) {}
   }
 
@@ -138,6 +167,8 @@ class CustomTitleBar extends StatefulWidget {
   static Future<void> setTheme({required bool isDark}) async {
     try {
       await _windowChannel.invokeMethod('setTheme', {'isDark': isDark});
+    } on MissingPluginException catch (e) {
+      _reportMissingPlugin(e);
     } catch (_) {}
   }
 
@@ -163,6 +194,7 @@ class _CustomTitleBarState extends State<CustomTitleBar>
   bool _isMaximizeHovered = false;
   bool _isCloseHovered = false;
   Worker? _themeWorker;
+  bool? _lastIsDark;
 
   @override
   void initState() {
@@ -180,8 +212,22 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     if (Get.isRegistered<ThemeLanguageController>()) {
       final themeCtrl = Get.find<ThemeLanguageController>();
       _themeWorker = ever(themeCtrl.themeMode, (mode) {
-        CustomTitleBar.setTheme(isDark: mode == ThemeMode.dark);
+        final isDark = mode == ThemeMode.dark;
+        if (_lastIsDark != isDark) {
+          _lastIsDark = isDark;
+          CustomTitleBar.setTheme(isDark: isDark);
+        }
       });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (_lastIsDark != isDark) {
+      _lastIsDark = isDark;
+      CustomTitleBar.setTheme(isDark: isDark);
     }
   }
 
@@ -219,6 +265,8 @@ class _CustomTitleBarState extends State<CustomTitleBar>
           _isMaximized = isMax;
         });
       }
+    } on MissingPluginException catch (e) {
+      CustomTitleBar._reportMissingPlugin(e);
     } catch (_) {}
   }
 
@@ -262,6 +310,21 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     }
   }
 
+  int _lastClickTime = 0;
+
+  void _handleDragRegionPointerDown(PointerDownEvent event) {
+    if ((event.buttons & 1) != 0) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (now - _lastClickTime < 400) {
+        _lastClickTime = 0;
+        _handleToggleMaximize();
+      } else {
+        _lastClickTime = now;
+        CustomTitleBar.startDragging();
+      }
+    }
+  }
+
   void _handleToggleMaximize() {
     final wasMaximized = _isMaximized;
     setState(() {
@@ -297,9 +360,6 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Synchronize native DWM frame attributes with active theme
-    CustomTitleBar.setTheme(isDark: isDark);
-
     // Theme matching surface and border colors
     final backgroundColor =
         isDark ? AppTheme.darkSurface : AppTheme.lightSurface;
@@ -326,61 +386,91 @@ class _CustomTitleBarState extends State<CustomTitleBar>
 
     return Directionality(
       textDirection: TextDirection.ltr,
-      child: Container(
-        key: const ValueKey('custom-title-bar-root'),
-        height: widget.height,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          border: Border(
-            bottom: BorderSide(
-              color: borderBottomColor,
-              width: 1.0,
-            ),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Top-left branding and title (Windows standard top-left position)
-            _buildBranding(
-              textColor: textColor,
-              title: resolvedTitle,
-              isFocused: effectiveFocused,
-            ),
-
-            // Central draggable region — uses bitsdojo_window's MoveWindow
-            // widget so dragging is handled at the native Win32 level (no
-            // polling, no SendMessage race). Double-tap to maximize/restore.
-            Expanded(
-              child: MoveWindow(
-                key: const ValueKey('custom-title-bar-drag-region'),
-                child: Listener(
-                  behavior: HitTestBehavior.opaque,
-                  onPointerDown: (event) {
-                    if ((event.buttons & 1) != 0) {
-                      CustomTitleBar.startDragging();
-                    }
-                  },
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onDoubleTap: _handleToggleMaximize,
-                    child: Container(color: Colors.transparent),
-                  ),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: CustomTitleBar.hasMissingPlugin,
+        builder: (context, hasMissing, _) {
+          final titleBarContainer = Container(
+            key: const ValueKey('custom-title-bar-root'),
+            height: widget.height,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              border: Border(
+                bottom: BorderSide(
+                  color: borderBottomColor,
+                  width: 1.0,
                 ),
               ),
             ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Top-left branding and title (Windows standard top-left position)
+                _buildBranding(
+                  textColor: textColor,
+                  title: resolvedTitle,
+                  isFocused: effectiveFocused,
+                ),
 
-            // Top-right window controls (Windows standard top-right position)
-            if (widget.showWindowControls)
-              _buildWindowControls(
-                textColor: textColor,
-                hoverColor: buttonHoverColor,
-                closeHoverColor: closeHoverColor,
-                isMaximized: effectiveMaximized,
+                // Central draggable region — uses bitsdojo_window's MoveWindow
+                // widget so dragging is handled at the native Win32 level (no
+                // polling, no SendMessage race). Double-tap to maximize/restore.
+                Expanded(
+                  child: MoveWindow(
+                    key: const ValueKey('custom-title-bar-drag-region'),
+                    onDoubleTap: _handleToggleMaximize,
+                    child: Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: _handleDragRegionPointerDown,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onDoubleTap: _handleToggleMaximize,
+                        child: Container(color: Colors.transparent),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Top-right window controls (Windows standard top-right position)
+                if (widget.showWindowControls)
+                  _buildWindowControls(
+                    textColor: textColor,
+                    hoverColor: buttonHoverColor,
+                    closeHoverColor: closeHoverColor,
+                    isMaximized: effectiveMaximized,
+                  ),
+              ],
+            ),
+          );
+
+          if (!hasMissing) {
+            return titleBarContainer;
+          }
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                key: const ValueKey('custom-title-bar-missing-plugin-banner'),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                color: const Color(0xFFD32F2F),
+                alignment: Alignment.center,
+                child: const Text(
+                  'کانال پنجرهی native ثبت نشده',
+                  style: TextStyle(
+                    fontFamily: 'Vazirmatn',
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  textDirection: TextDirection.rtl,
+                ),
               ),
-          ],
-        ),
+              titleBarContainer,
+            ],
+          );
+        },
       ),
     );
   }
@@ -393,13 +483,10 @@ class _CustomTitleBarState extends State<CustomTitleBar>
     final double brandingOpacity = isFocused ? 1.0 : 0.55;
 
     return MoveWindow(
+      onDoubleTap: _handleToggleMaximize,
       child: Listener(
         behavior: HitTestBehavior.opaque,
-        onPointerDown: (event) {
-          if ((event.buttons & 1) != 0) {
-            CustomTitleBar.startDragging();
-          }
-        },
+        onPointerDown: _handleDragRegionPointerDown,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onDoubleTap: _handleToggleMaximize,

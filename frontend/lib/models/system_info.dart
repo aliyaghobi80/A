@@ -2241,6 +2241,7 @@ class BatchInstallStatus {
   final double progressPercent;
   final List<BatchInstallItem> items;
   final String summaryMessage;
+  final String? bootId;
 
   BatchInstallStatus({
     this.stateRevision = 1,
@@ -2262,6 +2263,7 @@ class BatchInstallStatus {
     this.progressPercent = 0.0,
     this.items = const [],
     this.summaryMessage = '',
+    this.bootId,
   });
 
   factory BatchInstallStatus.empty() => BatchInstallStatus(
@@ -2292,6 +2294,7 @@ class BatchInstallStatus {
           .map((e) => BatchInstallItem.fromJson(e as Map<String, dynamic>))
           .toList(),
       summaryMessage: json['summary_message'] ?? '',
+      bootId: json['boot_id'] as String?,
     );
   }
 
@@ -2438,9 +2441,10 @@ class DriverInstallItem {
   final int retryCount;
   final String? categoryFa;
   final double? elapsedSeconds;
+  final String? installerFile;
 
   DriverInstallItem({
-    required this.filename,
+    this.filename = '',
     this.relativePath = '',
     this.type = 'exe',
     this.fileSizeDisplay = '',
@@ -2456,6 +2460,7 @@ class DriverInstallItem {
     this.retryCount = 0,
     this.categoryFa,
     this.elapsedSeconds,
+    this.installerFile,
   });
 
   /// Whether the item is waiting to be installed (supports pending and queued synonymously).
@@ -2464,11 +2469,12 @@ class DriverInstallItem {
   factory DriverInstallItem.fromJson(Map<String, dynamic> json) {
     final msg = (json['message'] ?? json['error_message'] ?? '') as String;
     final err = (json['error_message'] ?? json['message'] ?? json['failure_reason']) as String?;
+    final rawInstallerFile = (json['installer_file'] ?? json['filename']) as String?;
     return DriverInstallItem(
       filename:
           json['filename'] ??
+          rawInstallerFile ??
           json['display_name'] ??
-          json['installer_file'] ??
           '',
       relativePath: json['relative_path'] ?? '',
       type: json['type'] ?? 'exe',
@@ -2485,6 +2491,7 @@ class DriverInstallItem {
       retryCount: json['retry_count'] as int? ?? 0,
       categoryFa: json['category_fa'] as String?,
       elapsedSeconds: (json['elapsed_seconds'] as num?)?.toDouble(),
+      installerFile: rawInstallerFile,
     );
   }
 }
@@ -2515,6 +2522,7 @@ class DriverBatchStatus {
   final String? mode;
   final bool workerAlive;
   final String fatalError;
+  final String? bootId;
 
   DriverBatchStatus({
     this.stateRevision = 1,
@@ -2542,6 +2550,7 @@ class DriverBatchStatus {
     this.mode,
     this.workerAlive = true,
     this.fatalError = '',
+    this.bootId,
   });
 
   factory DriverBatchStatus.empty() => DriverBatchStatus(
@@ -2575,6 +2584,7 @@ class DriverBatchStatus {
       mode: json['mode'] as String?,
       workerAlive: json['worker_alive'] as bool? ?? true,
       fatalError: json['fatal_error'] as String? ?? '',
+      bootId: json['boot_id'] as String?,
       items: (json['items'] as List<dynamic>? ?? [])
           .map((e) => DriverInstallItem.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -2763,6 +2773,34 @@ class DriverHardwareMatch {
           .toList(),
     );
   }
+
+  DriverHardwareMatch copyWith({
+    bool? isMatched,
+    String? confidence,
+    String? status,
+    String? statusFa,
+    String? statusEn,
+    String? matchedDeviceName,
+    String? matchedDeviceId,
+    String? installedVersion,
+    String? packageVersion,
+    String? recommendation,
+    List<String>? reasons,
+  }) {
+    return DriverHardwareMatch(
+      isMatched: isMatched ?? this.isMatched,
+      confidence: confidence ?? this.confidence,
+      status: status ?? this.status,
+      statusFa: statusFa ?? this.statusFa,
+      statusEn: statusEn ?? this.statusEn,
+      matchedDeviceName: matchedDeviceName ?? this.matchedDeviceName,
+      matchedDeviceId: matchedDeviceId ?? this.matchedDeviceId,
+      installedVersion: installedVersion ?? this.installedVersion,
+      packageVersion: packageVersion ?? this.packageVersion,
+      recommendation: recommendation ?? this.recommendation,
+      reasons: reasons ?? this.reasons,
+    );
+  }
 }
 
 class IntelligentDriverPackage {
@@ -2839,6 +2877,52 @@ class IntelligentDriverPackage {
           ? DriverHardwareMatch.fromJson(json['match'] as Map<String, dynamic>)
           : null,
       isDuplicate: json['is_duplicate'] as bool? ?? false,
+    );
+  }
+
+  IntelligentDriverPackage copyWith({
+    String? packageId,
+    String? displayName,
+    String? category,
+    String? categoryFa,
+    int? categoryOrder,
+    String? packageType,
+    String? sourcePath,
+    String? relativePath,
+    String? installerFile,
+    String? installMethod,
+    String? fileSizeDisplay,
+    int? sizeBytes,
+    String? fingerprint,
+    List<String>? hardwareIds,
+    String? driverVersion,
+    String? driverDate,
+    String? provider,
+    List<String>? alternativeInstallers,
+    DriverHardwareMatch? match,
+    bool? isDuplicate,
+  }) {
+    return IntelligentDriverPackage(
+      packageId: packageId ?? this.packageId,
+      displayName: displayName ?? this.displayName,
+      category: category ?? this.category,
+      categoryFa: categoryFa ?? this.categoryFa,
+      categoryOrder: categoryOrder ?? this.categoryOrder,
+      packageType: packageType ?? this.packageType,
+      sourcePath: sourcePath ?? this.sourcePath,
+      relativePath: relativePath ?? this.relativePath,
+      installerFile: installerFile ?? this.installerFile,
+      installMethod: installMethod ?? this.installMethod,
+      fileSizeDisplay: fileSizeDisplay ?? this.fileSizeDisplay,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      fingerprint: fingerprint ?? this.fingerprint,
+      hardwareIds: hardwareIds ?? this.hardwareIds,
+      driverVersion: driverVersion ?? this.driverVersion,
+      driverDate: driverDate ?? this.driverDate,
+      provider: provider ?? this.provider,
+      alternativeInstallers: alternativeInstallers ?? this.alternativeInstallers,
+      match: match ?? this.match,
+      isDuplicate: isDuplicate ?? this.isDuplicate,
     );
   }
 }
@@ -2922,6 +3006,36 @@ class DriverScanResult {
       upToDateCount: summary['up_to_date'] as int? ?? 0,
       notApplicableCount: summary['not_applicable'] as int? ?? 0,
       duplicateCount: summary['duplicates'] as int? ?? 0,
+    );
+  }
+
+  DriverScanResult copyWith({
+    bool? success,
+    String? message,
+    String? driverDirectory,
+    int? totalPackages,
+    List<IntelligentDriverPackage>? packages,
+    List<RemovableDriverSource>? removableSources,
+    int? matchingCount,
+    int? needsInstallCount,
+    int? updateAvailableCount,
+    int? upToDateCount,
+    int? notApplicableCount,
+    int? duplicateCount,
+  }) {
+    return DriverScanResult(
+      success: success ?? this.success,
+      message: message ?? this.message,
+      driverDirectory: driverDirectory ?? this.driverDirectory,
+      totalPackages: totalPackages ?? this.totalPackages,
+      packages: packages ?? this.packages,
+      removableSources: removableSources ?? this.removableSources,
+      matchingCount: matchingCount ?? this.matchingCount,
+      needsInstallCount: needsInstallCount ?? this.needsInstallCount,
+      updateAvailableCount: updateAvailableCount ?? this.updateAvailableCount,
+      upToDateCount: upToDateCount ?? this.upToDateCount,
+      notApplicableCount: notApplicableCount ?? this.notApplicableCount,
+      duplicateCount: duplicateCount ?? this.duplicateCount,
     );
   }
 }

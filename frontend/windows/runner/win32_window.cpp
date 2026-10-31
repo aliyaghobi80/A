@@ -1,11 +1,77 @@
 #include "win32_window.h"
 
+#include <commctrl.h>
 #include <dwmapi.h>
 #include <flutter_windows.h>
+#include <windowsx.h>
+
+#pragma comment(lib, "comctl32.lib")
 
 #include "resource.h"
 
 namespace {
+
+constexpr UINT_PTR kChildViewSubclassId = 1;
+
+LRESULT CALLBACK ChildViewSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam,
+                                       LPARAM lParam, UINT_PTR uIdSubclass,
+                                       DWORD_PTR dwRefData) {
+  if (uMsg == WM_NCHITTEST) {
+    HWND parent = GetParent(hwnd);
+    if (parent) {
+      bool is_zoomed = (::IsZoomed(parent) != FALSE);
+      POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+      RECT rcParent;
+      ::GetWindowRect(parent, &rcParent);
+
+      HMONITOR monitor = ::MonitorFromWindow(parent, MONITOR_DEFAULTTONEAREST);
+      MONITORINFO mi = {sizeof(mi)};
+      if (::GetMonitorInfo(monitor, &mi) && is_zoomed) {
+        rcParent = mi.rcWork;
+      }
+
+      UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
+      double scale = (dpi == 0 ? 96.0 : dpi) / 96.0;
+
+      int button_width = static_cast<int>(46 * scale);
+      int title_bar_height = static_cast<int>(32 * scale);
+
+      // 1. Maximize button region: Return HTTRANSPARENT so parent handles Snap Layouts
+      int max_btn_left = rcParent.right - 2 * button_width;
+      int max_btn_right = rcParent.right - button_width;
+      int controls_top = rcParent.top;
+      int controls_bottom = rcParent.top + title_bar_height;
+
+      if (pt.x >= max_btn_left && pt.x < max_btn_right &&
+          pt.y >= controls_top && pt.y < controls_bottom) {
+        return HTTRANSPARENT;
+      }
+
+      // 2. Window edge and corner resize borders (when not maximized)
+      if (!is_zoomed) {
+        LONG_PTR style = ::GetWindowLongPtr(parent, GWL_STYLE);
+        bool is_fullscreen = !(style & WS_THICKFRAME);
+        if (!is_fullscreen) {
+          int border_thickness = static_cast<int>(8 * scale);
+          bool in_border = (pt.x < rcParent.left + border_thickness) ||
+                           (pt.x >= rcParent.right - border_thickness) ||
+                           (pt.y < rcParent.top + border_thickness) ||
+                           (pt.y >= rcParent.bottom - border_thickness);
+          if (in_border) {
+            return HTTRANSPARENT;
+          }
+        }
+      }
+    }
+  }
+
+  if (uMsg == WM_NCDESTROY) {
+    RemoveWindowSubclass(hwnd, ChildViewSubclassProc, uIdSubclass);
+    return DefSubclassProc(hwnd, uMsg, wParam, lParam);
+  }
+
+  return DefSubclassProc(hwnd, uMsg, wParam, lParam);
+}
 
 /// Window attribute that enables dark mode window decorations.
 ///
@@ -279,6 +345,10 @@ Win32Window::MessageHandler(HWND hwnd,
 void Win32Window::Destroy() {
   OnDestroy();
 
+  if (child_content_) {
+    RemoveWindowSubclass(child_content_, ChildViewSubclassProc, kChildViewSubclassId);
+    child_content_ = nullptr;
+  }
   if (window_handle_) {
     DestroyWindow(window_handle_);
     window_handle_ = nullptr;
@@ -300,6 +370,9 @@ void Win32Window::SetChildContent(HWND content) {
 
   MoveWindow(content, frame.left, frame.top, frame.right - frame.left,
              frame.bottom - frame.top, true);
+
+  SetWindowSubclass(content, ChildViewSubclassProc, kChildViewSubclassId,
+                    reinterpret_cast<DWORD_PTR>(this));
 
   SetFocus(child_content_);
 }

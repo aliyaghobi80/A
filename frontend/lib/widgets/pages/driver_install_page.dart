@@ -39,6 +39,7 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
       final selectedIds = driverCtrl.selectedPackageIds;
       final isAdvanced = driverCtrl.isAdvancedMode.value;
       final removables = driverCtrl.removableSources;
+      final isDisconnected = driverCtrl.isDisconnected.value;
 
       final totalDrivers = drivers.length;
       final needsInstall = drivers
@@ -83,6 +84,44 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                 ),
 
                 const SizedBox(height: 14),
+
+                // Disconnection notice banner (shown only when >= 3 consecutive network failures occur)
+                if (isDisconnected) ...[
+                  Container(
+                    key: const ValueKey('disconnection-notice-banner'),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.wifi_off_rounded,
+                          color: Color(0xFFEF4444),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            driverCtrl.disconnectionMessage.value.isNotEmpty
+                                ? driverCtrl.disconnectionMessage.value
+                                : 'اتصال به سرویس قطع شد؛ در حال تلاش مجدد',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFEF4444),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
 
                 // GPU Screen Flashing Warning Banner (prominently shown when installing GPU driver)
                 if (isBatchRunning && batchStatus.hasActiveGpuInstall) ...[
@@ -528,11 +567,22 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
                           bypassConfirmation: true,
                         );
                       },
-                icon: const Icon(Icons.auto_mode_rounded, size: 16),
+                icon: isBatchRunning
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.auto_mode_rounded, size: 16),
                 label: Text(
-                  ctrl.areAllInstallableSelected
-                      ? 'نصب خودکار همه (${selectedIds.length})'
-                      : 'نصب انتخاب‌شده‌ها (${selectedIds.length})',
+                  isBatchRunning
+                      ? 'در حال نصب (${ctrl.batchStatus.value.completed}/${ctrl.batchStatus.value.total})'
+                      : (ctrl.areAllInstallableSelected
+                          ? 'نصب خودکار همه (${selectedIds.length})'
+                          : 'نصب انتخاب‌شده‌ها (${selectedIds.length})'),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0D9488),
@@ -571,11 +621,13 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
     final isSelected = ctrl.selectedPackageIds.contains(pkg.packageId);
 
     // Find any batch installation status item for this driver
+    final normPkgFile = pkg.installerFile.replaceAll('\\', '/').split('/').last.toLowerCase();
     DriverInstallItem? queueItem;
     for (final item in batchStatus.items) {
-      if ((item.packageId != null && item.packageId == pkg.packageId) ||
-          (item.displayName != null && item.displayName == pkg.displayName) ||
-          (item.filename == pkg.installerFile)) {
+      final itemFile = (item.installerFile ?? item.filename).replaceAll('\\', '/').split('/').last.toLowerCase();
+      if ((item.packageId != null && item.packageId!.isNotEmpty && item.packageId == pkg.packageId) ||
+          (item.displayName != null && item.displayName!.isNotEmpty && item.displayName == pkg.displayName) ||
+          (normPkgFile.isNotEmpty && itemFile == normPkgFile)) {
         queueItem = item;
         break;
       }
@@ -664,21 +716,81 @@ class _DriverInstallPageState extends State<DriverInstallPage> {
         children: [
           Row(
             children: [
-              // Selection Checkbox
-              Checkbox(
-                value: isSelected,
-                activeColor: accent,
-                checkColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
+              // Leading Status Indicator or Selection Checkbox
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: Builder(
+                    builder: (context) {
+                      if (isBatchRunning || (queueItem != null && queueItem.status != 'pending')) {
+                        if (queueItem?.status == 'installing') {
+                          return const SizedBox(
+                            key: ValueKey('driver-installing-spinner'),
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Color(0xFF0D9488),
+                            ),
+                          );
+                        } else if (queueItem?.status == 'completed') {
+                          return const Icon(
+                            Icons.check_circle_rounded,
+                            key: ValueKey('driver-completed-checkmark'),
+                            color: Color(0xFF10B981),
+                            size: 22,
+                          );
+                        } else if (queueItem?.status == 'failed') {
+                          return const Icon(
+                            Icons.cancel_rounded,
+                            key: ValueKey('driver-failed-icon'),
+                            color: Color(0xFFEF4444),
+                            size: 22,
+                          );
+                        } else if (queueItem?.status == 'skipped') {
+                          return const Icon(
+                            Icons.skip_next_rounded,
+                            key: ValueKey('driver-skipped-icon'),
+                            color: Color(0xFF64748B),
+                            size: 22,
+                          );
+                        } else if (queueItem?.status == 'interrupted') {
+                          return const Icon(
+                            Icons.warning_amber_rounded,
+                            key: ValueKey('driver-interrupted-icon'),
+                            color: Color(0xFFF59E0B),
+                            size: 22,
+                          );
+                        } else if (queueItem?.status == 'queued' || queueItem?.status == 'pending') {
+                          return Icon(
+                            Icons.schedule_rounded,
+                            key: const ValueKey('driver-pending-icon'),
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            size: 22,
+                          );
+                        }
+                      }
+                      return Checkbox(
+                        value: isSelected,
+                        activeColor: accent,
+                        checkColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        side: BorderSide(
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                          width: 1.8,
+                        ),
+                        onChanged: isBatchRunning
+                            ? null
+                            : (_) => ctrl.togglePackageSelection(pkg.packageId),
+                      );
+                    },
+                  ),
                 ),
-                side: BorderSide(
-                  color: isDark
-                      ? const Color(0xFF94A3B8)
-                      : const Color(0xFF64748B),
-                  width: 1.8,
-                ),
-                onChanged: (_) => ctrl.togglePackageSelection(pkg.packageId),
               ),
               // Category Icon
               Container(

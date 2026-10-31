@@ -18,17 +18,16 @@ if %errorlevel% neq 0 (
     timeout /t 1 /nobreak >nul
 )
 
-:: Launch Flutter Desktop Application
-if exist "%~dp0frontend\build\windows\x64\runner\Release\CentralSystemChecker.exe" (
-    start "" /D "%~dp0frontend\build\windows\x64\runner\Release" "CentralSystemChecker.exe"
+:: Launch Flutter Desktop Application (Target: MarkaziSystemChecker.exe)
+set "RELEASE_EXE=%~dp0frontend\build\windows\x64\runner\Release\MarkaziSystemChecker.exe"
+if exist "%RELEASE_EXE%" (
+    start "" /D "%~dp0frontend\build\windows\x64\runner\Release" "MarkaziSystemChecker.exe"
     exit 0
 )
 
-if exist "%~dp0frontend\build\windows\x64\runner\Release\central_system_checker.exe" (
-    start "" /D "%~dp0frontend\build\windows\x64\runner\Release" "central_system_checker.exe"
-    exit 0
-)
+echo [ERROR] Release executable not found:
+echo %RELEASE_EXE%
+echo Please build the application first (py build_production.py or flutter build windows --release).
+pause
+exit /b 1
 
-cd /d "%~dp0frontend"
-flutter run -d windows
-exit 0

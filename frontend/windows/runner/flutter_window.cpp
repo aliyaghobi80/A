@@ -452,6 +452,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     return 0;
   }
 
+  if (message == WM_NCLBUTTONDBLCLK && wparam == HTCAPTION) {
+    if (::IsZoomed(hwnd)) {
+      ::ShowWindow(hwnd, SW_RESTORE);
+    } else {
+      ::ShowWindow(hwnd, SW_MAXIMIZE);
+    }
+    return 0;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   // Wrap with exception handling to safely survive DirectX 11 / DXGI device resets
   // that occur during GPU graphics driver installations.

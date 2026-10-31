@@ -30,6 +30,7 @@ class SoftwareInstallPage extends StatelessWidget {
       final isBatchRunning = softwareCtrl.hasActiveBatch;
       final isBatchUninstalling = softwareCtrl.isBatchUninstalling.value;
       final batchStatus = softwareCtrl.batchStatus.value;
+      final isDisconnected = softwareCtrl.isDisconnected.value;
       final dir = softwareCtrl.packagesDirectory;
       final isHomeEdition =
           Get.find<SystemInfoController>()
@@ -242,6 +243,44 @@ class SoftwareInstallPage extends StatelessWidget {
                 ),
 
                 const SizedBox(height: 12),
+
+                // Disconnection notice banner (shown only when >= 3 consecutive network failures occur)
+                if (isDisconnected) ...[
+                  Container(
+                    key: const ValueKey('software-disconnection-notice-banner'),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.wifi_off_rounded,
+                          color: Color(0xFFEF4444),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            softwareCtrl.disconnectionMessage.value.isNotEmpty
+                                ? softwareCtrl.disconnectionMessage.value
+                                : 'اتصال به سرویس قطع شد؛ در حال تلاش مجدد',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFEF4444),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
 
                 // 2. Batch Progress (If running or recently completed)
                 if (isBatchRunning ||

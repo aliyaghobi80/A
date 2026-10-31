@@ -6,11 +6,13 @@ running in a background thread.
 Each item is executed, verified, and progress is tracked in real-time.
 """
 
-import logging
 import copy
+import json
+import logging
 import os
 import threading
 import time
+import uuid
 from typing import Dict, Any, List, Optional
 
 from packages.manager import (
@@ -29,6 +31,8 @@ from deployment_scheduler import (
 
 logger = logging.getLogger(__name__)
 
+BOOT_ID = str(uuid.uuid4())
+
 
 def _is_winrar_package(package: Dict[str, Any]) -> bool:
     combined = " ".join(
@@ -41,6 +45,7 @@ def _is_winrar_package(package: Dict[str, Any]) -> bool:
 _batch_lock = threading.Lock()
 _batch_state: Dict[str, Any] = {
     "api_contract_version": 5,
+    "boot_id": BOOT_ID,
     "state_revision": 1,
     "server_time": time.time(),
     "is_running": False,
@@ -53,6 +58,8 @@ _batch_state: Dict[str, Any] = {
     "reboot_required": False,
     "current_item_name": None,
     "current_item_index": 0,
+    "active_items": [],
+    "persist_error": None,
     "progress_percent": 0.0,
     "items": [],
     "start_time": None,
@@ -113,17 +120,19 @@ def _bump_revision_locked(persist: bool = True) -> int:
     _batch_state["state_revision"] = max(1, current + 1)
     _batch_state["server_time"] = time.time()
     _batch_state["api_contract_version"] = 5
+    _batch_state["boot_id"] = BOOT_ID
     if persist:
         try:
             persist_software_state_atomic(_batch_state)
+            _batch_state["persist_error"] = None
         except Exception as exc:
-            logger.debug(f"[BatchInstall] Failed to persist state: {exc}")
+            _batch_state["persist_error"] = str(exc)
+            logger.warning(f"[BatchInstall] Failed to persist state: {exc}")
     return _batch_state["state_revision"]
 
 
 def reconcile_startup_software_queue(file_path: Optional[str] = None) -> None:
     """Load persisted queue state upon startup and reconcile unfinalized installing items."""
-    global _batch_state
     path = file_path or _get_software_state_filepath()
     if not os.path.isfile(path):
         return
@@ -151,14 +160,19 @@ def reconcile_startup_software_queue(file_path: Optional[str] = None) -> None:
                 saved["state_revision"] = max(1, saved.get("state_revision", 0) + 1)
                 saved["server_time"] = time.time()
                 saved["api_contract_version"] = 5
+                saved["boot_id"] = BOOT_ID
                 persist_software_state_atomic(saved, path)
 
             _batch_state.update(saved)
+            _batch_state["boot_id"] = BOOT_ID
             _batch_state["state_revision"] = max(1, _batch_state.get("state_revision", 1))
             _batch_state["server_time"] = time.time()
             _batch_state["api_contract_version"] = 5
+            _batch_state["persist_error"] = None
     except Exception as exc:
-        logger.debug(f"[BatchInstall] Startup reconciliation skipped: {exc}")
+        with _batch_lock:
+            _batch_state["persist_error"] = f"Reconciliation failed: {exc}"
+        logger.warning(f"[BatchInstall] Startup reconciliation failed: {exc}")
 
 
 try:
@@ -180,6 +194,7 @@ def _active_batch_response_locked() -> Dict[str, Any]:
     status["state_revision"] = max(1, status.get("state_revision", 1))
     status["server_time"] = time.time()
     status["api_contract_version"] = 5
+    status["boot_id"] = BOOT_ID
     return {
         "success": True,
         "already_running": True,
@@ -209,6 +224,7 @@ def _mark_batch_worker_failed_locked(reason: str) -> None:
     _batch_state["skipped"] = sum(1 for item in items if item.get("status") == "skipped")
     _batch_state["interrupted"] = sum(1 for item in items if item.get("status") == "interrupted")
     _batch_state["is_running"] = False
+    _batch_state["active_items"] = []
     _batch_state["current_item_name"] = None
     _batch_state["end_time"] = now
     _batch_state["progress_percent"] = 100.0 if _batch_state.get("total", 0) else 0.0
@@ -259,6 +275,7 @@ def _reset_state():
     rev = max(1, _batch_state.get("state_revision", 0) + 1)
     _batch_state = {
         "api_contract_version": 5,
+        "boot_id": BOOT_ID,
         "state_revision": rev,
         "server_time": time.time(),
         "is_running": False,
@@ -271,6 +288,8 @@ def _reset_state():
         "reboot_required": False,
         "current_item_name": None,
         "current_item_index": 0,
+        "active_items": [],
+        "persist_error": None,
         "progress_percent": 0.0,
         "items": [],
         "start_time": None,
@@ -281,14 +300,28 @@ def _reset_state():
 
 def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Optional[str] = None):
     """Background thread worker: installs packages and executes orchestrator steps one by one."""
-    global _batch_state
-
     logger.info(f"[BatchInstall] Starting batch execution of {len(items_to_run)} items")
 
     with _batch_lock:
-        _batch_state["start_time"] = time.time()
+        _batch_state["start_time"] = _batch_state.get("start_time") or time.time()
 
     resolved_pkg_dir = custom_dir or get_packages_directory()
+
+    active_workers: Dict[int, Dict[str, Any]] = {}
+
+    def _sync_active_display_locked():
+        active = list(active_workers.values())
+        _batch_state["active_items"] = active
+        if not active:
+            if not _batch_state.get("is_running"):
+                _batch_state["current_item_name"] = None
+        elif len(active) == 1:
+            _batch_state["current_item_name"] = active[0].get("name")
+            _batch_state["current_item_index"] = active[0].get("index", 0)
+        else:
+            names = [str(a.get("name") or a.get("id") or "") for a in active[:2]]
+            _batch_state["current_item_name"] = " • ".join(names)
+            _batch_state["current_item_index"] = active[0].get("index", 0)
 
     def run_one(idx, item_info):
         # Check if cancelled
@@ -299,17 +332,26 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
                         _batch_state["items"][j]["status"] = "skipped"
                         _batch_state["items"][j]["message"] = "لغو شده توسط کاربر"
                         _batch_state["skipped"] += 1
+                _sync_active_display_locked()
                 _bump_revision_locked()
                 return
 
-            _batch_state["current_item_index"] = idx
-            _batch_state["current_item_name"] = _batch_state["items"][idx].get("name", item_info.get("id"))
+            item_name = _batch_state["items"][idx].get("name", item_info.get("id"))
             current_st = _batch_state["items"][idx].get("status", "pending")
             if _can_transition(current_st, "installing"):
                 _batch_state["items"][idx]["status"] = "installing"
-                _bump_revision_locked()
             else:
                 logger.warning(f"[BatchInstall] Illegal transition ignored: {current_st} -> installing")
+
+            active_workers[idx] = {
+                "id": item_info.get("id"),
+                "name": item_name,
+                "index": idx,
+                "status": "installing",
+                "start_time": time.time(),
+            }
+            _sync_active_display_locked()
+            _bump_revision_locked()
 
         action = item_info.get("orchestrator_action")
         pkg_id = item_info.get("id", "")
@@ -477,6 +519,7 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
             }
 
         with _batch_lock:
+            active_workers.pop(idx, None)
             item = _batch_state["items"][idx]
             current_status = item.get("status", "pending")
             item["message"] = result.get("message", "")
@@ -506,6 +549,7 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
 
             processed = sum(_batch_state[key] for key in ("completed", "failed", "skipped"))
             _batch_state["progress_percent"] = round((processed / max(1, _batch_state["total"])) * 100, 1)
+            _sync_active_display_locked()
             _bump_revision_locked()
 
         if result.get("exit_code") == -2:
@@ -514,11 +558,17 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
 
     def mark_external_wait(idx, item):
         with _batch_lock:
-            _batch_state["current_item_index"] = idx
-            _batch_state["current_item_name"] = item.get("name") or item.get("id")
+            active_workers[idx] = {
+                "id": item.get("id"),
+                "name": item.get("name") or item.get("id"),
+                "index": idx,
+                "status": "installing",
+                "start_time": time.time(),
+            }
             _batch_state["items"][idx]["message"] = (
                 "در انتظار پایان نصب دستی یا Windows Installer خارجی..."
             )
+            _sync_active_display_locked()
             _bump_revision_locked()
 
     run_deployment(
@@ -531,6 +581,8 @@ def _run_batch_install_impl(items_to_run: List[Dict[str, Any]], custom_dir: Opti
 
     # Finalize
     with _batch_lock:
+        active_workers.clear()
+        _batch_state["active_items"] = []
         _batch_state["is_running"] = False
         _batch_state["current_item_name"] = None
         _batch_state["end_time"] = time.time()
@@ -581,7 +633,7 @@ def start_batch_install(
       - Automatically True when package_ids is None or len(package_ids) > 1 (full automated deployment).
       - False when package_ids contains exactly 1 package (isolated single package install).
     """
-    global _batch_thread, _batch_state
+    global _batch_thread
 
     with _batch_lock:
         _repair_dead_worker_locked()
@@ -862,11 +914,13 @@ def start_batch_install(
             return _active_batch_response_locked()
         _reset_state()
         _batch_state["is_running"] = True
+        _batch_state["start_time"] = time.time()
         _batch_state["double_speed"] = double_speed is True
         _batch_state["include_activation"] = include_activation is True and not is_home
         _batch_state["cancelled"] = False
         _batch_state["total"] = len(queue_items)
         _batch_state["items"] = copy.deepcopy(queue_items)
+        _batch_state["active_items"] = []
         _bump_revision_locked()
         # Clear the previous completed worker before publishing the new
         # running state. The status endpoint treats a non-alive published
@@ -914,6 +968,11 @@ def get_batch_status() -> Dict[str, Any]:
         snapshot["state_revision"] = max(1, snapshot.get("state_revision", 1))
         snapshot["server_time"] = time.time()
         snapshot["api_contract_version"] = 5
+        snapshot["boot_id"] = BOOT_ID
+        if "persist_error" not in snapshot:
+            snapshot["persist_error"] = None
+        if "active_items" not in snapshot:
+            snapshot["active_items"] = []
         return snapshot
 
 

@@ -1,4 +1,4 @@
-# Central System Checker - Silent Demo Launcher (PowerShell)
+# Markazi System Checker - Silent Demo Launcher (PowerShell)
 $portActive = (Get-NetTCPConnection -LocalPort 18088 -ErrorAction SilentlyContinue)
 if (-not $portActive) {
     if (Get-Command pythonw -ErrorAction SilentlyContinue) {
@@ -9,10 +9,11 @@ if (-not $portActive) {
     Start-Sleep -Seconds 1
 }
 
-$releaseExe = "frontend\build\windows\x64\runner\Release\CentralSystemChecker.exe"
+$releaseExe = Join-Path $PSScriptRoot "frontend\build\windows\x64\runner\Release\MarkaziSystemChecker.exe"
 if (Test-Path $releaseExe) {
-    Start-Process $releaseExe -WorkingDirectory "frontend\build\windows\x64\runner\Release"
+    Start-Process $releaseExe -WorkingDirectory (Split-Path $releaseExe -Parent)
 } else {
-    Set-Location frontend
-    flutter run -d windows
+    Write-Host "[ERROR] Release executable not found at: '$releaseExe'" -ForegroundColor Red
+    Write-Host "Please build the application before launching (py build_production.py or flutter build windows --release)." -ForegroundColor Yellow
+    exit 1
 }

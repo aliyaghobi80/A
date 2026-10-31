@@ -29,17 +29,17 @@ Executes packages sequentially (1X) or bounded 2X concurrency using DeploymentWo
 """
 
 import copy
+import json
 import logging
 import os
 import subprocess
 import threading
 import time
+import uuid
 from typing import Dict, Any, List, Optional, Tuple
 
 from deployment_scheduler import (
     approved_resources,
-    run_deployment,
-    wait_for_windows_installer_idle,
     persist_queue_state_atomic,
     DeploymentWorkerPool,
 )
@@ -50,10 +50,12 @@ from .gpu_installers import (
     deduplicate_gpu_packages,
 )
 from utils.powershell import run_powershell_json, get_hidden_subprocess_kwargs
-from packages.manager import _run_elevated_and_wait, terminate_process_tree
+from packages.manager import _run_elevated_and_wait
 from .history import record_driver_installation
 
 logger = logging.getLogger(__name__)
+
+BOOT_ID = str(uuid.uuid4())
 
 
 def _resolve_driver_log_file(local_app_data: Optional[str] = None) -> str:
@@ -89,6 +91,7 @@ PRIORITY_ORDER = {
 _queue_lock = threading.Lock()
 _queue_state: Dict[str, Any] = {
     "api_contract_version": 5,
+    "boot_id": BOOT_ID,
     "state_revision": 1,
     "server_time": time.time(),
     "status": "ok",
@@ -106,6 +109,7 @@ _queue_state: Dict[str, Any] = {
     "current_index": 0,
     "current_package": None,
     "current_file": None,
+    "persist_error": None,
     "progress_percent": 0.0,
     "start_time": None,
     "end_time": None,
@@ -146,11 +150,14 @@ def _bump_driver_revision_locked(persist: bool = True) -> int:
     _queue_state["state_revision"] = max(1, current + 1)
     _queue_state["server_time"] = time.time()
     _queue_state["api_contract_version"] = 5
+    _queue_state["boot_id"] = BOOT_ID
     if persist:
         try:
             persist_queue_state_atomic(_queue_state)
+            _queue_state["persist_error"] = None
         except Exception as exc:
-            logger.debug(f"Failed to persist driver queue state: {exc}")
+            _queue_state["persist_error"] = str(exc)
+            logger.warning(f"Failed to persist driver queue state: {exc}")
     return _queue_state["state_revision"]
 
 
@@ -163,7 +170,6 @@ def _get_driver_state_filepath(local_app_data: Optional[str] = None) -> str:
 
 def reconcile_startup_driver_queue(file_path: Optional[str] = None) -> None:
     """Load persisted queue state upon startup and reconcile unfinalized installing items."""
-    global _queue_state
     path = file_path or _get_driver_state_filepath()
     if not os.path.isfile(path):
         return
@@ -192,14 +198,19 @@ def reconcile_startup_driver_queue(file_path: Optional[str] = None) -> None:
                 saved["state_revision"] = max(1, saved.get("state_revision", 0) + 1)
                 saved["server_time"] = time.time()
                 saved["api_contract_version"] = 5
+                saved["boot_id"] = BOOT_ID
                 persist_queue_state_atomic(saved, path)
 
             _queue_state.update(saved)
+            _queue_state["boot_id"] = BOOT_ID
             _queue_state["state_revision"] = max(1, _queue_state.get("state_revision", 1))
             _queue_state["server_time"] = time.time()
             _queue_state["api_contract_version"] = 5
+            _queue_state["persist_error"] = None
     except Exception as exc:
-        logger.debug(f"Driver startup reconciliation skipped: {exc}")
+        with _queue_lock:
+            _queue_state["persist_error"] = f"Reconciliation failed: {exc}"
+        logger.warning(f"Driver startup reconciliation failed: {exc}")
 
 
 try:
@@ -503,7 +514,7 @@ def _install_single_package(pkg: Dict[str, Any], timeout: int = 240) -> Dict[str
 
 def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
     """Worker thread that executes the sorted driver queue using DeploymentWorkerPool."""
-    global _queue_state
+    global _queue_thread
     total = len(packages)
     with _queue_lock:
         any_reboot = bool(_queue_state.get("reboot_required", False))
@@ -517,7 +528,21 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
         persist_queue_state_atomic(_queue_state)
 
     try:
-        problems_before = set(_query_problematic_devices())
+        problems_before = set()
+
+        def _fetch_problems_before():
+            nonlocal problems_before
+            try:
+                problems_before = set(_query_problematic_devices())
+            except Exception as exc:
+                logger.debug("Failed querying problematic devices before queue: %s", exc)
+
+        probe_thread = threading.Thread(
+            target=_fetch_problems_before,
+            daemon=True,
+            name="ProbeProblemDevicesBefore",
+        )
+        probe_thread.start()
 
         def run_one(idx, pkg):
             nonlocal any_reboot, current_index, current_previous_status
@@ -642,9 +667,10 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
         )
         pool.run()
 
+        probe_thread.join(timeout=3.0)
         try:
             problems_after = set(_query_problematic_devices())
-            resolved = len(problems_before - problems_after)
+            resolved = max(0, len(problems_before - problems_after))
         except Exception as exc:
             logger.warning("Post-install device verification failed: %s", exc)
             resolved = 0
@@ -667,6 +693,7 @@ def _run_queue_thread(packages: List[Dict[str, Any]]) -> None:
                     _queue_state["failed"] += 1
     finally:
         with _queue_lock:
+            _queue_thread = None
             _queue_state["is_running"] = False
             _queue_state["worker_alive"] = False
             _queue_state["active_items"] = []
@@ -752,6 +779,9 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
             status["state_revision"] = max(1, status.get("state_revision", 1))
             status["server_time"] = time.time()
             status["api_contract_version"] = 5
+            status["boot_id"] = BOOT_ID
+            if "persist_error" not in status:
+                status["persist_error"] = None
             return {
                 "success": True,
                 "already_running": True,
@@ -769,6 +799,7 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
             return {"success": False, "message": "هیچ صفی برای ادامه دادن یافت نشد."}
         sorted_pkgs = _last_packages
         with _queue_lock:
+            _queue_thread = None
             _queue_state["is_running"] = True
             _queue_state["cancelled"] = False
             _queue_state["summary_message"] = "در حال از سرگیری صف نصب درایورها..."
@@ -780,6 +811,7 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
             _queue_state["double_speed"] = double_speed is True
             _queue_state["mode"] = "2X" if double_speed else "1X"
             _queue_state["worker_count"] = 2 if double_speed else 1
+            _queue_state["boot_id"] = BOOT_ID
             _bump_driver_revision_locked()
     else:
         # Deduplicate APU+dGPU unified packages (CONTRACT.md § 8.2)
@@ -827,8 +859,10 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
                 })
 
         with _queue_lock:
+            _queue_thread = None
             _queue_state = {
                 "api_contract_version": 5,
+                "boot_id": BOOT_ID,
                 "state_revision": max(1, _queue_state.get("state_revision", 0) + 1),
                 "server_time": time.time(),
                 "status": "ok",
@@ -846,6 +880,7 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
                 "current_index": 0,
                 "current_package": None,
                 "current_file": None,
+                "persist_error": None,
                 "progress_percent": round((skipped_count / max(len(sorted_pkgs), 1)) * 100.0, 1),
                 "start_time": time.time(),
                 "end_time": None,
@@ -870,6 +905,7 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
         _queue_thread.start()
     except Exception:
         with _queue_lock:
+            _queue_thread = None
             _queue_state["is_running"] = False
             _queue_state["worker_alive"] = False
             _queue_state["end_time"] = time.time()
@@ -886,6 +922,9 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
         status["state_revision"] = max(1, status.get("state_revision", 1))
         status["server_time"] = time.time()
         status["api_contract_version"] = 5
+        status["boot_id"] = BOOT_ID
+        if "persist_error" not in status:
+            status["persist_error"] = None
     return {
         "success": True,
         "message": msg,
@@ -896,7 +935,6 @@ def start_driver_queue(packages: List[Dict[str, Any]], resume: bool = False,
 
 def get_driver_queue_status() -> Dict[str, Any]:
     """Return a snapshot and repair a stale state left by a dead worker."""
-    global _queue_state, _queue_thread
     with _queue_lock:
         worker_alive = bool(_queue_thread and _queue_thread.is_alive())
         started_at = _queue_state.get("start_time") or time.time()
@@ -936,6 +974,9 @@ def get_driver_queue_status() -> Dict[str, Any]:
         _queue_state["state_revision"] = max(1, _queue_state.get("state_revision", 1))
         _queue_state["server_time"] = time.time()
         _queue_state["api_contract_version"] = 5
+        _queue_state["boot_id"] = BOOT_ID
+        if "persist_error" not in _queue_state:
+            _queue_state["persist_error"] = None
         _sync_current_package_display_locked()
 
         return copy.deepcopy(_queue_state)
@@ -943,7 +984,6 @@ def get_driver_queue_status() -> Dict[str, Any]:
 
 def cancel_driver_queue() -> Dict[str, Any]:
     """Cancels active driver installation queue."""
-    global _queue_state
     with _queue_lock:
         if not _queue_state["is_running"]:
             return {"success": False, "message": "هیچ صفی در حال اجرا نیست."}

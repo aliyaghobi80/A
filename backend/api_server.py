@@ -28,8 +28,6 @@ from windows.device_settings import get_device_settings_status, pin_windows_secu
 from packages.office_shortcuts import ensure_office_desktop_shortcuts
 from packages.batch_installer import start_batch_install, get_batch_status, cancel_batch_install
 from drivers.driver_installer import (
-    scan_driver_folder,
-    start_batch_driver_install,
     get_driver_batch_status,
     cancel_driver_batch_install,
     intelligent_scan_drivers,
@@ -168,8 +166,6 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        global _cached_data
-        
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
         query_params = parse_qs(parsed.query)
@@ -361,7 +357,7 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"status": "success", "storage": storage_data}, indent=2).encode("utf-8"))
             return
 
-        elif path in ("/api/packages/batch-status", "/api/software/install/status"):
+        elif path in ("/api/packages/batch-status", "/api/software/batch-status", "/api/software/install/status"):
             resp = get_batch_status()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -433,7 +429,6 @@ class SystemInspectorRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(resp).encode("utf-8"))
 
     def do_POST(self):
-        global _cached_data
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
         

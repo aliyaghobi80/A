@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/system_info.dart';
@@ -27,16 +28,18 @@ class DriverInstallController extends GetxController {
   InstallStateService get _installService =>
       InstallStateService.ensureInitialized(apiService: _apiService);
   Worker? _driverStatusWorker;
-  Worker? _driverRunningWorker;
   int _lastDriverCompletedCount = 0;
   bool _wasDriverRunning = false;
 
   final RxString driverFolder = ''.obs;
   final RxBool isScanning = false.obs;
-  final RxBool isBatchInstalling = false.obs;
-  RxBool get isBatchRunning => isBatchInstalling;
+  RxBool get isBatchInstalling => _installService.isDriverRunning;
+  RxBool get isDriverRunning => _installService.isDriverRunning;
+  RxBool get isBatchRunning => _installService.isDriverRunning;
+  RxBool get isDisconnected => _installService.isDisconnected;
+  RxString get disconnectionMessage => _installService.disconnectionMessage;
   final RxBool doubleSpeed = false.obs;
-  final Rx<DriverBatchStatus> batchStatus = DriverBatchStatus.empty().obs;
+  Rx<DriverBatchStatus> get batchStatus => _installService.driverStatus;
   final Rx<DriverScanResult> scanResult = DriverScanResult.empty().obs;
   final RxSet<String> selectedPackageIds = <String>{}.obs;
   final RxBool isAdvancedMode = false.obs;
@@ -45,9 +48,7 @@ class DriverInstallController extends GetxController {
   final RxList<ScannedDriverFile> scannedFiles =
       <ScannedDriverFile>[].obs; // For backwards compatibility
 
-  Timer? _pollTimer;
   bool _syncInFlight = false;
-  int _emptyQueueSnapshots = 0;
   int _scanGeneration = 0;
 
   List<DriverActiveItem> get activeItems =>
@@ -65,11 +66,6 @@ class DriverInstallController extends GetxController {
         _handleDriverStatusUpdate(status);
       }
     });
-    _driverRunningWorker = ever(_installService.isDriverRunning, (bool running) {
-      if (!isClosed) {
-        isBatchInstalling.value = running;
-      }
-    });
     _loadInitialConfig();
     synchronizeDriverBatchState();
   }
@@ -78,9 +74,6 @@ class DriverInstallController extends GetxController {
   void onClose() {
     _scanGeneration++;
     _driverStatusWorker?.dispose();
-    _driverRunningWorker?.dispose();
-    _pollTimer?.cancel();
-    _pollTimer = null;
     super.onClose();
   }
 
@@ -106,20 +99,16 @@ class DriverInstallController extends GetxController {
     if (_syncInFlight || isClosed) return batchStatus.value.isRunning;
     _syncInFlight = true;
     try {
-      final status = await _apiService.getDriverBatchStatus();
+      final status = await _installService.synchronizeDriver();
       if (isClosed) return false;
-      final effective = _applyDriverBatchStatus(status);
-      if (effective.isRunning) {
-        doubleSpeed.value = effective.doubleSpeed;
-        isBatchInstalling.value = true;
-        if (effective.folderPath.isNotEmpty) {
-          driverFolder.value = effective.folderPath;
+      if (status.isRunning) {
+        doubleSpeed.value = status.doubleSpeed;
+        if (status.folderPath.isNotEmpty) {
+          driverFolder.value = status.folderPath;
         }
         _startDriverBatchPolling(null);
-      } else {
-        isBatchInstalling.value = false;
       }
-      return effective.isRunning;
+      return status.isRunning;
     } catch (error) {
       debugPrint('[DriverInstallController] Queue state sync error: $error');
       return batchStatus.value.isRunning;
@@ -130,32 +119,10 @@ class DriverInstallController extends GetxController {
 
   DriverBatchStatus _applyDriverBatchStatus(DriverBatchStatus status) {
     _installService.applyDriverStatus(status);
-    if (batchStatus.value.isRunning &&
-        !status.isRunning &&
-        status.total == 0 &&
-        status.items.isEmpty) {
-      _emptyQueueSnapshots += 1;
-      if (_emptyQueueSnapshots < 2) {
-        isBatchInstalling.value = true;
-        return batchStatus.value;
-      }
-    } else {
-      _emptyQueueSnapshots = 0;
-    }
-
-    final preserveLastCompleted =
-        !status.isRunning &&
-        status.total == 0 &&
-        batchStatus.value.total > 0 &&
-        !batchStatus.value.isRunning;
-    if (!preserveLastCompleted) {
-      batchStatus.value = status;
-    }
-    final effective = preserveLastCompleted ? batchStatus.value : status;
-    if (effective.isRunning) {
+    if (batchStatus.value.isRunning) {
       _installService.notifyQueueStarted();
     }
-    return effective;
+    return batchStatus.value;
   }
 
   void toggleAdvancedMode() {
@@ -597,7 +564,7 @@ class DriverInstallController extends GetxController {
       return;
     }
     if (!context.mounted) return;
-    isBatchInstalling.value = true;
+    _installService.startDriverQueueIntent();
 
     try {
       final res = await _apiService.startDriverQueueInstall(
@@ -613,10 +580,6 @@ class DriverInstallController extends GetxController {
           _applyDriverBatchStatus(
             DriverBatchStatus.fromJson(Map<String, dynamic>.from(rawStatus)),
           );
-        } else {
-          // Keep the local running state visible until the first status poll;
-          // never replace it with an idle-looking empty queue.
-          isBatchInstalling.value = true;
         }
         scaffoldMessenger.showSnackBar(
           SnackBar(
@@ -641,7 +604,7 @@ class DriverInstallController extends GetxController {
           );
           return;
         }
-        isBatchInstalling.value = false;
+        _installService.cancelDriverQueueIntent();
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
@@ -665,7 +628,7 @@ class DriverInstallController extends GetxController {
         );
         return;
       }
-      isBatchInstalling.value = false;
+      _installService.cancelDriverQueueIntent();
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('خطا: $e'),
@@ -677,8 +640,6 @@ class DriverInstallController extends GetxController {
   }
 
   void _handleDriverStatusUpdate(DriverBatchStatus status) {
-    batchStatus.value = status;
-    isBatchInstalling.value = status.isRunning;
     doubleSpeed.value = status.doubleSpeed;
     if (status.folderPath.isNotEmpty) {
       driverFolder.value = status.folderPath;
@@ -696,9 +657,62 @@ class DriverInstallController extends GetxController {
       } catch (_) {}
     }
 
+    // REAL-TIME IN-MEMORY UPDATE:
+    // Update matched package status in-memory upon item completion so the UI updates immediately
+    final currentPkgs = scanResult.value.packages;
+    if (currentPkgs.isNotEmpty) {
+      bool anyChanged = false;
+      final updatedList = <IntelligentDriverPackage>[];
+      for (final pkg in currentPkgs) {
+        final normPkgFile = pkg.installerFile.replaceAll('\\', '/').split('/').last.toLowerCase();
+        DriverInstallItem? matchingItem;
+        for (final it in status.items) {
+          final itemFile = (it.installerFile ?? it.filename).replaceAll('\\', '/').split('/').last.toLowerCase();
+          if ((it.packageId != null && it.packageId!.isNotEmpty && it.packageId == pkg.packageId) ||
+              (it.displayName != null && it.displayName!.isNotEmpty && it.displayName == pkg.displayName) ||
+              (normPkgFile.isNotEmpty && itemFile == normPkgFile)) {
+            matchingItem = it;
+            break;
+          }
+        }
+
+        if (matchingItem != null && matchingItem.status == 'completed' && pkg.match?.status != 'up_to_date') {
+          anyChanged = true;
+          updatedList.add(
+            pkg.copyWith(
+              match: pkg.match?.copyWith(
+                    status: 'up_to_date',
+                    statusFa: 'نصب شده',
+                    statusEn: 'Installed',
+                  ) ??
+                  DriverHardwareMatch(
+                    isMatched: true,
+                    confidence: 'HIGH',
+                    status: 'up_to_date',
+                    statusFa: 'نصب شده',
+                    statusEn: 'Installed',
+                    matchedDeviceName: pkg.displayName,
+                    matchedDeviceId: '',
+                    installedVersion: pkg.driverVersion,
+                    packageVersion: pkg.driverVersion,
+                    recommendation: 'skip',
+                    reasons: const [],
+                  ),
+            ),
+          );
+        } else {
+          updatedList.add(pkg);
+        }
+      }
+
+      if (anyChanged) {
+        scanResult.value = scanResult.value.copyWith(packages: updatedList);
+        scanResult.refresh();
+      }
+    }
+
     if (_wasDriverRunning && !status.isRunning) {
       _wasDriverRunning = false;
-      isBatchInstalling.value = false;
       unawaited(_refreshAfterCompletedQueue(status));
       if (status.rebootRequired) {
         _showRebootRequiredDialog();
@@ -709,12 +723,13 @@ class DriverInstallController extends GetxController {
   }
 
   void _startDriverBatchPolling(ScaffoldMessengerState? scaffoldMessenger) {
-    _pollTimer?.cancel();
-    _pollTimer = null;
     _installService.notifyQueueStarted();
   }
 
   Future<void> _refreshAfterCompletedQueue(DriverBatchStatus status) async {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      return;
+    }
     final touchedGraphics = status.hasActiveGpuInstall ||
         status.items.any(
           (item) => item.category.toLowerCase() == 'gpu',
@@ -840,13 +855,19 @@ class DriverInstallController extends GetxController {
     IntelligentDriverPackage pkg,
   ) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    isBatchInstalling.value = true;
+    _installService.startDriverQueueIntent();
     try {
       final res = await _apiService.startDriverQueueInstall(
         packageIds: [pkg.packageId],
         folderPath: driverFolder.value,
       );
       if (res['success'] == true) {
+        final rawStatus = res['status'];
+        if (rawStatus is Map) {
+          _applyDriverBatchStatus(
+            DriverBatchStatus.fromJson(Map<String, dynamic>.from(rawStatus)),
+          );
+        }
         _startDriverBatchPolling(scaffoldMessenger);
         scaffoldMessenger.showSnackBar(
           SnackBar(
@@ -857,7 +878,7 @@ class DriverInstallController extends GetxController {
           ),
         );
       } else {
-        isBatchInstalling.value = false;
+        _installService.cancelDriverQueueIntent();
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(res['message'] as String? ?? 'خطا در شروع نصب.'),
@@ -868,7 +889,7 @@ class DriverInstallController extends GetxController {
         );
       }
     } catch (e) {
-      isBatchInstalling.value = false;
+      _installService.cancelDriverQueueIntent();
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('خطا در شروع نصب خودکار: $e'),

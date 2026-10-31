@@ -71,7 +71,9 @@ class SoftwareController extends GetxController {
   }
 
   // Batch auto-install state
-  final RxBool isBatchInstalling = false.obs;
+  RxBool get isBatchInstalling => _installService.isSoftwareRunning;
+  RxBool get isDisconnected => _installService.isDisconnected;
+  RxString get disconnectionMessage => _installService.disconnectionMessage;
   final DeploymentPreferences deploymentPreferences = DeploymentPreferences();
   RxBool get includeActivation => deploymentPreferences.includeActivation;
   RxBool get doubleSpeed => deploymentPreferences.doubleSpeed;
@@ -83,23 +85,18 @@ class SoftwareController extends GetxController {
               ?.windows
               .isHomeEdition ==
           false;
-  final Rx<BatchInstallStatus> batchStatus = BatchInstallStatus.empty().obs;
+  Rx<BatchInstallStatus> get batchStatus => _installService.softwareStatus;
   final RxSet<String> selectedPackageIds = <String>{}.obs;
 
   InstallStateService get _installService =>
       InstallStateService.ensureInitialized(apiService: _apiService);
   Worker? _softwareStatusWorker;
-  Worker? _softwareRunningWorker;
 
   Timer? _pollTimer;
   Timer? _initialTimer;
   bool _batchSyncInFlight = false;
-  int _emptyBatchSnapshots = 0;
-  bool _syncInFlight = false;
   int _scanGeneration = 0;
   Timer? _debounceTimer;
-  Timer? _periodicSyncTimer;
-  Timer? _batchPollTimer;
   StreamSubscription<FileSystemEvent>? _dirWatcherSub;
   String? _currentlyWatchedDir;
 
@@ -151,11 +148,6 @@ class SoftwareController extends GetxController {
         _onSoftwareStatusUpdated(status);
       }
     });
-    _softwareRunningWorker = ever(_installService.isSoftwareRunning, (bool running) {
-      if (!isClosed) {
-        isBatchInstalling.value = running;
-      }
-    });
 
     // Queue ownership lives in the backend. Reconnect immediately so a
     // recreated Flutter view never looks idle while installers are running.
@@ -177,21 +169,16 @@ class SoftwareController extends GetxController {
     _initialTimer = Timer(const Duration(milliseconds: 500), () {
       if (isClosed) return;
       fetchPackages();
-      _startPeriodicSync();
     });
   }
 
   @override
   void onClose() {
     _softwareStatusWorker?.dispose();
-    _softwareRunningWorker?.dispose();
     _initialTimer?.cancel();
     _scanGeneration++;
     _pollTimer?.cancel();
     _debounceTimer?.cancel();
-    _periodicSyncTimer?.cancel();
-    _batchPollTimer?.cancel();
-    _batchPollTimer = null;
     _dirWatcherSub?.cancel();
     super.onClose();
   }
@@ -320,46 +307,6 @@ class SoftwareController extends GetxController {
     }
   }
 
-  void _startPeriodicSync() {
-    _periodicSyncTimer?.cancel();
-    // One low-cost heartbeat owns recovery for both package changes and a
-    // backend queue that outlived/replaced the current Flutter view.
-    _periodicSyncTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
-      if (isClosed) return;
-      if (_batchPollTimer?.isActive != true) {
-        await synchronizeBatchInstallState();
-      }
-      if (_syncInFlight || isClosed || hasActiveBatch) return;
-      if (!isScanning.value && installingPackageId.value.isEmpty) {
-        _syncInFlight = true;
-        final generation = _scanGeneration;
-        try {
-          final res = await _apiService.fetchPackages();
-          if (isClosed || generation != _scanGeneration) return;
-          // Only update if count, items, or directory status actually changed
-          if (res.packages.length != packagesResponse.value.packages.length ||
-              res.directoryExists != packagesResponse.value.directoryExists ||
-              res.summary.installedPackages !=
-                  packagesResponse.value.summary.installedPackages ||
-              res.summary.blockedPackages !=
-                  packagesResponse.value.summary.blockedPackages ||
-              res.summary.autoInstallable !=
-                  packagesResponse.value.summary.autoInstallable) {
-            debugPrint(
-              '[SoftwareController] Real-time periodic sync updated package list.',
-            );
-            packagesResponse.value = res;
-            _reconcilePackageSelection(res.packages);
-            _updateWatcher(res.packagesDirectory);
-          }
-        } catch (_) {
-          // Background sync is retried on the next tick.
-        } finally {
-          _syncInFlight = false;
-        }
-      }
-    });
-  }
 
   bool isCurrentInstalling(SoftwarePackage pkg) {
     final targetId = pkg.relativePath.isNotEmpty ? pkg.relativePath : pkg.id;
@@ -602,7 +549,7 @@ class SoftwareController extends GetxController {
       return;
     }
 
-    isBatchInstalling.value = true;
+    _installService.startSoftwareQueueIntent();
     try {
       final res = await _apiService.startBatchInstall(
         packageIds: [targetId],
@@ -625,16 +572,14 @@ class SoftwareController extends GetxController {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        if (_batchPollTimer?.isActive != true) {
-          _startBatchStatusPolling(scaffoldMessenger);
-        }
+        _startBatchStatusPolling(scaffoldMessenger);
       } else {
         final recovered = await synchronizeBatchInstallState();
         if (recovered) {
           _showActiveBatchNotice(scaffoldMessenger);
           return;
         }
-        isBatchInstalling.value = false;
+        _installService.cancelSoftwareQueueIntent();
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
@@ -652,7 +597,7 @@ class SoftwareController extends GetxController {
         _showActiveBatchNotice(scaffoldMessenger);
         return;
       }
-      isBatchInstalling.value = false;
+      _installService.cancelSoftwareQueueIntent();
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('خطا: $e'),
@@ -1272,14 +1217,11 @@ class SoftwareController extends GetxController {
     if (_batchSyncInFlight || isClosed) return batchStatus.value.isRunning;
     _batchSyncInFlight = true;
     try {
-      final status = await _apiService.getBatchInstallStatus();
-      if (isClosed) return false;
-      final effective = _applyBatchStatus(status, startPolling: startPolling);
-      return effective.isRunning;
+      final status = await _installService.synchronizeSoftware();
+      deploymentPreferences.reconcileQueue(status);
+      return status.isRunning;
     } catch (error) {
       // Preserve the last known state on a transient backend/HTTP failure.
-      // Replacing it with BatchInstallStatus.empty() would make an active
-      // installer disappear from the UI and re-enable conflicting controls.
       debugPrint('[SoftwareController] Batch state sync error: $error');
       return batchStatus.value.isRunning;
     } finally {
@@ -1292,38 +1234,11 @@ class SoftwareController extends GetxController {
     bool startPolling = true,
   }) {
     _installService.applySoftwareStatus(status);
-    // A backend restart/race can briefly yield a default empty snapshot while
-    // the installer worker is still alive. Require two consecutive empty
-    // snapshots before clearing a queue that the UI already knows is running.
-    // A real completion snapshot keeps its total/items and is accepted at once.
-    if (batchStatus.value.isRunning &&
-        !status.isRunning &&
-        status.total == 0 &&
-        status.items.isEmpty) {
-      _emptyBatchSnapshots += 1;
-      if (_emptyBatchSnapshots < 2) {
-        isBatchInstalling.value = true;
-        return batchStatus.value;
-      }
-    } else {
-      _emptyBatchSnapshots = 0;
-    }
-
-    final preserveLastCompleted =
-        !status.isRunning &&
-        status.total == 0 &&
-        batchStatus.value.total > 0 &&
-        !batchStatus.value.isRunning;
-    if (!preserveLastCompleted) {
-      batchStatus.value = status;
-    }
-    final effective = preserveLastCompleted ? batchStatus.value : status;
-    isBatchInstalling.value = effective.isRunning;
-    deploymentPreferences.reconcileQueue(effective);
-    if (effective.isRunning && startPolling) {
+    deploymentPreferences.reconcileQueue(batchStatus.value);
+    if (batchStatus.value.isRunning && startPolling) {
       _startBatchStatusPolling(null);
     }
-    return effective;
+    return batchStatus.value;
   }
 
   BatchInstallStatus? _statusFromStartResponse(Map<String, dynamic> response) {
@@ -1346,8 +1261,7 @@ class SoftwareController extends GetxController {
       _applyBatchStatus(status, startPolling: false);
     }
     final adoptedExisting = response['already_running'] == true;
-    if (status?.isRunning == true || adoptedExisting) {
-      isBatchInstalling.value = true;
+    if (batchStatus.value.isRunning || status?.isRunning == true || adoptedExisting) {
       _startBatchStatusPolling(scaffoldMessenger);
       return true;
     }
@@ -1377,9 +1291,7 @@ class SoftwareController extends GetxController {
     final running = await synchronizeBatchInstallState();
     if (running) {
       _showActiveBatchNotice(scaffoldMessenger);
-      if (_batchPollTimer?.isActive != true) {
-        _startBatchStatusPolling(null);
-      }
+      _startBatchStatusPolling(null);
       return true;
     }
     return false;
@@ -1593,7 +1505,7 @@ class SoftwareController extends GetxController {
     }
 
     if (confirmed == true) {
-      isBatchInstalling.value = true;
+      _installService.startSoftwareQueueIntent();
       try {
         final res = await _apiService.startBatchInstall(
           packageIds: availablePackages.map((p) => p.id).toList(),
@@ -1619,16 +1531,14 @@ class SoftwareController extends GetxController {
               behavior: SnackBarBehavior.floating,
             ),
           );
-          if (_batchPollTimer?.isActive != true) {
-            _startBatchStatusPolling(scaffoldMessenger);
-          }
+          _startBatchStatusPolling(scaffoldMessenger);
         } else {
           final recovered = await synchronizeBatchInstallState();
           if (recovered) {
             _showActiveBatchNotice(scaffoldMessenger);
             return;
           }
-          isBatchInstalling.value = false;
+          _installService.cancelSoftwareQueueIntent();
           scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text(
@@ -1646,7 +1556,7 @@ class SoftwareController extends GetxController {
           _showActiveBatchNotice(scaffoldMessenger);
           return;
         }
-        isBatchInstalling.value = false;
+        _installService.cancelSoftwareQueueIntent();
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text('خطا: $e'),
@@ -1661,8 +1571,6 @@ class SoftwareController extends GetxController {
   bool _wasBatchRunning = false;
 
   void _onSoftwareStatusUpdated(BatchInstallStatus effective) {
-    batchStatus.value = effective;
-    isBatchInstalling.value = effective.isRunning;
     deploymentPreferences.reconcileQueue(effective);
 
     // REAL-TIME IN-MEMORY UPDATE:
@@ -1735,8 +1643,6 @@ class SoftwareController extends GetxController {
   }
 
   void _startBatchStatusPolling(ScaffoldMessengerState? scaffoldMessenger) {
-    _batchPollTimer?.cancel();
-    _batchPollTimer = null;
     _installService.notifyQueueStarted();
   }
 
